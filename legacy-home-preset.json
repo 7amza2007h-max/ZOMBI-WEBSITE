@@ -1,0 +1,4095 @@
+{
+  "guildId": "1470436560456384575",
+  "source": "Sanitized settings/content preset from the 2026-09-04 ZOMBI backup. Private member balances/live gang state are intentionally excluded from the website bundle.",
+  "config": {
+    "guildId": "1470436560456384575",
+    "setupComplete": true,
+    "legacyPresetVersion": "v8.5",
+    "features": {
+      "economy": true,
+      "bank": true,
+      "games": true,
+      "tickets": true,
+      "store": true,
+      "rolePanel": true,
+      "levels": true,
+      "voiceRewards": true,
+      "voiceRooms": true,
+      "moderation": true,
+      "gangs": true,
+      "gangMissions": true,
+      "bankRobbery": true
+    },
+    "branding": {
+      "color": "#B00020",
+      "name": "ZOMBI",
+      "footer": "Powered by ZOMBI",
+      "customName": "",
+      "customFooter": "ZOMBI • ZOM Store",
+      "botNickname": "zombi",
+      "avatarUrl": "",
+      "bannerUrl": "",
+      "bio": "",
+      "panelLogoUrl": "",
+      "panelBannerUrl": ""
+    },
+    "currency": {
+      "name": "ZOM",
+      "emoji": "🪙"
+    },
+    "channels": {
+      "logs": "",
+      "gamePanel": "",
+      "ticketPanel": "1470436562226384949",
+      "ticketCategory": "1512985902316519514",
+      "storePanel": "1545211249246216284",
+      "rolePanel": "1545012486162485259",
+      "levelUp": "1543273620996882523",
+      "bankPanel": "1543276583417024632",
+      "centralBank": "1544496140396011570",
+      "gangCategory": "",
+      "gangLogs": "",
+      "voiceCreate": "1543271928884895754",
+      "voiceControl": "1535455746299265046",
+      "voiceCategory": "1535455743858188349",
+      "nameChangePanel": "1545515128584404993"
+    },
+    "economy": {
+      "dailyAmount": 500,
+      "dailyCooldownHours": 24,
+      "messageEvery": 15,
+      "messageReward": 10,
+      "messageCooldownSeconds": 6,
+      "transferCooldownSeconds": 10,
+      "voiceEveryMinutes": 10,
+      "voiceReward": 10,
+      "messageChannelIds": [
+        "1470436562226384954"
+      ],
+      "voiceChannelIds": [
+        "1470436562524307525",
+        "1512980080836477009",
+        "1512980317760258098",
+        "1512980356431745124",
+        "1512980570181865584",
+        "1535455743858188349"
+      ]
+    },
+    "bank": {
+      "depositEnabled": true,
+      "withdrawEnabled": true,
+      "maxTransaction": 1000000000,
+      "title": "🏦 ZOMBI City Bank",
+      "description": "نظام البنك الأصلي في سيرفر ZOMBI.",
+      "bankChannelId": "1543276583417024632",
+      "goldValue": 100000,
+      "salaryCooldownHours": 4,
+      "maxSalary": 200,
+      "tradeProfitPercent": 15,
+      "tradeSessionMinutes": 5,
+      "maxLoan": 100000,
+      "loanInterestPercent": 25,
+      "companyEmployeeStartSalary": 4000,
+      "companyEmployeeSalaryIncrease": 500,
+      "companyLevelUpHours": 24,
+      "companyOwnerStartSalary": 100000,
+      "companyOwnerSalaryIncrease": 5000
+    },
+    "moderation": {
+      "clearEnabled": true,
+      "kickEnabled": true,
+      "banEnabled": true,
+      "lockEnabled": true,
+      "logActions": true
+    },
+    "games": {
+      "enabled": {
+        "quiz": true,
+        "guess": true,
+        "speed": true,
+        "scramble": true,
+        "truefalse": true,
+        "math": true,
+        "closest": true,
+        "word": true,
+        "daily": true,
+        "rps": true,
+        "wheel": true,
+        "mafia": true,
+        "roulette": true,
+        "chairs": true,
+        "killer": true
+      },
+      "quickGameSettings": {
+        "quiz": {
+          "rounds": 5,
+          "roundTimeSeconds": 24,
+          "winnerReward": 300
+        },
+        "guess": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "speed": {
+          "rounds": 5,
+          "roundTimeSeconds": 15,
+          "winnerReward": 300
+        },
+        "scramble": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "truefalse": {
+          "rounds": 5,
+          "roundTimeSeconds": 20,
+          "winnerReward": 300
+        },
+        "math": {
+          "rounds": 5,
+          "roundTimeSeconds": 20,
+          "winnerReward": 300
+        },
+        "closest": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "word": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "daily": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "rps": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "wheel": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "mafia": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "roulette": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        },
+        "chairs": {
+          "rounds": 5,
+          "roundTimeSeconds": 20,
+          "winnerReward": 500
+        },
+        "killer": {
+          "rounds": 5,
+          "roundTimeSeconds": 25,
+          "winnerReward": 300
+        }
+      },
+      "lobby": {
+        "roulette": {
+          "minPlayers": 2,
+          "maxPlayers": 25
+        },
+        "chairs": {
+          "minPlayers": 2,
+          "maxPlayers": 20
+        },
+        "mafia": {
+          "minPlayers": 4,
+          "maxPlayers": 20
+        }
+      },
+      "wheelRewards": [
+        50,
+        75,
+        100,
+        150,
+        200,
+        300
+      ],
+      "rouletteEnabled": true,
+      "rouletteTurnSeconds": 25,
+      "rouletteActionCosts": {
+        "revive": 300,
+        "link": 300,
+        "protect": 300,
+        "freeze": 500,
+        "double": 500,
+        "curse": 500,
+        "unlink": 200,
+        "add": 1000
+      },
+      "chairs": {
+        "startCountdownSeconds": 5,
+        "betweenRoundsMs": 2500
+      }
+    },
+    "gangs": {
+      "maxMembers": 7,
+      "maxDeputies": 2,
+      "createCost": 0,
+      "bankEnabled": true,
+      "missionsEnabled": true,
+      "missionCooldownMinutes": 600,
+      "missionDurationMinutes": 30,
+      "missionRewardMin": 5000,
+      "missionRewardMax": 7000,
+      "missionVoiceSeconds": 60,
+      "roleColor": "#2b2d31",
+      "minMissionParticipants": 2,
+      "maxMissionSteps": 5,
+      "puzzleMaxAttempts": 2,
+      "chatMaxAttempts": 2,
+      "relayMaxAttempts": 2
+    },
+    "robbery": {
+      "enabled": false,
+      "minParticipants": 5,
+      "lobbyMinutes": 10,
+      "missionMinutes": 15,
+      "reward": 150000,
+      "cooldownHours": 24,
+      "equipment": {
+        "mask": 5000,
+        "hacking": 25000,
+        "drill": 30000,
+        "radio": 12000,
+        "car": 50000
+      },
+      "panelMessageId": ""
+    },
+    "voiceRooms": {
+      "enabled": true,
+      "roomName": "🎙️・{username}",
+      "userLimit": 0,
+      "bitrate": 64000,
+      "controlMessageId": ""
+    },
+    "levels": {
+      "xpPerMessage": 1,
+      "xpCooldownSeconds": 30,
+      "baseXp": 200,
+      "growth": 50
+    },
+    "tickets": {
+      "title": "🎫 ZOMBI Tickets",
+      "description": "اختر نوع التكت الذي تريد فتحه من القائمة بالأسفل.",
+      "buttonLabel": "فتح تذكرة",
+      "buttonEmoji": "🎫",
+      "supportRoleIds": [],
+      "types": [
+        {
+          "id": "ticket_1788358549815_1126",
+          "label": "دعم فني",
+          "name": "دعم فني",
+          "emoji": "🎫",
+          "description": "لاي مشكلة بالسيرفر",
+          "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+          "categoryId": "1512985902316519514",
+          "supportRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445",
+            "1470436560783675444"
+          ],
+          "viewRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445",
+            "1470436560783675444"
+          ],
+          "openRoleIds": [],
+          "maxOpenPerUser": 1,
+          "enabled": true
+        },
+        {
+          "id": "ticket_1788358563319_9720",
+          "label": "شكوى ع اداري",
+          "name": "شكوى ع اداري",
+          "emoji": "🎫",
+          "description": "لاي شكوى ع اداري",
+          "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+          "categoryId": "1512985902316519514",
+          "supportRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445"
+          ],
+          "viewRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445"
+          ],
+          "openRoleIds": [],
+          "maxOpenPerUser": 1,
+          "enabled": true
+        },
+        {
+          "id": "ticket_1788358575871_501",
+          "label": "تقديم ع الادارة",
+          "name": "تقديم ع الادارة",
+          "emoji": "🎫",
+          "description": "للتقديم ع الادارة",
+          "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+          "categoryId": "1512985902316519514",
+          "supportRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445",
+            "1470436560783675444"
+          ],
+          "viewRoleIds": [
+            "1511388779544318105",
+            "1470436560783675445",
+            "1470436560783675444"
+          ],
+          "openRoleIds": [],
+          "maxOpenPerUser": 1,
+          "enabled": true
+        }
+      ],
+      "panelMessageId": "1544712624984301700"
+    },
+    "store": {
+      "title": "متجر الرتب",
+      "description": "افتح القائمة واختار الرتبة التي تريد معرفة سعرها ومميزاتها، وبعدها اضغط زر الشراء.",
+      "thumbnailUrl": "",
+      "bannerUrl": "",
+      "products": [
+        {
+          "id": "product_1787965808129_3677",
+          "type": "role",
+          "roleId": "1470436560767029401",
+          "name": "Extremely Active LVL 20",
+          "price": 15000,
+          "createdAt": 1787965808131,
+          "category": "رتب الأعضاء",
+          "emoji": "🏷️",
+          "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+          "features": [
+            "رتبة مميزة داخل السيرفر",
+            "تضاف مباشرة بعد نجاح عملية الشراء"
+          ],
+          "imageUrl": "https://cdn.phototourl.com/free/2026-09-04-09dd7003-31ef-4721-869f-0f4eea6e33fa.png",
+          "bannerUrl": "https://cdn.phototourl.com/free/2026-09-04-c7053671-9fc7-4a17-bb81-ba24e6f86c7c.png",
+          "enabled": true,
+          "sortOrder": 10,
+          "updatedAt": 1788483801452,
+          "accessMode": "everyone",
+          "allowedRoleIds": []
+        },
+        {
+          "id": "product_1788221712126_6395",
+          "type": "role",
+          "roleId": "1470436560767029402",
+          "name": "💫 Insanely Active [LVL 30]",
+          "price": 25000,
+          "createdAt": 1788221712126,
+          "category": "رتب الأعضاء",
+          "emoji": "💫",
+          "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+          "features": [
+            "رتبة مميزة داخل السيرفر",
+            "تضاف مباشرة بعد نجاح عملية الشراء"
+          ],
+          "imageUrl": "https://cdn.phototourl.com/free/2026-09-04-543e5406-f3db-4760-ba3c-f2584b17f564.png",
+          "bannerUrl": "https://cdn.phototourl.com/free/2026-09-04-9bf0216c-79ee-4936-a512-d2f818f94532.png",
+          "enabled": true,
+          "sortOrder": 20,
+          "updatedAt": 1788483802878,
+          "accessMode": "everyone",
+          "allowedRoleIds": []
+        },
+        {
+          "id": "product_1788221721365_7454",
+          "type": "role",
+          "roleId": "1470436560767029403",
+          "name": "🌠 Most Active [LVL 50]",
+          "price": 50000,
+          "createdAt": 1788221721365,
+          "category": "رتب الأعضاء",
+          "emoji": "🌠",
+          "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+          "features": [
+            "رتبة مميزة داخل السيرفر",
+            "تضاف مباشرة بعد نجاح عملية الشراء"
+          ],
+          "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-1008d1b1-714c-4d9c-98b6-f8cda17f601d.png",
+          "bannerUrl": "https://cdn.phototourl.com/member/2026-09-04-bf9966e8-9f10-4620-b968-a3135ea3ba2f.png",
+          "enabled": true,
+          "sortOrder": 30,
+          "updatedAt": 1788483803943,
+          "accessMode": "everyone",
+          "allowedRoleIds": []
+        },
+        {
+          "id": "product_1788221759001_8541",
+          "type": "role",
+          "roleId": "1470436560767029405",
+          "name": "👑 VIP",
+          "price": 120000,
+          "createdAt": 1788221759001,
+          "category": "رتب الأعضاء",
+          "emoji": "👑",
+          "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+          "features": [
+            "رتبة مميزة داخل السيرفر",
+            "تضاف مباشرة بعد نجاح عملية الشراء"
+          ],
+          "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-0f68fd44-4f5f-42e7-b00a-d45d3421ad5f.png",
+          "bannerUrl": "https://cdn.phototourl.com/member/2026-09-04-2c0041d5-fc74-4f60-bf4c-1fcc63d723d9.png",
+          "enabled": true,
+          "sortOrder": 40,
+          "updatedAt": 1788483806385,
+          "accessMode": "everyone",
+          "allowedRoleIds": []
+        },
+        {
+          "id": "product_1788481265714_805",
+          "type": "role",
+          "roleId": "1545226194989883464",
+          "name": "مطنوخ الادارة 💎ྀི",
+          "price": 30000,
+          "category": "رتب الادارة",
+          "emoji": "💎",
+          "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+          "features": [
+            "رتبة مميزة داخل السيرفر",
+            "تضاف مباشرة بعد نجاح عملية الشراء"
+          ],
+          "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-6a000a1c-e2ca-462f-bae6-a16c0129174f.png",
+          "bannerUrl": "",
+          "enabled": true,
+          "sortOrder": 1,
+          "createdAt": 1788481265714,
+          "updatedAt": 1788482566506,
+          "accessMode": "admins",
+          "allowedRoleIds": []
+        }
+      ],
+      "panelMessageId": "",
+      "footer": "ZOMBI • ZOM Store",
+      "accentColor": "#B00020",
+      "detailBannerUrl": ""
+    },
+    "rolePanel": {
+      "title": "🔔 ZOMBI • مركز الإشعارات",
+      "description": "اختر الإشعارات التي تريدها من الأزرار بالأسفل. اضغط مرة للحصول على الرتبة، واضغط مرة ثانية لإلغائها.",
+      "items": [
+        {
+          "roleId": "1545011875333275678",
+          "label": "Games Notifications",
+          "emoji": "🎮",
+          "style": "Primary"
+        },
+        {
+          "roleId": "1545206872762486924",
+          "label": "Notifications-سرقة بنك",
+          "emoji": "🔔",
+          "style": "Danger"
+        }
+      ],
+      "panelMessageId": ""
+    },
+    "system": {
+      "presenceText": "ZOM Economy | /help",
+      "presenceStatus": "online"
+    },
+    "warnings": {
+      "role1Id": "1544159442982014976",
+      "role2Id": "1544159663451406507",
+      "role3Id": "1544159697618346095"
+    },
+    "nameChange": {
+      "enabled": true,
+      "title": "تغيير اسمك في السيرفر",
+      "description": "لتغيير اسمك داخل السيرفر اضغط على الزر بالأسفل.\nسيظهر لك نموذج تكتب فيه الاسم الجديد، وبعد الإرسال يتغير اسمك مباشرة ويظهر لجميع أعضاء السيرفر.",
+      "buttonLabel": "تغيير اسمي",
+      "buttonEmoji": "✏️",
+      "modalTitle": "تغيير اسمك في السيرفر",
+      "inputLabel": "ضع الاسم الجديد",
+      "inputPlaceholder": "اكتب اسمك الجديد هنا...",
+      "successMessage": "✅ تم تغيير اسمك بنجاح إلى **{name}**.",
+      "cooldownSeconds": 30,
+      "color": "#8B5CF6",
+      "bannerUrl": "",
+      "panelMessageId": "1545519086006571130"
+    }
+  },
+  "data": {
+    "game-content.json": {
+      "quizQuestions": [
+        {
+          "question": "ما هي عاصمة الأردن؟",
+          "answer": "عمان"
+        },
+        {
+          "question": "كم عدد أيام الأسبوع؟",
+          "answer": "7"
+        },
+        {
+          "question": "ما هو أكبر كوكب في المجموعة الشمسية؟",
+          "answer": "المشتري"
+        },
+        {
+          "question": "كم عدد أشهر السنة؟",
+          "answer": "12"
+        },
+        {
+          "question": "ما هو الكوكب المعروف بالكوكب الأحمر؟",
+          "answer": "المريخ"
+        },
+        {
+          "question": "كم يساوي 5 + 5؟",
+          "answer": "10"
+        },
+        {
+          "question": "ما هي عاصمة فلسطين؟",
+          "answer": "القدس"
+        },
+        {
+          "question": "ما هو الحيوان المعروف بملك الغابة؟",
+          "answer": "الأسد"
+        },
+        {
+          "question": "كم عدد أضلاع المثلث؟",
+          "answer": "3"
+        },
+        {
+          "question": "ما هو أسرع حيوان بري؟",
+          "answer": "الفهد"
+        },
+        {
+          "question": "كم عدد القارات؟",
+          "answer": "7"
+        },
+        {
+          "question": "كم دقيقة في الساعة؟",
+          "answer": "60"
+        }
+      ],
+      "trueFalseQuestions": [
+        {
+          "question": "الشمس نجم.",
+          "answer": "صح"
+        },
+        {
+          "question": "الأرض أكبر من الشمس.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "الماء يتجمد عند 0 درجة مئوية.",
+          "answer": "صح"
+        },
+        {
+          "question": "عدد أيام السنة 365 يومًا.",
+          "answer": "صح"
+        },
+        {
+          "question": "القمر أكبر من الأرض.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "الأرض تدور حول الشمس.",
+          "answer": "صح"
+        },
+        {
+          "question": "الشمس نجم.",
+          "answer": "صح"
+        },
+        {
+          "question": "البطاريق تستطيع الطيران.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "الأرض مسطحة.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "للعناكب ستة أرجل.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "قوس قزح له سبعة ألوان.",
+          "answer": "صح"
+        },
+        {
+          "question": "أسماك القرش من الثدييات.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "كان جورج واشنطن أول رئيس للولايات المتحدة.",
+          "answer": "صح"
+        },
+        {
+          "question": "تحتاج النباتات إلى ضوء الشمس لتنمو.",
+          "answer": "صح"
+        },
+        {
+          "question": "نهر النيل هو أطول نهر في العالم.",
+          "answer": "صح"
+        },
+        {
+          "question": "يوجد سبع قارات على الأرض.",
+          "answer": "صح"
+        },
+        {
+          "question": "المحيط الهادئ هو أكبر المحيطات.",
+          "answer": "صح"
+        },
+        {
+          "question": "جبل إيفرست هو أعلى جبل في العالم.",
+          "answer": "صح"
+        },
+        {
+          "question": "النحل يصنع العسل.",
+          "answer": "صح"
+        },
+        {
+          "question": "الفهود هي أسرع الحيوانات البرية.",
+          "answer": "صح"
+        },
+        {
+          "question": "للسداسي خمسة أضلاع.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يوجد 26 حرفًا في الأبجدية الإنجليزية.",
+          "answer": "صح"
+        },
+        {
+          "question": "يأتي شهر يوليو قبل شهر يونيو.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يوجد 100 بنس في الدولار.",
+          "answer": "صح"
+        },
+        {
+          "question": "الخفافيش عمياء.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "البرق أشد حرارة من سطح الشمس.",
+          "answer": "صح"
+        },
+        {
+          "question": "الضفادع من الزواحف.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "ينتقل الصوت أسرع من الضوء.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "أستراليا دولة وقارة في آن واحد.",
+          "answer": "صح"
+        },
+        {
+          "question": "مصر تقع في أفريقيا.",
+          "answer": "صح"
+        },
+        {
+          "question": "للثعابين جفون.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "كندا تقع جنوب الولايات المتحدة.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "الشوكولاتة تُصنع من نبات.",
+          "answer": "صح"
+        },
+        {
+          "question": "يقع تمثال الحرية في نيويورك.",
+          "answer": "صح"
+        },
+        {
+          "question": "الفيلة هي أكبر الحيوانات البرية.",
+          "answer": "صح"
+        },
+        {
+          "question": "تحتاج الأسماك إلى الماء للبقاء على قيد الحياة.",
+          "answer": "صح"
+        },
+        {
+          "question": "الأرض تدور حول القمر.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "جميع الطيور تستطيع الطيران.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يغوص الجليد في الماء.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "كوكب المشتري هو أكبر كوكب في نظامنا الشمسي.",
+          "answer": "صح"
+        },
+        {
+          "question": "تُسمى مجموعة الأسود قطيعًا.",
+          "answer": "صح"
+        },
+        {
+          "question": "عاصمة فرنسا هي باريس.",
+          "answer": "صح"
+        },
+        {
+          "question": "يتوقف نمو دماغ الإنسان بعد مرحلة الطفولة.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يوجد 60 دقيقة في الساعة.",
+          "answer": "صح"
+        },
+        {
+          "question": "الحوت الأزرق هو أكبر حيوان على وجه الأرض.",
+          "answer": "صح"
+        },
+        {
+          "question": "يوجد 365 يومًا في السنة العادية.",
+          "answer": "صح"
+        },
+        {
+          "question": "الصحراء حارة دائمًا.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "أطول حيوان في العالم هو الزرافة.",
+          "answer": "صح"
+        },
+        {
+          "question": "الأرض هي مركز الكون.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يقع الحاجز المرجاني العظيم في أستراليا.",
+          "answer": "صح"
+        },
+        {
+          "question": "يوجد ثمانية كواكب في نظامنا الشمسي.",
+          "answer": "صح"
+        },
+        {
+          "question": "يستطيع النعام الجري أسرع من الحصان.",
+          "answer": "صح"
+        },
+        {
+          "question": "يضخ القلب الدم في جميع أنحاء الجسم.",
+          "answer": "صح"
+        },
+        {
+          "question": "تُعد غابات الأمازون المطيرة أكبر غابة مطيرة في العالم.",
+          "answer": "صح"
+        },
+        {
+          "question": "الزجاج مصنوع من الرمل.",
+          "answer": "صح"
+        },
+        {
+          "question": "يوجد ألف عام في القرن.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يمتلك جسم الإنسان خمس حواس.",
+          "answer": "صح"
+        },
+        {
+          "question": "المحيط الهادئ أصغر من المحيط الأطلسي.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "بعض الضفادع تستطيع أن تتجمد دون أن تموت.",
+          "answer": "صح"
+        },
+        {
+          "question": "تشرق الشمس من الغرب.",
+          "answer": "خطأ"
+        },
+        {
+          "question": "يوجد 50 ولاية في الولايات المتحدة.",
+          "answer": "صح"
+        },
+        {
+          "question": "أطول مبنى في العالم موجود في دبي.",
+          "answer": "صح"
+        },
+        {
+          "question": "الطماطم فاكهة.",
+          "answer": "صح"
+        },
+        {
+          "question": "يوجد 24 ساعة في اليوم.",
+          "answer": "صح"
+        },
+        {
+          "question": "القارة القطبية الجنوبية هي أبرد قارة.",
+          "answer": "صح"
+        },
+        {
+          "question": "أكبر صحراء في العالم هي الصحراء الكبرى.",
+          "answer": "خطأ"
+        }
+      ],
+      "wordQuestions": [
+        {
+          "scrambled": "نمعا",
+          "answer": "عمان"
+        },
+        {
+          "scrambled": "سدأ",
+          "answer": "أسد"
+        },
+        {
+          "scrambled": "مقل",
+          "answer": "قلم"
+        },
+        {
+          "scrambled": "باتك",
+          "answer": "كتاب"
+        },
+        {
+          "scrambled": "ةرجش",
+          "answer": "شجرة"
+        },
+        {
+          "scrambled": "ةرايس",
+          "answer": "سيارة"
+        },
+        {
+          "scrambled": "فتاه",
+          "answer": "هاتف"
+        },
+        {
+          "scrambled": "حافت",
+          "answer": "مفتاح"
+        },
+        {
+          "scrambled": "ةرايس",
+          "answer": "سيارة"
+        },
+        {
+          "scrambled": "باتك",
+          "answer": "كتاب"
+        },
+        {
+          "scrambled": "ةرجش",
+          "answer": "شجرة"
+        },
+        {
+          "scrambled": "رطم",
+          "answer": "مطر"
+        },
+        {
+          "scrambled": "رمق",
+          "answer": "قمر"
+        },
+        {
+          "scrambled": "رحب",
+          "answer": "بحر"
+        },
+        {
+          "scrambled": "رمن",
+          "answer": "نمر"
+        },
+        {
+          "scrambled": "يسرك",
+          "answer": "كرسي"
+        },
+        {
+          "scrambled": "فتاه",
+          "answer": "هاتف"
+        },
+        {
+          "scrambled": "ةعاس",
+          "answer": "ساعة"
+        },
+        {
+          "scrambled": "ةذفان",
+          "answer": "نافذة"
+        },
+        {
+          "scrambled": "لبج",
+          "answer": "جبل"
+        },
+        {
+          "scrambled": "ةنيدم",
+          "answer": "مدينة"
+        },
+        {
+          "scrambled": "راطم",
+          "answer": "مطار"
+        },
+        {
+          "scrambled": "بيبط",
+          "answer": "طبيب"
+        },
+        {
+          "scrambled": "ةقيدح",
+          "answer": "حديقة"
+        },
+        {
+          "scrambled": "خبطم",
+          "answer": "مطبخ"
+        },
+        {
+          "scrambled": "ناصح",
+          "answer": "حصان"
+        },
+        {
+          "scrambled": "ةنيفس",
+          "answer": "سفينة"
+        },
+        {
+          "scrambled": "ناكرب",
+          "answer": "بركان"
+        },
+        {
+          "scrambled": "ةريزج",
+          "answer": "جزيرة"
+        },
+        {
+          "scrambled": "ةبتكم",
+          "answer": "مكتبة"
+        },
+        {
+          "scrambled": "ةحورم",
+          "answer": "مروحة"
+        },
+        {
+          "scrambled": "بوساح",
+          "answer": "حاسوب"
+        },
+        {
+          "scrambled": "اريماك",
+          "answer": "كاميرا"
+        },
+        {
+          "scrambled": "ةلظم",
+          "answer": "مظلة"
+        },
+        {
+          "scrambled": "خيطب",
+          "answer": "بطيخ"
+        },
+        {
+          "scrambled": "لاقترب",
+          "answer": "برتقال"
+        },
+        {
+          "scrambled": "زوم",
+          "answer": "موز"
+        },
+        {
+          "scrambled": "بنع",
+          "answer": "عنب"
+        },
+        {
+          "scrambled": "نوميل",
+          "answer": "ليمون"
+        },
+        {
+          "scrambled": "ةجارد",
+          "answer": "دراجة"
+        },
+        {
+          "scrambled": "راطق",
+          "answer": "قطار"
+        },
+        {
+          "scrambled": "بعلم",
+          "answer": "ملعب"
+        },
+        {
+          "scrambled": "ىفشتسم",
+          "answer": "مستشفى"
+        },
+        {
+          "scrambled": "ةعماج",
+          "answer": "جامعة"
+        },
+        {
+          "scrambled": "ةباحس",
+          "answer": "سحابة"
+        },
+        {
+          "scrambled": "ءارحص",
+          "answer": "صحراء"
+        },
+        {
+          "scrambled": "ةلخن",
+          "answer": "نخلة"
+        },
+        {
+          "scrambled": "حاسمت",
+          "answer": "تمساح"
+        },
+        {
+          "scrambled": "ةفارز",
+          "answer": "زرافة"
+        },
+        {
+          "scrambled": "نيفلد",
+          "answer": "دلفين"
+        },
+        {
+          "scrambled": "شرق",
+          "answer": "قرش"
+        },
+        {
+          "scrambled": "ةشارف",
+          "answer": "فراشة"
+        },
+        {
+          "scrambled": "توبكنع",
+          "answer": "عنكبوت"
+        },
+        {
+          "scrambled": "ةافحلس",
+          "answer": "سلحفاة"
+        },
+        {
+          "scrambled": "رقص",
+          "answer": "صقر"
+        },
+        {
+          "scrambled": "ةمامح",
+          "answer": "حمامة"
+        },
+        {
+          "scrambled": "بنرأ",
+          "answer": "أرنب"
+        },
+        {
+          "scrambled": "ةذوخ",
+          "answer": "خوذة"
+        },
+        {
+          "scrambled": "عرد",
+          "answer": "درع"
+        },
+        {
+          "scrambled": "زنك",
+          "answer": "كنز"
+        },
+        {
+          "scrambled": "ةرجم",
+          "answer": "مجرة"
+        },
+        {
+          "scrambled": "بكوك",
+          "answer": "كوكب"
+        },
+        {
+          "scrambled": "ةمجن",
+          "answer": "نجمة"
+        },
+        {
+          "scrambled": "بنذم",
+          "answer": "مذنب"
+        },
+        {
+          "scrambled": "خوراص",
+          "answer": "صاروخ"
+        },
+        {
+          "scrambled": "توبور",
+          "answer": "روبوت"
+        },
+        {
+          "scrambled": "ةرهوج",
+          "answer": "جوهرة"
+        },
+        {
+          "scrambled": "ةعلق",
+          "answer": "قلعة"
+        },
+        {
+          "scrambled": "ةكلمم",
+          "answer": "مملكة"
+        },
+        {
+          "scrambled": "ةرزج",
+          "answer": "جزرة"
+        },
+        {
+          "scrambled": "لفلف",
+          "answer": "فلفل"
+        },
+        {
+          "scrambled": "اطاطب",
+          "answer": "بطاطا"
+        },
+        {
+          "scrambled": "ناجنذاب",
+          "answer": "باذنجان"
+        },
+        {
+          "scrambled": "مطامط",
+          "answer": "طماطم"
+        },
+        {
+          "scrambled": "لصب",
+          "answer": "بصل"
+        },
+        {
+          "scrambled": "موث",
+          "answer": "ثوم"
+        },
+        {
+          "scrambled": "ةوهق",
+          "answer": "قهوة"
+        },
+        {
+          "scrambled": "ياش",
+          "answer": "شاي"
+        },
+        {
+          "scrambled": "ريصع",
+          "answer": "عصير"
+        },
+        {
+          "scrambled": "بيلح",
+          "answer": "حليب"
+        },
+        {
+          "scrambled": "ةتالوكوش",
+          "answer": "شوكولاتة"
+        },
+        {
+          "scrambled": "تيوكسب",
+          "answer": "بسكويت"
+        },
+        {
+          "scrambled": "ازتيب",
+          "answer": "بيتزا"
+        },
+        {
+          "scrambled": "رجرب",
+          "answer": "برجر"
+        },
+        {
+          "scrambled": "ةنوركعم",
+          "answer": "معكرونة"
+        },
+        {
+          "scrambled": "زرأ",
+          "answer": "أرز"
+        },
+        {
+          "scrambled": "جاجد",
+          "answer": "دجاج"
+        },
+        {
+          "scrambled": "ةكمس",
+          "answer": "سمكة"
+        },
+        {
+          "scrambled": "ةيحورم",
+          "answer": "مروحية"
+        },
+        {
+          "scrambled": "ةبابد",
+          "answer": "دبابة"
+        },
+        {
+          "scrambled": "ةصاوغ",
+          "answer": "غواصة"
+        },
+        {
+          "scrambled": "داطنم",
+          "answer": "منطاد"
+        },
+        {
+          "scrambled": "ةبكرم",
+          "answer": "مركبة"
+        },
+        {
+          "scrambled": "حرسم",
+          "answer": "مسرح"
+        },
+        {
+          "scrambled": "امنيس",
+          "answer": "سينما"
+        },
+        {
+          "scrambled": "فحتم",
+          "answer": "متحف"
+        }
+      ],
+      "speedWords": [
+        "ZOM",
+        "ZOMBI",
+        "GAME",
+        "FAST",
+        "WIN",
+        "DISCORD",
+        "ECONOMY",
+        "PLAYER",
+        "تفاح",
+        "سيارة",
+        "قمر",
+        "بحر",
+        "نمر",
+        "كتاب",
+        "مدرسة",
+        "طائرة",
+        "مفتاح",
+        "شجرة",
+        "نظارة",
+        "هاتف",
+        "ساعة",
+        "كرسي",
+        "نافذة",
+        "جبل",
+        "مطر",
+        "صندوق",
+        "مدينة",
+        "مطار",
+        "طبيب",
+        "حديقة",
+        "مطبخ",
+        "حصان",
+        "سفينة",
+        "بركان",
+        "جزيرة",
+        "مكتبة",
+        "مروحة",
+        "حاسوب",
+        "كاميرا",
+        "ملعقة",
+        "مظلة",
+        "بطيخ",
+        "برتقال",
+        "موز",
+        "فراولة",
+        "عنب",
+        "ليمون",
+        "أناناس",
+        "دراجة",
+        "قطار",
+        "ملعب",
+        "مستشفى",
+        "جامعة",
+        "مخبز",
+        "مصعد",
+        "سحابة",
+        "صحراء",
+        "نخلة",
+        "تمساح",
+        "زرافة",
+        "دلفين",
+        "قرش",
+        "فراشة",
+        "عنكبوت",
+        "سلحفاة",
+        "صقر",
+        "حمامة",
+        "أرنب",
+        "بندقية",
+        "خوذة",
+        "درع",
+        "مغامرة",
+        "كنز",
+        "مجرة",
+        "كوكب",
+        "نجمة",
+        "مذنب",
+        "صاروخ",
+        "روبوت",
+        "جوهرة",
+        "قلعة",
+        "مملكة",
+        "جزرة",
+        "فلفل",
+        "بطاطا",
+        "باذنجان",
+        "طماطم",
+        "بصل",
+        "ثوم",
+        "قهوة",
+        "شاي",
+        "عصير",
+        "حليب",
+        "شوكولاتة",
+        "بسكويت",
+        "بيتزا",
+        "برجر",
+        "معكرونة",
+        "أرز",
+        "دجاج",
+        "سمكة",
+        "مروحية",
+        "دبابة",
+        "غواصة",
+        "منطاد",
+        "مركبة",
+        "مسرح",
+        "سينما",
+        "متحف"
+      ],
+      "dailyQuestions": [
+        {
+          "question": "كم عدد ساعات اليوم؟",
+          "answer": "24"
+        },
+        {
+          "question": "كم عدد دقائق الساعة؟",
+          "answer": "60"
+        },
+        {
+          "question": "كم عدد أيام الأسبوع؟",
+          "answer": "7"
+        },
+        {
+          "question": "ما هي عاصمة كندا؟",
+          "answer": "أوتاوا"
+        },
+        {
+          "question": "ما هي عاصمة أستراليا؟",
+          "answer": "كانبرا"
+        },
+        {
+          "question": "ما هي عاصمة البرازيل؟",
+          "answer": "برازيليا"
+        },
+        {
+          "question": "ما هي عاصمة تركيا؟",
+          "answer": "أنقرة"
+        },
+        {
+          "question": "ما هي عاصمة سويسرا؟",
+          "answer": "برن"
+        },
+        {
+          "question": "ما هي عاصمة النرويج؟",
+          "answer": "أوسلو"
+        },
+        {
+          "question": "ما هي عاصمة السويد؟",
+          "answer": "ستوكهولم"
+        },
+        {
+          "question": "ما هي عاصمة الأرجنتين؟",
+          "answer": "بوينس آيرس"
+        },
+        {
+          "question": "ما هي عاصمة الهند؟",
+          "answer": "نيودلهي"
+        },
+        {
+          "question": "ما هي عاصمة الصين؟",
+          "answer": "بكين"
+        },
+        {
+          "question": "ما هي عاصمة إيطاليا؟",
+          "answer": "روما"
+        },
+        {
+          "question": "ما هي عاصمة اليونان؟",
+          "answer": "أثينا"
+        },
+        {
+          "question": "ما هي عاصمة هولندا؟",
+          "answer": "أمستردام"
+        },
+        {
+          "question": "ما هي عاصمة ألمانيا؟",
+          "answer": "برلين"
+        },
+        {
+          "question": "ما هي عاصمة البرتغال؟",
+          "answer": "لشبونة"
+        },
+        {
+          "question": "ما هي عاصمة النمسا؟",
+          "answer": "فيينا"
+        },
+        {
+          "question": "ما هي عاصمة كوريا الجنوبية؟",
+          "answer": "سيول"
+        },
+        {
+          "question": "ما هي عاصمة تايلاند؟",
+          "answer": "بانكوك"
+        },
+        {
+          "question": "ما هي عاصمة المغرب؟",
+          "answer": "الرباط"
+        },
+        {
+          "question": "ما هي عاصمة الجزائر؟",
+          "answer": "الجزائر"
+        },
+        {
+          "question": "ما هي عاصمة تونس؟",
+          "answer": "تونس"
+        },
+        {
+          "question": "ما هي عاصمة السعودية؟",
+          "answer": "الرياض"
+        },
+        {
+          "question": "ما هي عاصمة الإمارات؟",
+          "answer": "أبوظبي"
+        },
+        {
+          "question": "ما هي عاصمة سلطنة عمان؟",
+          "answer": "مسقط"
+        },
+        {
+          "question": "ما هي عاصمة الكويت؟",
+          "answer": "الكويت"
+        },
+        {
+          "question": "ما هي عاصمة البحرين؟",
+          "answer": "المنامة"
+        },
+        {
+          "question": "ما هي عاصمة لبنان؟",
+          "answer": "بيروت"
+        },
+        {
+          "question": "ما هي عاصمة سوريا؟",
+          "answer": "دمشق"
+        },
+        {
+          "question": "ما هي عاصمة العراق؟",
+          "answer": "بغداد"
+        },
+        {
+          "question": "ما هي عاصمة اليمن؟",
+          "answer": "صنعاء"
+        },
+        {
+          "question": "ما الحيوان الذي يُعرف بقدرته على تغيير لونه؟",
+          "answer": "الحرباء"
+        },
+        {
+          "question": "ما الحيوان الذي يحمل صغاره في كيس؟",
+          "answer": "الكنغر"
+        },
+        {
+          "question": "ما الحيوان الذي يُعرف ببطئه الشديد؟",
+          "answer": "الكسلان"
+        },
+        {
+          "question": "ما الطائر الذي لا يستطيع الطيران ويعيش في القطب الجنوبي؟",
+          "answer": "البطريق"
+        },
+        {
+          "question": "ما أكبر طائر حي في العالم؟",
+          "answer": "النعامة"
+        },
+        {
+          "question": "ما الحيوان الذي يمتلك أطول رقبة؟",
+          "answer": "الزرافة"
+        },
+        {
+          "question": "ما الحيوان الذي يمتلك خطوطًا سوداء وبيضاء؟",
+          "answer": "الحمار الوحشي"
+        },
+        {
+          "question": "ما الحيوان الذي يمتلك درعًا صلبًا على ظهره؟",
+          "answer": "السلحفاة"
+        },
+        {
+          "question": "ما الحيوان الذي يستخدم صدى الصوت لتحديد المواقع؟",
+          "answer": "الخفاش"
+        },
+        {
+          "question": "ما الحيوان الذي يمتلك ثمانية أذرع؟",
+          "answer": "الأخطبوط"
+        },
+        {
+          "question": "ما الحيوان المعروف بقدرته على بناء السدود؟",
+          "answer": "القندس"
+        },
+        {
+          "question": "ما الحيوان الذي يعيش غالبًا في القطب الشمالي؟",
+          "answer": "الدب القطبي"
+        },
+        {
+          "question": "ما الطائر الذي يُستخدم رمزًا للسلام؟",
+          "answer": "الحمامة"
+        },
+        {
+          "question": "ما الطائر الذي يشتهر بريشه الملون الجميل؟",
+          "answer": "الطاووس"
+        },
+        {
+          "question": "ما الجزء الذي نستخدمه للشم؟",
+          "answer": "الأنف"
+        },
+        {
+          "question": "ما الجزء الذي نستخدمه للتذوق؟",
+          "answer": "اللسان"
+        },
+        {
+          "question": "ما العضو المسؤول عن التفكير؟",
+          "answer": "الدماغ"
+        },
+        {
+          "question": "ما العضو المسؤول عن التنفس؟",
+          "answer": "الرئتان"
+        },
+        {
+          "question": "ما الجزء الذي يحمي الدماغ؟",
+          "answer": "الجمجمة"
+        },
+        {
+          "question": "ما السائل الذي يجري داخل الأوعية الدموية؟",
+          "answer": "الدم"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه O؟",
+          "answer": "الأكسجين"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه H؟",
+          "answer": "الهيدروجين"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه Fe؟",
+          "answer": "الحديد"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه Au؟",
+          "answer": "الذهب"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه Ag؟",
+          "answer": "الفضة"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه Na؟",
+          "answer": "الصوديوم"
+        },
+        {
+          "question": "ما العنصر الكيميائي الذي رمزه C؟",
+          "answer": "الكربون"
+        },
+        {
+          "question": "ما اسم الجهاز الذي يقيس درجة الحرارة؟",
+          "answer": "مقياس الحرارة"
+        },
+        {
+          "question": "ما اسم الجهاز الذي يقيس الوزن؟",
+          "answer": "الميزان"
+        },
+        {
+          "question": "ما اسم الجهاز الذي نستخدمه لرؤية الأجسام الصغيرة جدًا؟",
+          "answer": "المجهر"
+        },
+        {
+          "question": "ما اسم الجهاز الذي نستخدمه لرؤية الأجسام البعيدة في الفضاء؟",
+          "answer": "التلسكوب"
+        },
+        {
+          "question": "ما المعدن السائل في درجة حرارة الغرفة؟",
+          "answer": "الزئبق"
+        },
+        {
+          "question": "ما الغاز المستخدم غالبًا في بالونات الحفلات؟",
+          "answer": "الهيليوم"
+        },
+        {
+          "question": "ما المادة التي تتجمد عند انخفاض درجة حرارتها؟",
+          "answer": "الماء"
+        },
+        {
+          "question": "ما العملية التي يتحول فيها الماء إلى بخار؟",
+          "answer": "التبخر"
+        },
+        {
+          "question": "ما العملية التي يتحول فيها البخار إلى ماء؟",
+          "answer": "التكاثف"
+        },
+        {
+          "question": "ما العملية التي يتحول فيها الماء إلى ثلج؟",
+          "answer": "التجمد"
+        },
+        {
+          "question": "كم يساوي 12 × 12؟",
+          "answer": "144"
+        },
+        {
+          "question": "كم يساوي 15 + 27؟",
+          "answer": "42"
+        },
+        {
+          "question": "كم يساوي 100 ÷ 4؟",
+          "answer": "25"
+        },
+        {
+          "question": "كم يساوي 9 × 8؟",
+          "answer": "72"
+        },
+        {
+          "question": "كم يساوي 144 ÷ 12؟",
+          "answer": "12"
+        },
+        {
+          "question": "كم يساوي 75 - 30؟",
+          "answer": "45"
+        },
+        {
+          "question": "كم يساوي 25 × 4؟",
+          "answer": "100"
+        },
+        {
+          "question": "كم يساوي نصف 80؟",
+          "answer": "40"
+        },
+        {
+          "question": "كم يساوي ربع 100؟",
+          "answer": "25"
+        },
+        {
+          "question": "كم عدد أضلاع الشكل الخماسي؟",
+          "answer": "5"
+        },
+        {
+          "question": "كم عدد أضلاع الشكل السداسي؟",
+          "answer": "6"
+        },
+        {
+          "question": "كم عدد أضلاع الشكل الثماني؟",
+          "answer": "8"
+        },
+        {
+          "question": "ما اسم الشكل الذي لا يحتوي على أضلاع؟",
+          "answer": "الدائرة"
+        },
+        {
+          "question": "ما اسم الشكل الذي له ثلاثة أضلاع؟",
+          "answer": "المثلث"
+        },
+        {
+          "question": "ما اسم الشكل الذي له أربعة أضلاع متساوية؟",
+          "answer": "المربع"
+        },
+        {
+          "question": "ما اللغة الرسمية في البرازيل؟",
+          "answer": "البرتغالية"
+        },
+        {
+          "question": "ما اللغة الرسمية في فرنسا؟",
+          "answer": "الفرنسية"
+        },
+        {
+          "question": "ما اللغة الرسمية في ألمانيا؟",
+          "answer": "الألمانية"
+        },
+        {
+          "question": "ما اللغة الرسمية في إيطاليا؟",
+          "answer": "الإيطالية"
+        },
+        {
+          "question": "ما اللغة الرسمية في إسبانيا؟",
+          "answer": "الإسبانية"
+        },
+        {
+          "question": "ما العملة الرسمية في بريطانيا؟",
+          "answer": "الجنيه الإسترليني"
+        },
+        {
+          "question": "ما العملة الرسمية في السعودية؟",
+          "answer": "الريال السعودي"
+        },
+        {
+          "question": "ما العملة الرسمية في الإمارات؟",
+          "answer": "الدرهم الإماراتي"
+        },
+        {
+          "question": "ما العملة الرسمية في الكويت؟",
+          "answer": "الدينار الكويتي"
+        },
+        {
+          "question": "ما العملة الرسمية في البحرين؟",
+          "answer": "الدينار البحريني"
+        },
+        {
+          "question": "من كتب مسرحية روميو وجولييت؟",
+          "answer": "ويليام شكسبير"
+        },
+        {
+          "question": "من رسم لوحة العشاء الأخير؟",
+          "answer": "ليوناردو دا فينشي"
+        },
+        {
+          "question": "من اخترع الهاتف؟",
+          "answer": "ألكسندر غراهام بيل"
+        },
+        {
+          "question": "من اخترع الطائرة؟",
+          "answer": "الأخوان رايت"
+        },
+        {
+          "question": "من وضع قوانين الحركة الثلاثة؟",
+          "answer": "إسحاق نيوتن"
+        },
+        {
+          "question": "من اكتشف البنسلين؟",
+          "answer": "ألكسندر فليمنغ"
+        },
+        {
+          "question": "ما اسم أول قمر صناعي أُرسل إلى الفضاء؟",
+          "answer": "سبوتنيك 1"
+        },
+        {
+          "question": "ما اسم المجرة التي توجد فيها الأرض؟",
+          "answer": "درب التبانة"
+        },
+        {
+          "question": "ما الكوكب الأبعد عن الشمس في المجموعة الشمسية؟",
+          "answer": "نبتون"
+        },
+        {
+          "question": "ما الكوكب المعروف بحلقاته الواضحة؟",
+          "answer": "زحل"
+        },
+        {
+          "question": "ما أصغر كوكب في المجموعة الشمسية؟",
+          "answer": "عطارد"
+        },
+        {
+          "question": "ما أكبر قمر في المجموعة الشمسية؟",
+          "answer": "غانيميد"
+        },
+        {
+          "question": "ما اسم القمر الطبيعي للأرض؟",
+          "answer": "القمر"
+        },
+        {
+          "question": "ما اسم أقرب نجم إلى الأرض؟",
+          "answer": "الشمس"
+        },
+        {
+          "question": "ما البحر الذي يفصل السعودية عن مصر؟",
+          "answer": "البحر الأحمر"
+        },
+        {
+          "question": "ما القارة التي تقع فيها اليابان؟",
+          "answer": "آسيا"
+        },
+        {
+          "question": "ما القارة التي تقع فيها فرنسا؟",
+          "answer": "أوروبا"
+        },
+        {
+          "question": "ما القارة التي تقع فيها كينيا؟",
+          "answer": "أفريقيا"
+        },
+        {
+          "question": "ما القارة التي تقع فيها تشيلي؟",
+          "answer": "أمريكا الجنوبية"
+        },
+        {
+          "question": "ما القارة التي تقع فيها كندا؟",
+          "answer": "أمريكا الشمالية"
+        },
+        {
+          "question": "ما القارة التي تقع فيها نيوزيلندا؟",
+          "answer": "أوقيانوسيا"
+        }
+      ]
+    },
+    "killer-cases.json": [
+      {
+        "id": "case_001",
+        "enabled": true,
+        "title": "💎 سر الألماسة الزرقاء",
+        "story": "في ليلة هادئة، اختفت ألماسة نادرة من خزنة داخل منزل كبير. الغريب أن الخزنة لم تكن مكسورة، والباب الرئيسي للمنزل كان مغلقًا.",
+        "suspects": [
+          "رامي",
+          "سامي",
+          "خالد",
+          "أحمد"
+        ],
+        "clues": [
+          "الخزنة لم تتعرض للكسر.",
+          "أحمد كان يعرف الرقم السري.",
+          "سامي كان في المطبخ.",
+          "رامي كان خارج المنزل.",
+          "خالد لم يدخل غرفة الخزنة."
+        ],
+        "hints": [
+          "فكر بمن يستطيع فتح الخزنة بدون كسرها.",
+          "شخص واحد فقط يعرف الرقم السري.",
+          "أحمد كان يملك المعلومة التي يحتاجها لفتح الخزنة."
+        ],
+        "killer": "أحمد",
+        "answer": "أحمد كان يعرف الرقم السري للخزنة، ولذلك استطاع فتحها دون ترك أي أثر للكسر.",
+        "updatedAt": 1788222412382
+      },
+      {
+        "id": "case_002",
+        "enabled": true,
+        "title": "☕ لغز المقهى",
+        "story": "في مقهى مزدحم، اختفى صندوق النقود من خلف الطاولة. كان هناك أربعة أشخاص بالقرب من المكان، لكن أحدهم يعرف تفاصيل لم يكن من المفترض أن يعرفها.",
+        "suspects": [
+          "مازن",
+          "عمر",
+          "ليث",
+          "ياسر"
+        ],
+        "clues": [
+          "الصندوق كان خلف الطاولة.",
+          "مازن كان يجلس بعيدًا.",
+          "عمر كان يتحدث مع الزبائن.",
+          "ليث خرج من المقهى قبل الحادثة.",
+          "ياسر كان آخر شخص خلف الطاولة."
+        ],
+        "hints": [
+          "ابحث عن الشخص الذي كان في المكان مباشرة.",
+          "آخر شخص كان خلف الطاولة لديه فرصة أكبر.",
+          "ياسر كان آخر شخص شوهد في مكان الصندوق."
+        ],
+        "killer": "ياسر",
+        "answer": "ياسر كان آخر شخص خلف الطاولة، وكانت لديه فرصة الوصول إلى صندوق النقود."
+      },
+      {
+        "id": "case_003",
+        "enabled": true,
+        "title": "⌚ الساعة المفقودة",
+        "story": "اختفت ساعة ثمينة من غرفة مغلقة أثناء تجمع عائلي. لم يكن هناك أي أثر لكسر الباب.",
+        "suspects": [
+          "علي",
+          "فادي",
+          "نور",
+          "وسام"
+        ],
+        "clues": [
+          "الغرفة كانت مغلقة.",
+          "علي كان يحمل المفتاح.",
+          "فادي لم يدخل الغرفة.",
+          "نور كانت في الحديقة.",
+          "وسام غادر قبل اكتشاف الاختفاء."
+        ],
+        "hints": [
+          "كيف دخل شخص إلى غرفة مغلقة؟",
+          "المفتاح هو أهم دليل.",
+          "علي كان الوحيد الذي يملك المفتاح."
+        ],
+        "killer": "علي",
+        "answer": "علي كان يملك مفتاح الغرفة، ولذلك استطاع دخولها والوصول إلى الساعة."
+      },
+      {
+        "id": "case_004",
+        "enabled": true,
+        "title": "🏠 المنزل المهجور",
+        "story": "سمع الجيران صوت حركة داخل منزل مهجور. بعد دقائق، اكتشفوا أن صندوقًا قديمًا اختفى من إحدى الغرف.",
+        "suspects": [
+          "باسل",
+          "كريم",
+          "طارق",
+          "حسين"
+        ],
+        "clues": [
+          "الباب الرئيسي كان مفتوحًا.",
+          "باسل قال إنه لم يدخل المنزل.",
+          "كريم كان يحمل مصباحًا.",
+          "طارق يعرف المنزل جيدًا.",
+          "حسين كان ينتظر خارج المنزل."
+        ],
+        "hints": [
+          "معرفة المكان قد تكون أهم من القوة.",
+          "من يعرف الطرق داخل المنزل يستطيع التحرك بسهولة.",
+          "طارق يعرف المنزل أكثر من الجميع."
+        ],
+        "killer": "طارق",
+        "answer": "طارق كان يعرف المنزل جيدًا، لذلك استطاع الوصول إلى الصندوق والتحرك دون لفت الانتباه."
+      },
+      {
+        "id": "case_005",
+        "enabled": true,
+        "title": "📱 الهاتف السري",
+        "story": "اختفى هاتف يحتوي على معلومات مهمة من مكتب المدير. المكتب كان مقفلًا ولا يستطيع الدخول إليه سوى أصحاب بطاقات معينة.",
+        "suspects": [
+          "سعيد",
+          "حسام",
+          "جمال",
+          "مروان"
+        ],
+        "clues": [
+          "المكتب كان مقفلًا.",
+          "سعيد يملك بطاقة الدخول.",
+          "حسام كان في اجتماع.",
+          "جمال غادر الشركة.",
+          "مروان لم يملك بطاقة."
+        ],
+        "hints": [
+          "فكر بمن يستطيع دخول المكتب.",
+          "ليس كل الموجودين يستطيعون فتح الباب.",
+          "سعيد كان يملك بطاقة الدخول."
+        ],
+        "killer": "سعيد",
+        "answer": "سعيد كان الشخص الوحيد من المشتبه بهم الذي يملك بطاقة دخول للمكتب."
+      },
+      {
+        "id": "case_006",
+        "enabled": true,
+        "title": "👜 الحقيبة السوداء",
+        "story": "أثناء حفلة مزدحمة، اختفت حقيبة سوداء كانت بجانب الباب. الجميع كان يتحرك، لكن شخصًا واحدًا كان قريبًا منها طوال الوقت.",
+        "suspects": [
+          "رامي",
+          "سليم",
+          "جاد",
+          "أنس"
+        ],
+        "clues": [
+          "الحقيبة كانت بجانب الباب.",
+          "رامي كان يجلس بجانبها.",
+          "سليم كان يرقص.",
+          "جاد كان خارج المكان.",
+          "أنس بقي مع مجموعة من الضيوف."
+        ],
+        "hints": [
+          "المسافة من الحقيبة مهمة.",
+          "من كان بجانبها؟",
+          "رامي كان الأقرب إليها."
+        ],
+        "killer": "رامي",
+        "answer": "رامي كان يجلس بجانب الحقيبة، وكان لديه فرصة الوصول إليها دون أن يلاحظه أحد."
+      },
+      {
+        "id": "case_007",
+        "enabled": true,
+        "title": "🕯️ الغرفة المظلمة",
+        "story": "انقطعت الكهرباء لمدة خمس دقائق، وبعد عودتها اختفى صندوق صغير من الغرفة.",
+        "suspects": [
+          "كامل",
+          "نبيل",
+          "وسيم",
+          "عادل"
+        ],
+        "clues": [
+          "الكهرباء انقطعت لخمس دقائق.",
+          "كامل يعرف مكان المصباح الاحتياطي.",
+          "نبيل بقي في الصالة.",
+          "وسيم خرج إلى الحديقة.",
+          "عادل كان يبحث عن هاتفه."
+        ],
+        "hints": [
+          "من يستطيع التحرك في الظلام بسهولة؟",
+          "شخص واحد يعرف مكان مصدر الضوء.",
+          "كامل يعرف مكان المصباح."
+        ],
+        "killer": "كامل",
+        "answer": "كامل كان يعرف مكان المصباح الاحتياطي، لذلك استطاع التحرك أثناء انقطاع الكهرباء."
+      },
+      {
+        "id": "case_008",
+        "enabled": true,
+        "title": "🚗 السيارة الغامضة",
+        "story": "شوهدت سيارة سوداء أمام منزل قبل اختفاء حقيبة مهمة.",
+        "suspects": [
+          "محمود",
+          "زياد",
+          "علاء",
+          "شادي"
+        ],
+        "clues": [
+          "السيارة كانت سوداء.",
+          "محمود يملك سيارة سوداء.",
+          "زياد لا يقود.",
+          "علاء كان في العمل.",
+          "شادي كان داخل المنزل."
+        ],
+        "hints": [
+          "ركز على وصف السيارة.",
+          "أي مشتبه به يملك سيارة تطابق الوصف؟",
+          "محمود يملك سيارة سوداء."
+        ],
+        "killer": "محمود",
+        "answer": "السيارة التي شوهدت تطابق سيارة محمود."
+      },
+      {
+        "id": "case_009",
+        "enabled": true,
+        "title": "🔑 المفتاح المفقود",
+        "story": "اختفى مفتاح خزنة من مكتب المدير أثناء فترة قصيرة لم يكن فيها المدير موجودًا.",
+        "suspects": [
+          "رامز",
+          "حازم",
+          "سمير",
+          "جلال"
+        ],
+        "clues": [
+          "المفتاح كان على المكتب.",
+          "رامز كان يعمل في المكتب.",
+          "حازم كان في الطابق الثاني.",
+          "سمير وصل بعد الحادثة.",
+          "جلال لم يدخل المكتب."
+        ],
+        "hints": [
+          "من كان في المكتب؟",
+          "المفتاح كان على المكتب.",
+          "رامز كان موجودًا في المكان."
+        ],
+        "killer": "رامز",
+        "answer": "رامز كان موجودًا في المكتب عندما كان المفتاح على الطاولة."
+      },
+      {
+        "id": "case_010",
+        "enabled": true,
+        "title": "📚 سر المكتبة",
+        "story": "اختفى كتاب نادر من مكتبة خاصة. لم يكن هناك سوى عدد قليل من الأشخاص داخل المكان.",
+        "suspects": [
+          "يوسف",
+          "إياد",
+          "مراد",
+          "فراس"
+        ],
+        "clues": [
+          "الكتاب كان في الرف الأخير.",
+          "يوسف كان يبحث عن كتاب.",
+          "إياد لم يدخل المكتبة.",
+          "مراد كان في الاستقبال.",
+          "فراس غادر مبكرًا."
+        ],
+        "hints": [
+          "من كان يبحث بين الكتب؟",
+          "الكتاب موجود بين الرفوف.",
+          "يوسف كان داخل المكتبة ويبحث عن كتاب."
+        ],
+        "killer": "يوسف",
+        "answer": "يوسف كان داخل المكتبة ويبحث بين الكتب، ولذلك استطاع الوصول إلى الكتاب النادر."
+      },
+      {
+        "id": "case_011",
+        "enabled": true,
+        "title": "🎒 الحقيبة المدرسية",
+        "story": "اختفت ورقة مهمة من حقيبة طالب أثناء الاستراحة.",
+        "suspects": [
+          "آدم",
+          "رامي",
+          "سيف",
+          "جاد"
+        ],
+        "clues": [
+          "الحقيبة بقيت في الصف.",
+          "آدم بقي في الصف.",
+          "رامي خرج إلى الملعب.",
+          "سيف ذهب إلى المقصف.",
+          "جاد كان مع المعلم."
+        ],
+        "hints": [
+          "من بقي في الصف؟",
+          "الحقيبة لم تغادر مكانها.",
+          "آدم كان الوحيد الذي بقي معها."
+        ],
+        "killer": "آدم",
+        "answer": "آدم كان الوحيد الموجود في الصف أثناء اختفاء الورقة."
+      },
+      {
+        "id": "case_012",
+        "enabled": true,
+        "title": "🏨 غرفة الفندق",
+        "story": "اختفت ساعة من غرفة فندق، والباب لم يكن مكسورًا.",
+        "suspects": [
+          "طارق",
+          "حسام",
+          "وليد",
+          "سامر"
+        ],
+        "clues": [
+          "الباب لم يكسر.",
+          "طارق يملك بطاقة الغرفة.",
+          "حسام كان في المطعم.",
+          "وليد كان في المصعد.",
+          "سامر وصل لاحقًا."
+        ],
+        "hints": [
+          "الباب لم يُكسر.",
+          "من يستطيع فتحه؟",
+          "طارق يملك بطاقة الغرفة."
+        ],
+        "killer": "طارق",
+        "answer": "طارق كان يملك بطاقة الغرفة وتمكن من دخولها دون كسر الباب."
+      },
+      {
+        "id": "case_013",
+        "enabled": true,
+        "title": "🎁 الهدية الغامضة",
+        "story": "اختفت هدية ثمينة من طاولة قبل بدء الحفلة.",
+        "suspects": [
+          "ليث",
+          "عمر",
+          "فادي",
+          "حسن"
+        ],
+        "clues": [
+          "الهدية كانت على الطاولة.",
+          "ليث كان بجانب الطاولة.",
+          "عمر كان يصور الحفلة.",
+          "فادي كان خارج المنزل.",
+          "حسن كان يتحدث مع الضيوف."
+        ],
+        "hints": [
+          "من كان قريبًا من الطاولة؟",
+          "ليث لم يكن بعيدًا عن الهدية.",
+          "ليث كان بجانبها مباشرة."
+        ],
+        "killer": "ليث",
+        "answer": "ليث كان بجانب الطاولة التي كانت عليها الهدية."
+      },
+      {
+        "id": "case_014",
+        "enabled": true,
+        "title": "💼 حقيبة المدير",
+        "story": "اختفى ملف مهم من حقيبة المدير أثناء اجتماع.",
+        "suspects": [
+          "سامر",
+          "معتز",
+          "نادر",
+          "بشير"
+        ],
+        "clues": [
+          "الحقيبة كانت بجانب المدير.",
+          "سامر جلس بجانبه.",
+          "معتز كان أمام الشاشة.",
+          "نادر كان يكتب.",
+          "بشير دخل متأخرًا."
+        ],
+        "hints": [
+          "من كان الأقرب للحقيبة؟",
+          "الحقيبة كانت بجانب المدير.",
+          "سامر كان يجلس بجانب المدير."
+        ],
+        "killer": "سامر",
+        "answer": "سامر كان يجلس بجانب المدير والحقيبة، مما أعطاه فرصة الوصول إليها."
+      },
+      {
+        "id": "case_015",
+        "enabled": true,
+        "title": "🪟 النافذة المفتوحة",
+        "story": "اختفى صندوق من غرفة وكانت النافذة مفتوحة.",
+        "suspects": [
+          "عمر",
+          "رامي",
+          "فارس",
+          "كريم"
+        ],
+        "clues": [
+          "النافذة كانت مفتوحة.",
+          "عمر يعرف مكان الغرفة.",
+          "رامي كان في الحديقة.",
+          "فارس كان في المطبخ.",
+          "كريم كان يشاهد التلفاز."
+        ],
+        "hints": [
+          "انظر إلى الشخص الموجود قرب النافذة.",
+          "رامي كان في الحديقة.",
+          "النافذة تطل على الحديقة."
+        ],
+        "killer": "رامي",
+        "answer": "رامي كان في الحديقة أسفل النافذة، مما أعطاه فرصة للوصول إليها."
+      },
+      {
+        "id": "case_016",
+        "enabled": true,
+        "title": "🧤 القفاز الأسود",
+        "story": "وجد المحققون قفازًا أسود قرب مكان اختفاء صندوق.",
+        "suspects": [
+          "حسام",
+          "مازن",
+          "سعيد",
+          "فؤاد"
+        ],
+        "clues": [
+          "القفاز أسود.",
+          "حسام يستخدم قفازات سوداء.",
+          "مازن لا يرتدي القفازات.",
+          "سعيد كان خارج المكان.",
+          "فؤاد كان في السيارة."
+        ],
+        "hints": [
+          "القفاز ليس مجرد تفصيل.",
+          "أي شخص يستخدم قفازات سوداء؟",
+          "حسام هو المطابق للدليل."
+        ],
+        "killer": "حسام",
+        "answer": "القفاز الأسود يتطابق مع القفازات التي يستخدمها حسام."
+      },
+      {
+        "id": "case_017",
+        "enabled": true,
+        "title": "🕵️ الشاهد الوحيد",
+        "story": "قال شاهد إنه رأى شخصًا يخرج من الغرفة، لكن أحد المشتبه بهم قدم رواية غير واضحة عن مكانه.",
+        "suspects": [
+          "نبيل",
+          "رامي",
+          "زياد",
+          "سامي"
+        ],
+        "clues": [
+          "الشاهد رأى شخصًا يخرج.",
+          "نبيل قال إنه كان في الحمام.",
+          "رامي كان في المطبخ.",
+          "زياد كان خارج المبنى.",
+          "سامي كان في الصالة."
+        ],
+        "hints": [
+          "هناك شخص قدم عذرًا يصعب التحقق منه.",
+          "نبيل قال إنه كان في الحمام.",
+          "رواية نبيل كانت الأضعف."
+        ],
+        "killer": "نبيل",
+        "answer": "نبيل قدم رواية لا يمكن التحقق منها بسهولة، وكان الأقرب إلى مكان الحادث."
+      },
+      {
+        "id": "case_018",
+        "enabled": true,
+        "title": "📦 الصندوق المغلق",
+        "story": "اختفى شيء من صندوق مقفل داخل المستودع.",
+        "suspects": [
+          "عدنان",
+          "بسام",
+          "رامز",
+          "وليد"
+        ],
+        "clues": [
+          "الصندوق كان مقفلًا.",
+          "عدنان يملك المفتاح.",
+          "بسام لم يدخل المستودع.",
+          "رامز كان خارج المكان.",
+          "وليد وصل لاحقًا."
+        ],
+        "hints": [
+          "الصندوق مقفل.",
+          "من يملك مفتاحه؟",
+          "عدنان يملك المفتاح."
+        ],
+        "killer": "عدنان",
+        "answer": "عدنان كان يملك مفتاح الصندوق المغلق."
+      },
+      {
+        "id": "case_019",
+        "enabled": true,
+        "title": "🚪 الباب الخلفي",
+        "story": "حدثت سرقة داخل منزل، لكن الباب الرئيسي لم يُستخدم.",
+        "suspects": [
+          "كريم",
+          "سامر",
+          "جاد",
+          "فادي"
+        ],
+        "clues": [
+          "الباب الرئيسي كان مغلقًا.",
+          "الباب الخلفي كان مفتوحًا.",
+          "كريم يعرف الباب الخلفي.",
+          "سامر كان نائمًا.",
+          "جاد كان في الشارع.",
+          "فادي لم يزر المنزل سابقًا."
+        ],
+        "hints": [
+          "أي باب استُخدم؟",
+          "من يعرف الباب الخلفي؟",
+          "كريم يعرفه جيدًا."
+        ],
+        "killer": "كريم",
+        "answer": "كريم كان يعرف الباب الخلفي، وهو الطريق المنطقي للدخول."
+      },
+      {
+        "id": "case_020",
+        "enabled": true,
+        "title": "🎧 السماعة المفقودة",
+        "story": "اختفت سماعة لاسلكية من غرفة الألعاب.",
+        "suspects": [
+          "يزن",
+          "لؤي",
+          "مؤيد",
+          "شادي"
+        ],
+        "clues": [
+          "السماعة كانت على المكتب.",
+          "يزن جلس على المكتب.",
+          "لؤي كان يلعب.",
+          "مؤيد كان خارج الغرفة.",
+          "شادي كان يتحدث بالهاتف."
+        ],
+        "hints": [
+          "أين كانت السماعة؟",
+          "من كان يجلس على المكتب؟",
+          "يزن كان بجانب السماعة."
+        ],
+        "killer": "يزن",
+        "answer": "يزن كان جالسًا على المكتب بجانب السماعة."
+      },
+      {
+        "id": "case_021",
+        "enabled": true,
+        "title": "🖼️ اللوحة النادرة",
+        "story": "اختفت لوحة نادرة من معرض صغير بعد إغلاقه.",
+        "suspects": [
+          "جمال",
+          "رامي",
+          "سعد",
+          "مروان"
+        ],
+        "clues": [
+          "المعرض كان مغلقًا.",
+          "جمال يملك المفتاح.",
+          "رامي كان في الفندق.",
+          "سعد كان مع الحارس.",
+          "مروان غادر المدينة."
+        ],
+        "hints": [
+          "كيف يمكن دخول المعرض؟",
+          "المفتاح مهم.",
+          "جمال يملك المفتاح."
+        ],
+        "killer": "جمال",
+        "answer": "جمال كان يملك مفتاح المعرض المغلق."
+      },
+      {
+        "id": "case_022",
+        "enabled": true,
+        "title": "🧳 حقيبة السفر",
+        "story": "اختفت حقيبة أثناء انتظار المسافرين.",
+        "suspects": [
+          "عادل",
+          "حسن",
+          "ماجد",
+          "رامي"
+        ],
+        "clues": [
+          "الحقيبة كانت بجانب المقعد.",
+          "عادل جلس بجانبها.",
+          "حسن كان يشتري تذكرة.",
+          "ماجد كان عند البوابة.",
+          "رامي كان في المطعم."
+        ],
+        "hints": [
+          "المكان القريب من الحقيبة مهم.",
+          "من جلس بجانبها؟",
+          "عادل كان بجوارها."
+        ],
+        "killer": "عادل",
+        "answer": "عادل كان جالسًا بجانب الحقيبة وقت اختفائها."
+      },
+      {
+        "id": "case_023",
+        "enabled": true,
+        "title": "🔦 المخزن المظلم",
+        "story": "اختفى جهاز من مخزن أثناء انقطاع الكهرباء.",
+        "suspects": [
+          "فهد",
+          "عمر",
+          "سامي",
+          "نبيل"
+        ],
+        "clues": [
+          "المخزن كان مظلمًا.",
+          "فهد كان يحمل مصباحًا.",
+          "عمر كان خارج المبنى.",
+          "سامي لم يدخل المخزن.",
+          "نبيل كان في المكتب."
+        ],
+        "hints": [
+          "من يستطيع الرؤية في الظلام؟",
+          "هناك شخص يحمل مصدر إضاءة.",
+          "فهد كان يحمل المصباح."
+        ],
+        "killer": "فهد",
+        "answer": "فهد كان يحمل مصباحًا، مما سمح له بالتحرك داخل المخزن المظلم."
+      },
+      {
+        "id": "case_024",
+        "enabled": true,
+        "title": "📸 الصورة الأخيرة",
+        "story": "التقطت كاميرا صورة قبل اختفاء ملف من مكتب.",
+        "suspects": [
+          "بسام",
+          "رامي",
+          "علي",
+          "ماهر"
+        ],
+        "clues": [
+          "الصورة أظهرت شخصًا قرب المكتب.",
+          "بسام كان قرب المكتب.",
+          "رامي كان في الممر.",
+          "علي كان خارج المبنى.",
+          "ماهر كان في المصعد."
+        ],
+        "hints": [
+          "الصورة هي الدليل الأقوى.",
+          "من ظهر قرب المكتب؟",
+          "بسام كان قرب المكتب."
+        ],
+        "killer": "بسام",
+        "answer": "الصورة وضعت بسام قرب المكتب في الوقت المناسب."
+      },
+      {
+        "id": "case_025",
+        "enabled": true,
+        "title": "🧪 المختبر",
+        "story": "اختفت عينة مهمة من مختبر يحتاج إلى بطاقة دخول.",
+        "suspects": [
+          "داني",
+          "سامر",
+          "كامل",
+          "فارس"
+        ],
+        "clues": [
+          "المختبر يحتاج بطاقة دخول.",
+          "داني يملك البطاقة.",
+          "سامر كان في المكتب.",
+          "كامل كان في المختبر المجاور.",
+          "فارس غادر المبنى."
+        ],
+        "hints": [
+          "الدخول يحتاج بطاقة.",
+          "من يملك البطاقة؟",
+          "داني هو صاحب البطاقة."
+        ],
+        "killer": "داني",
+        "answer": "داني كان يملك بطاقة الدخول اللازمة للمختبر."
+      },
+      {
+        "id": "case_026",
+        "enabled": true,
+        "title": "🎮 غرفة الألعاب",
+        "story": "اختفى جهاز ألعاب من غرفة مليئة بالأشخاص.",
+        "suspects": [
+          "سيف",
+          "كريم",
+          "عمر",
+          "رامي"
+        ],
+        "clues": [
+          "الجهاز كان على الطاولة.",
+          "سيف جلس أمام الطاولة.",
+          "كريم كان يستخدم جهازًا آخر.",
+          "عمر كان يشاهد المباراة.",
+          "رامي خرج للحظات."
+        ],
+        "hints": [
+          "من كان أمام الجهاز؟",
+          "الجهاز كان على الطاولة.",
+          "سيف كان أمام الطاولة."
+        ],
+        "killer": "سيف",
+        "answer": "سيف كان يجلس أمام الطاولة التي عليها الجهاز."
+      },
+      {
+        "id": "case_027",
+        "enabled": true,
+        "title": "🛎️ الفندق في منتصف الليل",
+        "story": "اختفت حقيبة من ممر الفندق خلال دقائق توقفت فيها إحدى الكاميرات.",
+        "suspects": [
+          "مازن",
+          "وليد",
+          "حسام",
+          "رامي"
+        ],
+        "clues": [
+          "الكاميرا توقفت لعدة دقائق.",
+          "مازن يعرف مكان الكاميرا.",
+          "وليد كان في غرفته.",
+          "حسام كان في المطعم.",
+          "رامي كان في المصعد."
+        ],
+        "hints": [
+          "من يعرف الكاميرات؟",
+          "توقف الكاميرا ليس صدفة.",
+          "مازن يعرف مكان الكاميرا."
+        ],
+        "killer": "مازن",
+        "answer": "مازن كان يعرف مكان الكاميرا وتوقيت توقفها."
+      },
+      {
+        "id": "case_028",
+        "enabled": true,
+        "title": "📜 الوثيقة السرية",
+        "story": "اختفت وثيقة من درج مكتب المدير.",
+        "suspects": [
+          "فارس",
+          "سامي",
+          "عمر",
+          "باسم"
+        ],
+        "clues": [
+          "الدرج كان مقفلًا.",
+          "فارس يملك المفتاح.",
+          "سامي كان في الاجتماع.",
+          "عمر كان خارج المكتب.",
+          "باسم لم يدخل المكتب."
+        ],
+        "hints": [
+          "الدرج مقفل.",
+          "من يملك مفتاحه؟",
+          "فارس كان يملك المفتاح."
+        ],
+        "killer": "فارس",
+        "answer": "فارس كان يملك مفتاح الدرج المقفل."
+      },
+      {
+        "id": "case_029",
+        "enabled": true,
+        "title": "💰 الخزنة",
+        "story": "اختفى مبلغ من خزنة دون وجود أي علامة كسر.",
+        "suspects": [
+          "أمين",
+          "رامي",
+          "سعد",
+          "نبيل"
+        ],
+        "clues": [
+          "الخزنة لم تكسر.",
+          "أمين يعرف الرقم السري.",
+          "رامي لم يدخل المكتب.",
+          "سعد كان في الاستقبال.",
+          "نبيل غادر مبكرًا."
+        ],
+        "hints": [
+          "الخزنة لم تكسر.",
+          "إذن هناك شخص يعرف الرقم.",
+          "أمين يعرف الرقم السري."
+        ],
+        "killer": "أمين",
+        "answer": "أمين كان يعرف الرقم السري واستطاع فتح الخزنة دون كسرها."
+      },
+      {
+        "id": "case_030",
+        "enabled": true,
+        "title": "🧢 القبعة الحمراء",
+        "story": "شاهد أحد الأشخاص شخصًا يرتدي قبعة حمراء قرب مكان الحادث.",
+        "suspects": [
+          "رامي",
+          "سامر",
+          "كريم",
+          "حازم"
+        ],
+        "clues": [
+          "القبعة كانت حمراء.",
+          "رامي يرتدي قبعة حمراء.",
+          "سامر لا يرتدي قبعات.",
+          "كريم كان في السيارة.",
+          "حازم كان داخل المتجر."
+        ],
+        "hints": [
+          "تذكر وصف الشاهد.",
+          "من يملك قبعة حمراء؟",
+          "رامي هو المطابق."
+        ],
+        "killer": "رامي",
+        "answer": "وصف الشاهد يطابق قبعة رامي الحمراء."
+      },
+      {
+        "id": "case_031",
+        "enabled": true,
+        "title": "🛗 المصعد",
+        "story": "اختفى شيء ثمين من الطابق العاشر، وسجل المصعد توقفًا واحدًا.",
+        "suspects": [
+          "حسن",
+          "ماهر",
+          "سليم",
+          "زياد"
+        ],
+        "clues": [
+          "المصعد توقف في الطابق العاشر.",
+          "حسن كان في التاسع.",
+          "ماهر خرج من المصعد في العاشر.",
+          "سليم كان في الطابق الأول.",
+          "زياد كان خارج المبنى."
+        ],
+        "hints": [
+          "المصعد توقف في الطابق العاشر.",
+          "من خرج هناك؟",
+          "ماهر خرج من المصعد في الطابق العاشر."
+        ],
+        "killer": "ماهر",
+        "answer": "ماهر كان الشخص الذي خرج من المصعد في الطابق العاشر."
+      },
+      {
+        "id": "case_032",
+        "enabled": true,
+        "title": "🕰️ الساعة المتوقفة",
+        "story": "توقفت ساعة الحائط عند وقت محدد، وأعطى ذلك المحققين دليلًا مهمًا.",
+        "suspects": [
+          "نادر",
+          "سامر",
+          "علي",
+          "رامز"
+        ],
+        "clues": [
+          "الساعة توقفت عند 8:30.",
+          "نادر قال إنه غادر قبل 8:00.",
+          "سامر كان موجودًا بعد 8:30.",
+          "علي غادر عند 9:00.",
+          "رامز لم يدخل المكان."
+        ],
+        "hints": [
+          "قارن الأقوال بالوقت.",
+          "هناك رواية لا تتوافق مع الأحداث.",
+          "قول نادر عن وقت مغادرته يثير الشك."
+        ],
+        "killer": "نادر",
+        "answer": "رواية نادر عن وقت مغادرته لا تتوافق مع الدليل الزمني."
+      },
+      {
+        "id": "case_033",
+        "enabled": true,
+        "title": "🌧️ آثار الأقدام",
+        "story": "وجدت آثار أقدام مبللة داخل المنزل بعد هطول المطر.",
+        "suspects": [
+          "جلال",
+          "رامي",
+          "فادي",
+          "عمر"
+        ],
+        "clues": [
+          "الأرض كانت مبللة.",
+          "جلال كان يحمل مظلة.",
+          "رامي كان داخل المنزل.",
+          "فادي كان خارجًا.",
+          "عمر وصل بعد توقف المطر."
+        ],
+        "hints": [
+          "آثار الأقدام مبللة.",
+          "من كان خارجًا أثناء المطر؟",
+          "فادي كان خارج المنزل أثناء المطر."
+        ],
+        "killer": "فادي",
+        "answer": "فادي كان خارج المنزل أثناء المطر، ولذلك يمكنه ترك آثار الأقدام المبللة."
+      },
+      {
+        "id": "case_034",
+        "enabled": true,
+        "title": "📻 الراديو",
+        "story": "كان الراديو يعمل أثناء الحادث، وسُمع صوت شخص في الخلفية.",
+        "suspects": [
+          "سعيد",
+          "حسام",
+          "بشار",
+          "وليد"
+        ],
+        "clues": [
+          "الصوت كان لشخص داخل الغرفة.",
+          "سعيد كان في الغرفة.",
+          "حسام كان خارج المبنى.",
+          "بشار كان في السيارة.",
+          "وليد كان في الحمام."
+        ],
+        "hints": [
+          "الصوت جاء من الغرفة.",
+          "من كان داخل الغرفة؟",
+          "سعيد كان داخل الغرفة."
+        ],
+        "killer": "سعيد",
+        "answer": "سعيد كان الشخص الموجود داخل الغرفة وقت سماع الصوت."
+      },
+      {
+        "id": "case_035",
+        "enabled": true,
+        "title": "🧥 المعطف الأزرق",
+        "story": "وجد المحققون معطفًا أزرق قرب مكان الحادث.",
+        "suspects": [
+          "كامل",
+          "باسم",
+          "سامر",
+          "رامي"
+        ],
+        "clues": [
+          "المعطف كان أزرق.",
+          "كامل يملك معطفًا أزرق.",
+          "باسم يرتدي معطفًا أسود.",
+          "سامر لا يملك معطفًا.",
+          "رامي كان يرتدي سترة."
+        ],
+        "hints": [
+          "لون المعطف مهم.",
+          "من يملك معطفًا أزرق؟",
+          "كامل هو المطابق."
+        ],
+        "killer": "كامل",
+        "answer": "المعطف الأزرق يطابق معطف كامل."
+      },
+      {
+        "id": "case_036",
+        "enabled": true,
+        "title": "🗝️ الغرفة السرية",
+        "story": "اكتشف المحققون غرفة سرية داخل منزل قديم.",
+        "suspects": [
+          "حسام",
+          "زياد",
+          "علي",
+          "فراس"
+        ],
+        "clues": [
+          "الغرفة تحتاج مفتاحًا خاصًا.",
+          "حسام يملك المفتاح.",
+          "زياد لم يعرف بوجود الغرفة.",
+          "علي كان خارج المنزل.",
+          "فراس كان مع الحراس."
+        ],
+        "hints": [
+          "الغرفة تحتاج مفتاحًا.",
+          "من يملك المفتاح الخاص؟",
+          "حسام يملك المفتاح."
+        ],
+        "killer": "حسام",
+        "answer": "حسام كان يملك المفتاح الخاص بالغرفة السرية."
+      },
+      {
+        "id": "case_037",
+        "enabled": true,
+        "title": "💻 الكمبيوتر",
+        "story": "تم حذف ملفات مهمة من جهاز كمبيوتر في مكتب.",
+        "suspects": [
+          "مازن",
+          "سامي",
+          "كريم",
+          "عمر"
+        ],
+        "clues": [
+          "الجهاز يحتاج كلمة مرور.",
+          "مازن يعرف كلمة المرور.",
+          "سامي لا يستخدم الكمبيوتر.",
+          "كريم كان خارج المكتب.",
+          "عمر وصل بعد حذف الملفات."
+        ],
+        "hints": [
+          "الجهاز يحتاج كلمة مرور.",
+          "من يعرف كلمة المرور؟",
+          "مازن يعرف كلمة المرور."
+        ],
+        "killer": "مازن",
+        "answer": "مازن كان يعرف كلمة مرور الجهاز وتمكن من الوصول إلى الملفات."
+      },
+      {
+        "id": "case_038",
+        "enabled": true,
+        "title": "📞 المكالمة الأخيرة",
+        "story": "وصلت مكالمة من هاتف شخص قبل دقائق من اختفائه.",
+        "suspects": [
+          "رامي",
+          "سيف",
+          "نبيل",
+          "حسن"
+        ],
+        "clues": [
+          "المكالمة استمرت دقيقتين.",
+          "رامي كان معه هاتفه.",
+          "سيف كان في اجتماع.",
+          "نبيل لم يكن يحمل هاتفًا.",
+          "حسن كان خارج المدينة."
+        ],
+        "hints": [
+          "من كان يملك هاتفًا؟",
+          "نبيل لم يكن يحمل هاتفًا وحسن خارج المدينة.",
+          "رامي كان معه هاتفه وقريبًا من المكان."
+        ],
+        "killer": "رامي",
+        "answer": "رامي كان يملك الهاتف وكان قريبًا من المكان."
+      },
+      {
+        "id": "case_039",
+        "enabled": true,
+        "title": "🧳 غرفة الأمتعة",
+        "story": "اختفت حقيبة من غرفة أمتعة مقفلة.",
+        "suspects": [
+          "وليد",
+          "مروان",
+          "عمر",
+          "سامي"
+        ],
+        "clues": [
+          "الغرفة كانت مقفلة.",
+          "وليد يملك المفتاح.",
+          "مروان كان في المطعم.",
+          "عمر كان في الفندق.",
+          "سامي كان خارج المبنى."
+        ],
+        "hints": [
+          "الغرفة مقفلة.",
+          "من يملك المفتاح؟",
+          "وليد يملك المفتاح."
+        ],
+        "killer": "وليد",
+        "answer": "وليد كان يملك مفتاح غرفة الأمتعة."
+      },
+      {
+        "id": "case_040",
+        "enabled": true,
+        "title": "🏪 المتجر الصغير",
+        "story": "اختفى مبلغ من صندوق متجر أثناء ازدحام المكان.",
+        "suspects": [
+          "عادل",
+          "رامي",
+          "سامي",
+          "فهد"
+        ],
+        "clues": [
+          "الصندوق كان مفتوحًا.",
+          "عادل كان يعمل على الصندوق.",
+          "رامي كان يشتري شيئًا.",
+          "سامي كان عند الباب.",
+          "فهد كان خارج المتجر."
+        ],
+        "hints": [
+          "من كان مسؤولًا عن الصندوق؟",
+          "الصندوق كان مفتوحًا.",
+          "عادل كان يعمل عليه."
+        ],
+        "killer": "عادل",
+        "answer": "عادل كان مسؤولًا عن الصندوق وكان يملك فرصة الوصول إلى المال."
+      },
+      {
+        "id": "case_041",
+        "enabled": true,
+        "title": "🪑 الكرسي الفارغ",
+        "story": "بعد لحظات من خروج أحد الأشخاص، اكتشف الجميع اختفاء شيء من الغرفة.",
+        "suspects": [
+          "محمود",
+          "طارق",
+          "سامي",
+          "فراس"
+        ],
+        "clues": [
+          "كرسي محمود كان فارغًا.",
+          "طارق بقي في مكانه.",
+          "سامي كان يتحدث.",
+          "فراس كان عند الباب."
+        ],
+        "hints": [
+          "من غادر مكانه؟",
+          "كرسي شخص واحد كان فارغًا.",
+          "محمود هو الشخص الذي غادر."
+        ],
+        "killer": "محمود",
+        "answer": "محمود كان الشخص الوحيد الذي غادر مكانه في الوقت المناسب."
+      },
+      {
+        "id": "case_042",
+        "enabled": true,
+        "title": "🍰 الحلوى",
+        "story": "اختفت قطعة حلوى من الثلاجة رغم أن الجميع كان في المنزل.",
+        "suspects": [
+          "ليث",
+          "عمر",
+          "جاد",
+          "باسم"
+        ],
+        "clues": [
+          "الثلاجة موجودة في المطبخ.",
+          "ليث كان في المطبخ.",
+          "عمر كان في الصالة.",
+          "جاد كان في الحديقة.",
+          "باسم كان في غرفته."
+        ],
+        "hints": [
+          "أين كانت الحلوى؟",
+          "الثلاجة في المطبخ.",
+          "ليث كان في المطبخ."
+        ],
+        "killer": "ليث",
+        "answer": "ليث كان الشخص الموجود في المطبخ بجانب الثلاجة."
+      },
+      {
+        "id": "case_043",
+        "enabled": true,
+        "title": "🎟️ التذكرة",
+        "story": "اختفت تذكرة مهمة من جيب أحد الأشخاص أثناء الانتظار.",
+        "suspects": [
+          "رامي",
+          "سعيد",
+          "كريم",
+          "حازم"
+        ],
+        "clues": [
+          "التذكرة كانت في الجيب.",
+          "رامي جلس بجانب صاحبها.",
+          "سعيد كان بعيدًا.",
+          "كريم كان خارج المكان.",
+          "حازم لم يقترب."
+        ],
+        "hints": [
+          "من كان قريبًا من صاحب التذكرة؟",
+          "رامي جلس بجانبه.",
+          "رامي كان الأقرب."
+        ],
+        "killer": "رامي",
+        "answer": "رامي كان يجلس بجانب صاحب التذكرة، مما أعطاه فرصة الوصول إليها."
+      },
+      {
+        "id": "case_044",
+        "enabled": true,
+        "title": "📦 الطرد",
+        "story": "اختفى طرد قبل تسليمه بدقائق.",
+        "suspects": [
+          "سامي",
+          "رامز",
+          "عمر",
+          "بشير"
+        ],
+        "clues": [
+          "الطرد كان عند الباب.",
+          "سامي كان ينتظر بجانب الباب.",
+          "رامز كان في الداخل.",
+          "عمر كان في السيارة.",
+          "بشير كان في المكتب."
+        ],
+        "hints": [
+          "أين كان الطرد؟",
+          "من كان بجانب الباب؟",
+          "سامي كان بجانب الطرد."
+        ],
+        "killer": "سامي",
+        "answer": "سامي كان ينتظر بجانب الطرد مباشرة."
+      },
+      {
+        "id": "case_045",
+        "enabled": true,
+        "title": "🔐 القفل الإلكتروني",
+        "story": "تم فتح باب إلكتروني دون وجود أي علامة على كسر القفل.",
+        "suspects": [
+          "حازم",
+          "نبيل",
+          "رامي",
+          "فادي"
+        ],
+        "clues": [
+          "الباب يحتاج رمزًا.",
+          "حازم يعرف الرمز.",
+          "نبيل كان في الطابق الثاني.",
+          "رامي كان خارج المبنى.",
+          "فادي لم يدخل المبنى."
+        ],
+        "hints": [
+          "الباب يحتاج رمزًا.",
+          "من يعرف الرمز؟",
+          "حازم يعرف الرمز."
+        ],
+        "killer": "حازم",
+        "answer": "حازم كان يعرف رمز الباب الإلكتروني واستطاع فتحه."
+      },
+      {
+        "id": "case_046",
+        "enabled": true,
+        "title": "🖊️ القلم الغريب",
+        "story": "وجد المحققون قلمًا مميزًا في مكان الحادث.",
+        "suspects": [
+          "سالم",
+          "عمر",
+          "رامي",
+          "باسم"
+        ],
+        "clues": [
+          "القلم يحمل علامة زرقاء.",
+          "سالم يستخدم قلمًا مشابهًا.",
+          "عمر يستخدم قلمًا أسود.",
+          "رامي يستخدم قلمًا أحمر.",
+          "باسم لا يحمل قلمًا."
+        ],
+        "hints": [
+          "ركز على لون القلم.",
+          "من يستخدم قلمًا مشابهًا؟",
+          "سالم يستخدم قلمًا يحمل نفس العلامة."
+        ],
+        "killer": "سالم",
+        "answer": "القلم الذي وجد في المكان يطابق القلم الذي يستخدمه سالم."
+      },
+      {
+        "id": "case_047",
+        "enabled": true,
+        "title": "🧢 غرفة الملابس",
+        "story": "اختفت ساعة من غرفة الملابس أثناء تجمع مجموعة من الأشخاص.",
+        "suspects": [
+          "رامي",
+          "ماهر",
+          "سيف",
+          "حسن"
+        ],
+        "clues": [
+          "الساعة كانت داخل الخزانة.",
+          "رامي فتح الخزانة.",
+          "ماهر كان خارج الغرفة.",
+          "سيف كان يتحدث مع شخص.",
+          "حسن لم يدخل الغرفة."
+        ],
+        "hints": [
+          "الساعة كانت داخل الخزانة.",
+          "من فتح الخزانة؟",
+          "رامي هو الذي فتحها."
+        ],
+        "killer": "رامي",
+        "answer": "رامي فتح الخزانة التي كانت تحتوي على الساعة."
+      },
+      {
+        "id": "case_048",
+        "enabled": true,
+        "title": "🚲 الدراجة",
+        "story": "اختفت دراجة من أمام منزل أثناء وجود أربعة أشخاص قريبًا.",
+        "suspects": [
+          "عمر",
+          "سامي",
+          "جاد",
+          "ليث"
+        ],
+        "clues": [
+          "الدراجة كانت أمام المنزل.",
+          "عمر كان خارج المنزل.",
+          "سامي كان في غرفته.",
+          "جاد كان في المدرسة.",
+          "ليث كان نائمًا."
+        ],
+        "hints": [
+          "من كان خارج المنزل؟",
+          "الدراجة كانت أمام المنزل.",
+          "عمر كان خارج المنزل."
+        ],
+        "killer": "عمر",
+        "answer": "عمر كان خارج المنزل وقريبًا من مكان الدراجة."
+      },
+      {
+        "id": "case_049",
+        "enabled": true,
+        "title": "📺 جهاز التحكم",
+        "story": "اختفى جهاز التحكم من غرفة الجلوس.",
+        "suspects": [
+          "بسام",
+          "رامي",
+          "سيف",
+          "مؤيد"
+        ],
+        "clues": [
+          "الجهاز كان على الطاولة.",
+          "بسام جلس بجانب الطاولة.",
+          "رامي كان على الأريكة.",
+          "سيف كان في المطبخ.",
+          "مؤيد كان خارج المنزل."
+        ],
+        "hints": [
+          "أين كان جهاز التحكم؟",
+          "من كان بجانب الطاولة؟",
+          "بسام كان بجانب الجهاز."
+        ],
+        "killer": "بسام",
+        "answer": "بسام كان جالسًا بجانب الطاولة التي عليها جهاز التحكم."
+      },
+      {
+        "id": "case_050",
+        "enabled": true,
+        "title": "🕵️ القضية الأخيرة",
+        "story": "اجتمع أربعة أشخاص داخل غرفة قديمة. بعد دقائق اختفى ملف مهم. الغرفة كانت مقفلة، وكان هناك مفتاح واحد فقط.",
+        "suspects": [
+          "رامي",
+          "سامي",
+          "عمر",
+          "فارس"
+        ],
+        "clues": [
+          "الغرفة كانت مقفلة.",
+          "المفتاح كان مع أحد الأشخاص.",
+          "رامي يملك المفتاح.",
+          "سامي كان بجانب النافذة.",
+          "عمر كان عند الباب.",
+          "فارس كان يتحدث مع الحارس."
+        ],
+        "hints": [
+          "الغرفة مقفلة، لذلك المفتاح مهم جدًا.",
+          "واحد فقط من المشتبه بهم يملك المفتاح.",
+          "رامي يملك مفتاح الغرفة."
+        ],
+        "killer": "رامي",
+        "answer": "رامي كان يملك مفتاح الغرفة، وكان يستطيع دخولها والوصول إلى الملف."
+      }
+    ],
+    "gang-missions.json": [
+      {
+        "id": "gm_default_001",
+        "enabled": true,
+        "name": "📦 القافلة المفقودة",
+        "description": "استعيدوا شحنة العصابة بعد أن ضاع مسارها داخل المدينة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل سجل المسار",
+          "فك رمز الحاوية",
+          "تأكيد نقطة الاستلام",
+          "تسليم أكواد الفريق"
+        ],
+        "updatedAt": 1788377972322
+      },
+      {
+        "id": "gm_default_002",
+        "enabled": true,
+        "name": "🚚 المسار البديل",
+        "description": "غيّروا مسار شحنة حساسة قبل إغلاق الطريق الافتراضي.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب المسار الجديد",
+          "تأكيد تصريح المرور",
+          "مطابقة رمز الشحنة",
+          "مزامنة نقطة الوصول"
+        ],
+        "updatedAt": 1788377972323
+      },
+      {
+        "id": "gm_default_003",
+        "enabled": true,
+        "name": "🧾 الشحنة المجهولة",
+        "description": "اكتشفوا هوية صندوق مجهول قبل إضافته إلى مخزن العصابة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "قراءة رقم التتبع",
+          "حل شفرة الملصق",
+          "مطابقة سجل المخزن",
+          "تأكيد الاستلام الجماعي"
+        ],
+        "updatedAt": 1788377972324
+      },
+      {
+        "id": "gm_default_004",
+        "enabled": true,
+        "name": "📍 نقطة التسليم الصامتة",
+        "description": "حددوا نقطة تسليم مخفية بالاعتماد على رموز متفرقة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "فك إحداثية الرمز",
+          "مراجعة كود الموقع",
+          "فتح قناة التسليم",
+          "إرسال رموز التأكيد"
+        ],
+        "updatedAt": 1788377972325
+      },
+      {
+        "id": "gm_default_005",
+        "enabled": true,
+        "name": "🗃️ المستودع المقفل",
+        "description": "استعيدوا وصول العصابة إلى مستودع افتراضي تم قفله.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "استرجاع مفتاح الدخول",
+          "مطابقة رقم القفل",
+          "إعادة تفعيل السجل",
+          "تأكيد الفريق النهائي"
+        ],
+        "updatedAt": 1788377972326
+      },
+      {
+        "id": "gm_default_006",
+        "enabled": true,
+        "name": "📨 الحزمة المزدوجة",
+        "description": "فرّقوا بين حزمتين متشابهتين وحددوا الصحيحة قبل انتهاء الوقت.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل أرقام الحزم",
+          "حل اختبار المطابقة",
+          "اعتماد الحزمة الصحيحة",
+          "تسلسل التسليم"
+        ],
+        "updatedAt": 1788377972327
+      },
+      {
+        "id": "gm_default_007",
+        "enabled": true,
+        "name": "🛰️ تعقب الإشارة",
+        "description": "تعقبوا إشارة شحنة متنقلة عبر عدة محطات داخل ZOMBI City.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "فك تردد البداية",
+          "حساب المحطة التالية",
+          "تثبيت رمز التتبع",
+          "ربط رموز الفريق"
+        ],
+        "updatedAt": 1788377972328
+      },
+      {
+        "id": "gm_default_008",
+        "enabled": true,
+        "name": "🔐 صندوق النقل الأسود",
+        "description": "افتحوا صندوق نقل متعدد الأقفال باستخدام سلسلة تحقق صعبة.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "حل القفل الأول",
+          "إدخال مفتاح التحقق",
+          "حل القفل الثاني",
+          "مزامنة مفاتيح الفريق"
+        ],
+        "updatedAt": 1788377972329
+      },
+      {
+        "id": "gm_default_009",
+        "enabled": true,
+        "name": "🏷️ هوية الشحنة",
+        "description": "أعيدوا بناء هوية شحنة حُذفت بياناتها من سجل العصابة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "استرجاع رقم الصنف",
+          "تحليل رمز المصدر",
+          "إعادة تكوين المعرف",
+          "اعتماد الهوية جماعيًا"
+        ],
+        "updatedAt": 1788377972330
+      },
+      {
+        "id": "gm_default_010",
+        "enabled": true,
+        "name": "🛣️ طريق بلا علامات",
+        "description": "استنتجوا طريق التسليم من مجموعة أكواد غير مرتبة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "ترتيب رموز الطريق",
+          "حل نقطة التحويل",
+          "تأكيد نهاية المسار",
+          "إرسال تسلسل الوصول"
+        ],
+        "updatedAt": 1788377972331
+      },
+      {
+        "id": "gm_default_011",
+        "enabled": true,
+        "name": "💾 الخادم المعزول",
+        "description": "أعيدوا تشغيل خادم العصابة الافتراضي بعد فقدان مفاتيح الوصول.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "فك مفتاح الإقلاع",
+          "إدخال رمز الجلسة",
+          "حل تحقق النظام",
+          "مزامنة مفاتيح الأعضاء"
+        ],
+        "updatedAt": 1788377972332
+      },
+      {
+        "id": "gm_default_012",
+        "enabled": true,
+        "name": "🧠 ذاكرة النظام",
+        "description": "استعيدوا سلسلة بيانات تالفة من نسخة ذاكرة قصيرة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "إعادة ترتيب السلسلة",
+          "تأكيد بصمة الملف",
+          "حل اختبار الذاكرة",
+          "تسلسل الاستعادة الجماعي"
+        ],
+        "updatedAt": 1788377972333
+      },
+      {
+        "id": "gm_default_013",
+        "enabled": true,
+        "name": "🔒 بروتوكول Z-17",
+        "description": "اجتازوا بروتوكول تحقق متعدد المراحل لحماية ملفات العصابة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل تحدي Z-17",
+          "تفعيل رمز المصادقة",
+          "حل البوابة الثانية",
+          "تأكيد المصادقة الجماعية"
+        ],
+        "updatedAt": 1788377972334
+      },
+      {
+        "id": "gm_default_014",
+        "enabled": true,
+        "name": "🧬 بصمة البيانات",
+        "description": "استخرجوا بصمة صحيحة من عدة قيم متشابهة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب البصمة الأولى",
+          "مطابقة كود العينة",
+          "حساب البصمة النهائية",
+          "ربط أكواد الفريق"
+        ],
+        "updatedAt": 1788377972335
+      },
+      {
+        "id": "gm_default_015",
+        "enabled": true,
+        "name": "📡 الشبكة المنقطعة",
+        "description": "أعيدوا ربط عقد شبكة افتراضية انقطع الاتصال بينها.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل عقدة البداية",
+          "إرسال رمز الربط",
+          "حل عقدة النهاية",
+          "مزامنة الاتصال الجماعي"
+        ],
+        "updatedAt": 1788377972336
+      },
+      {
+        "id": "gm_default_016",
+        "enabled": true,
+        "name": "🗝️ المفتاح المتغير",
+        "description": "تعاملوا مع مفتاح وصول يتبدل في كل مرحلة.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "فك المفتاح الأول",
+          "تسجيل الرمز المؤقت",
+          "فك المفتاح الثاني",
+          "اعتماد المفاتيح بالترتيب"
+        ],
+        "updatedAt": 1788377972337
+      },
+      {
+        "id": "gm_default_017",
+        "enabled": true,
+        "name": "🧩 ملف 404-Z",
+        "description": "أعيدوا تجميع ملف افتراضي ناقص من أجزاء مشفرة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "ترتيب أجزاء الملف",
+          "إثبات رقم النسخة",
+          "حل جزء التحقق",
+          "تجميع رموز الفريق"
+        ],
+        "updatedAt": 1788377972338
+      },
+      {
+        "id": "gm_default_018",
+        "enabled": true,
+        "name": "📟 محطة التحقق",
+        "description": "مرروا البيانات عبر محطة تحقق تحتاج إجابات دقيقة وسريعة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل بوابة المحطة",
+          "إرسال رمز المرور",
+          "حل فحص النزاهة",
+          "تأكيد المرور الجماعي"
+        ],
+        "updatedAt": 1788377972339
+      },
+      {
+        "id": "gm_default_019",
+        "enabled": true,
+        "name": "🧱 الجدار الرقمي",
+        "description": "اجتازوا أربع طبقات تحقق متتابعة بدون أخطاء.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل الطبقة الأولى",
+          "فتح البوابة المؤقتة",
+          "حل الطبقة الثالثة",
+          "كسر القفل الجماعي"
+        ],
+        "updatedAt": 1788377972340
+      },
+      {
+        "id": "gm_default_020",
+        "enabled": true,
+        "name": "🧮 مفتاح الحساب",
+        "description": "استخرجوا مفتاح دخول من عمليات حسابية مركبة ومتسلسلة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب المفتاح الأول",
+          "إرسال كود الحساب",
+          "حساب المفتاح النهائي",
+          "تسليم النتيجة جماعيًا"
+        ],
+        "updatedAt": 1788377972341
+      },
+      {
+        "id": "gm_default_021",
+        "enabled": true,
+        "name": "🏙️ قلب المنطقة",
+        "description": "ثبتوا نفوذ العصابة افتراضيًا عبر سلسلة نقاط تحقق.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رمز المنطقة",
+          "تسجيل نقطة النفوذ",
+          "حل اختبار السيطرة",
+          "تأكيد النفوذ الجماعي"
+        ],
+        "updatedAt": 1788377972342
+      },
+      {
+        "id": "gm_default_022",
+        "enabled": true,
+        "name": "🚦 تقاطع النفوذ",
+        "description": "اختاروا المسار الصحيح بين أربع نقاط متنافسة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل رمز التقاطع",
+          "إدخال كود المسار",
+          "تحليل نقطة النهاية",
+          "ربط نقاط الفريق"
+        ],
+        "updatedAt": 1788377972343
+      },
+      {
+        "id": "gm_default_023",
+        "enabled": true,
+        "name": "🗺️ خريطة الظلال",
+        "description": "أعيدوا بناء خريطة منطقة من رموز ناقصة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "ترتيب رموز الخريطة",
+          "تأكيد القطاع",
+          "حل رمز الحدود",
+          "اعتماد الخريطة جماعيًا"
+        ],
+        "updatedAt": 1788377972344
+      },
+      {
+        "id": "gm_default_024",
+        "enabled": true,
+        "name": "🏢 برج الإشارة",
+        "description": "استعيدوا السيطرة على برج اتصال افتراضي من عدة طبقات.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "حل مفتاح البرج",
+          "تشغيل نقطة الاتصال",
+          "حل تحقق الإشارة",
+          "مزامنة إشارات الأعضاء"
+        ],
+        "updatedAt": 1788377972345
+      },
+      {
+        "id": "gm_default_025",
+        "enabled": true,
+        "name": "🚧 القطاع المغلق",
+        "description": "افتحوا قطاعًا مغلقًا بعد تغيير رموز الوصول.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "استنتاج رمز القطاع",
+          "إرسال كود الفتح",
+          "حل بوابة القطاع",
+          "تسلسل دخول الفريق"
+        ],
+        "updatedAt": 1788377972346
+      },
+      {
+        "id": "gm_default_026",
+        "enabled": true,
+        "name": "🧭 نقطة الصفر",
+        "description": "اعثروا على نقطة الصفر من سلسلة أرقام متغيرة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب نقطة البداية",
+          "تأكيد رمز الاتجاه",
+          "حل نقطة الصفر",
+          "تثبيت النتيجة جماعيًا"
+        ],
+        "updatedAt": 1788377972347
+      },
+      {
+        "id": "gm_default_027",
+        "enabled": true,
+        "name": "🏁 حدود جديدة",
+        "description": "ثبتوا حدود منطقة جديدة بترتيب نقاط صحيح.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "ترتيب علامات الحدود",
+          "تأكيد كود القطاع",
+          "حل علامة النهاية",
+          "مزامنة علامات الفريق"
+        ],
+        "updatedAt": 1788377972348
+      },
+      {
+        "id": "gm_default_028",
+        "enabled": true,
+        "name": "🌐 شبكة النفوذ",
+        "description": "اربطوا أربع عقد نفوذ في شبكة واحدة متماسكة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل العقدة الأولى",
+          "إرسال رمز الربط",
+          "حل العقدة الثالثة",
+          "ربط العقد جماعيًا"
+        ],
+        "updatedAt": 1788377972349
+      },
+      {
+        "id": "gm_default_029",
+        "enabled": true,
+        "name": "🧱 الممر الأخير",
+        "description": "افتحوا الممر الأخير إلى منطقة العصابة بعد سلسلة أقفال.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل القفل الخارجي",
+          "تأكيد رمز الممر",
+          "حل القفل الداخلي",
+          "تسلسل فتح الفريق"
+        ],
+        "updatedAt": 1788377972350
+      },
+      {
+        "id": "gm_default_030",
+        "enabled": true,
+        "name": "📌 العلامة الحمراء",
+        "description": "حددوا العلامة الصحيحة من بين بيانات مضللة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل الرمز الأحمر",
+          "مطابقة نقطة الهدف",
+          "حل اختبار التثبيت",
+          "تأكيد العلامة جماعيًا"
+        ],
+        "updatedAt": 1788377972351
+      },
+      {
+        "id": "gm_default_031",
+        "enabled": true,
+        "name": "🕵️ الرسالة المقطعة",
+        "description": "أعيدوا تركيب رسالة استخباراتية مقطعة إلى أجزاء.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "ترتيب أجزاء الرسالة",
+          "تأكيد كلمة المرور",
+          "حل رمز المرسل",
+          "تجميع مفاتيح الفريق"
+        ],
+        "updatedAt": 1788377972352
+      },
+      {
+        "id": "gm_default_032",
+        "enabled": true,
+        "name": "📂 الملف الرمادي",
+        "description": "حددوا الملف الصحيح بين نسخ متشابهة قبل إغلاق المهمة.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم الملف",
+          "إرسال رمز التصنيف",
+          "حل فحص النسخة",
+          "اعتماد الملف جماعيًا"
+        ],
+        "updatedAt": 1788377972353
+      },
+      {
+        "id": "gm_default_033",
+        "enabled": true,
+        "name": "🔎 أثر رقمي",
+        "description": "تتبعوا أثرًا افتراضيًا من سلسلة دلائل رقمية.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل الدليل الأول",
+          "تسجيل كود الأثر",
+          "حل الدليل الثاني",
+          "ربط الأدلة جماعيًا"
+        ],
+        "updatedAt": 1788377972354
+      },
+      {
+        "id": "gm_default_034",
+        "enabled": true,
+        "name": "📰 التقرير المزيف",
+        "description": "اكتشفوا السطر الصحيح داخل تقرير مليء بالبيانات المضللة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم التقرير",
+          "تأكيد رمز المصدر",
+          "حل تحقق الحقيقة",
+          "اعتماد التقرير جماعيًا"
+        ],
+        "updatedAt": 1788377972355
+      },
+      {
+        "id": "gm_default_035",
+        "enabled": true,
+        "name": "📓 دفتر الرموز",
+        "description": "افتحوا دفتر رموز افتراضي يحتاج ترتيبًا دقيقًا للمفاتيح.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل المفتاح الأول",
+          "إرسال كلمة التحقق",
+          "حل المفتاح الأخير",
+          "تسلسل مفاتيح الفريق"
+        ],
+        "updatedAt": 1788377972356
+      },
+      {
+        "id": "gm_default_036",
+        "enabled": true,
+        "name": "🎫 بطاقة مجهولة",
+        "description": "حددوا صاحب بطاقة مشفرة من رقم تعريفي مركب.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم البطاقة",
+          "مطابقة رمز الهوية",
+          "حل تحقق السجل",
+          "تأكيد الهوية جماعيًا"
+        ],
+        "updatedAt": 1788377972357
+      },
+      {
+        "id": "gm_default_037",
+        "enabled": true,
+        "name": "📢 البث المشوش",
+        "description": "استخرجوا رسالة واضحة من بث افتراضي مشوش.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "فك نمط التشويش",
+          "إرسال رمز القناة",
+          "حل الرسالة النهائية",
+          "مزامنة قناة الفريق"
+        ],
+        "updatedAt": 1788377972358
+      },
+      {
+        "id": "gm_default_038",
+        "enabled": true,
+        "name": "🧿 عين المراقبة",
+        "description": "استعيدوا سجل مراقبة افتراضي بعد تشفيره.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل مفتاح السجل",
+          "تأكيد وقت التسجيل",
+          "حل رمز المقطع",
+          "اعتماد السجل جماعيًا"
+        ],
+        "updatedAt": 1788377972359
+      },
+      {
+        "id": "gm_default_039",
+        "enabled": true,
+        "name": "📜 السجل القديم",
+        "description": "افتحوا سجلًا قديمًا باستخدام سلسلة حساب ورموز.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حساب رقم الصفحة",
+          "إدخال رمز السجل",
+          "حل مفتاح الفهرس",
+          "تأكيد الفهرس جماعيًا"
+        ],
+        "updatedAt": 1788377972360
+      },
+      {
+        "id": "gm_default_040",
+        "enabled": true,
+        "name": "🧷 الخيط الأخير",
+        "description": "اربطوا أربع إشارات منفصلة للوصول إلى الاستنتاج الصحيح.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "حل الإشارة الأولى",
+          "تأكيد رابط الدليل",
+          "حل الإشارة الثالثة",
+          "ربط الاستنتاج جماعيًا"
+        ],
+        "updatedAt": 1788377972361
+      },
+      {
+        "id": "gm_default_041",
+        "enabled": true,
+        "name": "🚗 المركبة الصامتة",
+        "description": "أعيدوا تفعيل مركبة افتراضية بعد تعطيل رموز التشغيل.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل رمز التشغيل",
+          "إدخال مفتاح اللوحة",
+          "حل تحقق المحرك",
+          "مزامنة أكواد الفريق"
+        ],
+        "updatedAt": 1788377972362
+      },
+      {
+        "id": "gm_default_042",
+        "enabled": true,
+        "name": "🛞 العجلة المشفرة",
+        "description": "استخرجوا رمز حركة من أرقام مخفية داخل سجل المركبة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب رمز العجلة",
+          "تأكيد مفتاح الحركة",
+          "حل رمز الطريق",
+          "تسلسل تشغيل الفريق"
+        ],
+        "updatedAt": 1788377972363
+      },
+      {
+        "id": "gm_default_043",
+        "enabled": true,
+        "name": "🔧 الورشة المقفلة",
+        "description": "افتحوا نظام ورشة افتراضية لإكمال صيانة عاجلة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل قفل الورشة",
+          "إرسال رمز الصيانة",
+          "حل اختبار القطعة",
+          "اعتماد الإصلاح جماعيًا"
+        ],
+        "updatedAt": 1788377972364
+      },
+      {
+        "id": "gm_default_044",
+        "enabled": true,
+        "name": "🧰 صندوق الأدوات",
+        "description": "حددوا الأداة الافتراضية الصحيحة عبر رموز متسلسلة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم الأداة",
+          "تأكيد رمز الصندوق",
+          "حل اختبار المطابقة",
+          "تسليم أكواد الفريق"
+        ],
+        "updatedAt": 1788377972365
+      },
+      {
+        "id": "gm_default_045",
+        "enabled": true,
+        "name": "⛽ محطة الاحتياط",
+        "description": "فعّلوا محطة احتياط افتراضية قبل نفاد وقت المهمة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل مفتاح المحطة",
+          "إدخال رمز التفعيل",
+          "حل فحص النظام",
+          "مزامنة التفعيل الجماعي"
+        ],
+        "updatedAt": 1788377972366
+      },
+      {
+        "id": "gm_default_046",
+        "enabled": true,
+        "name": "🚙 المسار التجريبي",
+        "description": "اجتازوا اختبار مسار رقمي يعتمد على حسابات وتسلسل.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب نقطة البداية",
+          "تأكيد رمز المنعطف",
+          "حل نقطة النهاية",
+          "إرسال ترتيب الفريق"
+        ],
+        "updatedAt": 1788377972367
+      },
+      {
+        "id": "gm_default_047",
+        "enabled": true,
+        "name": "🧲 وحدة التثبيت",
+        "description": "استعيدوا وحدة تثبيت مركبة عبر سلسلة تحقق قصيرة وصعبة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل رمز الوحدة",
+          "تأكيد مفتاح التثبيت",
+          "حل فحص الأمان",
+          "اعتماد التثبيت جماعيًا"
+        ],
+        "updatedAt": 1788377972368
+      },
+      {
+        "id": "gm_default_048",
+        "enabled": true,
+        "name": "📻 جهاز الاتصال",
+        "description": "أعيدوا ربط جهاز اتصال المركبة بشبكة العصابة.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "حل تردد الجهاز",
+          "إرسال كود الربط",
+          "حل بصمة الشبكة",
+          "مزامنة أجهزة الفريق"
+        ],
+        "updatedAt": 1788377972369
+      },
+      {
+        "id": "gm_default_049",
+        "enabled": true,
+        "name": "🧯 بروتوكول الطوارئ",
+        "description": "نفذوا بروتوكول طوارئ افتراضي قبل إغلاق النظام.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل رمز الطوارئ",
+          "تأكيد حالة النظام",
+          "حل بوابة الخروج",
+          "تسلسل تأكيد الفريق"
+        ],
+        "updatedAt": 1788377972370
+      },
+      {
+        "id": "gm_default_050",
+        "enabled": true,
+        "name": "🏎️ اختبار الاستجابة",
+        "description": "أكملوا سلسلة اختبارات سرعة ودقة لنظام مركبة افتراضية.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل اختبار الاستجابة",
+          "إرسال رمز القياس",
+          "حل اختبار الدقة",
+          "اعتماد النتيجة جماعيًا"
+        ],
+        "updatedAt": 1788377972371
+      },
+      {
+        "id": "gm_default_051",
+        "enabled": true,
+        "name": "🧪 العينة الغامضة",
+        "description": "حددوا رمز عينة افتراضية من سلسلة نتائج متغيرة.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم العينة",
+          "تأكيد رمز المختبر",
+          "حل معادلة التحقق",
+          "اعتماد العينة جماعيًا"
+        ],
+        "updatedAt": 1788377972372
+      },
+      {
+        "id": "gm_default_052",
+        "enabled": true,
+        "name": "📦 مخزون الطوارئ",
+        "description": "أعيدوا ترتيب مخزون افتراضي قبل انتهاء مهلة النظام.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حساب رقم الصندوق",
+          "إرسال كود المخزون",
+          "حل ترتيب الرفوف",
+          "مزامنة جرد الفريق"
+        ],
+        "updatedAt": 1788377972373
+      },
+      {
+        "id": "gm_default_053",
+        "enabled": true,
+        "name": "🗄️ الأرشيف المقسم",
+        "description": "اجمعوا أقسام أرشيف موزعة على عدة سجلات.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل فهرس القسم",
+          "تأكيد كود الأرشيف",
+          "حل رقم المجلد",
+          "تجميع فهارس الفريق"
+        ],
+        "updatedAt": 1788377972374
+      },
+      {
+        "id": "gm_default_054",
+        "enabled": true,
+        "name": "🪪 تصريح مؤقت",
+        "description": "أنشئوا تصريح مرور افتراضي من عدة مفاتيح تحقق.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل رقم التصريح",
+          "إدخال كود المصادقة",
+          "حل تاريخ التحقق",
+          "تسلسل توقيعات الفريق"
+        ],
+        "updatedAt": 1788377972375
+      },
+      {
+        "id": "gm_default_055",
+        "enabled": true,
+        "name": "🧱 مخزن المستوى السفلي",
+        "description": "افتحوا مخزنًا افتراضيًا متعدد الطبقات قبل انتهاء الوقت.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "حل القفل الخارجي",
+          "تأكيد رمز المستوى",
+          "حل القفل الداخلي",
+          "فتح الخزنة جماعيًا"
+        ],
+        "updatedAt": 1788377972376
+      },
+      {
+        "id": "gm_default_056",
+        "enabled": true,
+        "name": "📊 ميزان الإمداد",
+        "description": "وازنوا أرقام الإمدادات للحصول على كود القبول.",
+        "difficulty": "legendary",
+        "minParticipants": 2,
+        "steps": [
+          "حساب مجموع الإمداد",
+          "إرسال رمز الميزان",
+          "حل فرق المخزون",
+          "اعتماد النتيجة جماعيًا"
+        ],
+        "updatedAt": 1788377972377
+      },
+      {
+        "id": "gm_default_057",
+        "enabled": true,
+        "name": "🔋 وحدة الطاقة",
+        "description": "أعيدوا تفعيل وحدة طاقة افتراضية عبر اختبارات حسابية.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل معادلة الطاقة",
+          "تأكيد كود التشغيل",
+          "حل اختبار الحمل",
+          "مزامنة تشغيل الفريق"
+        ],
+        "updatedAt": 1788377972378
+      },
+      {
+        "id": "gm_default_058",
+        "enabled": true,
+        "name": "🪫 الاحتياط الأخير",
+        "description": "فعّلوا الاحتياط الأخير قبل أن يغلق النظام المهمة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل رمز الاحتياط",
+          "إرسال مفتاح التشغيل",
+          "حل فحص الاستقرار",
+          "تأكيد الطاقة جماعيًا"
+        ],
+        "updatedAt": 1788377972379
+      },
+      {
+        "id": "gm_default_059",
+        "enabled": true,
+        "name": "📋 قائمة الاستلام",
+        "description": "تحققوا من قائمة طويلة وحددوا رمز الاستلام الصحيح.",
+        "difficulty": "elite",
+        "minParticipants": 2,
+        "steps": [
+          "تحليل رقم القائمة",
+          "تأكيد بند الاستلام",
+          "حل كود المطابقة",
+          "تسلسل توقيع الفريق"
+        ],
+        "updatedAt": 1788377972380
+      },
+      {
+        "id": "gm_default_060",
+        "enabled": true,
+        "name": "🧭 خطة العودة",
+        "description": "ابنوا خطة عودة افتراضية من نقاط متفرقة ومشفرة.",
+        "difficulty": "hard",
+        "minParticipants": 2,
+        "steps": [
+          "حل نقطة الانطلاق",
+          "إرسال رمز الاتجاه",
+          "حل نقطة الوصول",
+          "اعتماد المسار جماعيًا"
+        ],
+        "updatedAt": 1788377972381
+      }
+    ],
+    "bank-catalog.json": {
+      "jobs": {
+        "worker": {
+          "name": "🧹 عامل",
+          "salary": 200
+        },
+        "security": {
+          "name": "👮 حارس أمن",
+          "salary": 200
+        },
+        "teacher": {
+          "name": "👨‍🏫 مدرس",
+          "salary": 200
+        },
+        "designer": {
+          "name": "🎨 مصمم",
+          "salary": 200
+        },
+        "programmer": {
+          "name": "💻 مبرمج",
+          "salary": 200
+        },
+        "engineer": {
+          "name": "👷 مهندس",
+          "salary": 200
+        },
+        "manager": {
+          "name": "👨‍💼 مدير",
+          "salary": 200
+        }
+      },
+      "companies": {
+        "bank": {
+          "id": "bank",
+          "name": "🏦 ZOMBI City Bank",
+          "description": "شركة الخدمات البنكية",
+          "priceGold": 20
+        },
+        "tech": {
+          "id": "tech",
+          "name": "💻 ZOMBI Tech",
+          "description": "شركة التكنولوجيا",
+          "priceGold": 20
+        },
+        "media": {
+          "id": "media",
+          "name": "📺 ZOMBI Media",
+          "description": "شركة الإعلام",
+          "priceGold": 20
+        },
+        "transport": {
+          "id": "transport",
+          "name": "🚗 ZOMBI Transport",
+          "description": "شركة النقل",
+          "priceGold": 20
+        }
+      },
+      "stocks": {
+        "ZZTECH": {
+          "symbol": "ZZTECH",
+          "name": "💻 ZOMBI Tech",
+          "price": 100000
+        },
+        "ZZBANK": {
+          "symbol": "ZZBANK",
+          "name": "🏦 ZOMBI City Bank",
+          "price": 150000
+        },
+        "ZZMEDIA": {
+          "symbol": "ZZMEDIA",
+          "name": "📺 ZOMBI Media",
+          "price": 80000
+        },
+        "ZZCAR": {
+          "symbol": "ZZCAR",
+          "name": "🚗 ZOMBI Motors",
+          "price": 120000
+        }
+      }
+    }
+  }
+}

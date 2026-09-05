@@ -36,10 +36,17 @@ const commands=[
     {type:1,name:'invite',description:'دعوة عضو',options:[{type:6,name:'user',description:'العضو',required:true}]},
     {type:1,name:'kick',description:'طرد عضو',options:[{type:6,name:'user',description:'العضو',required:true}]},
     {type:1,name:'deputy',description:'تعيين/إزالة نائب',options:[{type:6,name:'user',description:'العضو',required:true}]},
+    {type:1,name:'rename',description:'تغيير اسم العصابة',options:[{type:3,name:'name',description:'الاسم الجديد',required:true,max_length:40}]},
+    {type:1,name:'transfer',description:'نقل ملكية العصابة',options:[{type:6,name:'user',description:'المالك الجديد',required:true}]},
     {type:1,name:'leave',description:'مغادرة العصابة'},
+    {type:1,name:'delete',description:'حذف العصابة نهائيًا'},
     {type:1,name:'deposit',description:'إيداع في خزنة العصابة',options:[{type:4,name:'amount',description:'المبلغ',required:true,min_value:1}]},
     {type:1,name:'withdraw',description:'سحب من خزنة العصابة',options:[{type:4,name:'amount',description:'المبلغ',required:true,min_value:1}]},
-    {type:1,name:'mission',description:'بدء مهمة العصابة والحصول على مكافأتها'}
+    {type:1,name:'mission',description:'فتح مهمة فعلية للعصابة'},
+    {type:1,name:'equipment',description:'عرض معدات سرقة البنك ومخزونك'},
+    {type:1,name:'buy-equipment',description:'شراء معدة لسرقة البنك',options:[{type:3,name:'item',description:'المعدة',required:true,choices:[
+      {name:'🎭 قناع افتراضي',value:'mask'},{name:'💻 جهاز اختراق',value:'hacking'},{name:'🛠️ مثقاب خزنة',value:'drill'},{name:'📻 جهاز اتصال',value:'radio'},{name:'🚗 سيارة هروب',value:'car'}
+    ]}]}
   ]},
   {name:'help',description:'عرض أوامر ZOMBI'},
   {name:'admin',description:'أوامر إدارة ZOMBI',default_member_permissions:MANAGE_GUILD,options:[

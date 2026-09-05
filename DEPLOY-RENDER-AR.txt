@@ -1,0 +1,5 @@
+ZOMBI Website V8.5 — GitHub / Render
+
+ارفع محتويات مجلد web إلى جذر مستودع الموقع.
+احتفظ بمتغيرات Render الحالية ولا تضع أسرارًا داخل Git.
+بعد Deploy افتح /health ثم سجل الدخول للـDashboard.
