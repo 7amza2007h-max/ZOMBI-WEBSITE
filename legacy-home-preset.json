@@ -4,7 +4,7 @@
   "config": {
     "guildId": "1470436560456384575",
     "setupComplete": true,
-    "legacyPresetVersion": "v8.5",
+    "legacyPresetVersion": "v8.6",
     "features": {
       "economy": true,
       "bank": true,

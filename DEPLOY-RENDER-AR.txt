@@ -1,5 +1,9 @@
-ZOMBI Website V8.5 — GitHub / Render
+ZOMBI Website V8.6 — GitHub / Render
 
-ارفع محتويات مجلد web إلى جذر مستودع الموقع.
-احتفظ بمتغيرات Render الحالية ولا تضع أسرارًا داخل Git.
-بعد Deploy افتح /health ثم سجل الدخول للـDashboard.
+1) ارفع كل محتويات مجلد WEBSITE إلى جذر مستودع GitHub الخاص بالموقع، وليس المجلد نفسه.
+2) استبدل الملفات القديمة ثم Commit.
+3) احتفظ بمتغيرات Render الحالية ولا تضع أي Secret داخل GitHub.
+4) انتظر Render حتى يصبح Live.
+5) افتح https://zombi-website.onrender.com/health وتأكد أن ok=true.
+6) افتح Dashboard ثم جرّب مزامنة أوامر السيرفر وإرسال لوحات Games/Tickets/Store/Self Roles.
+7) صفحات /privacy و /terms موجودة في الموقع.
