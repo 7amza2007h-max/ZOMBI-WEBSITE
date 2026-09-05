@@ -1,6 +1,6 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "ZOMBI public website and Discord dashboard",
   "main": "server.js",
   "type": "commonjs",
