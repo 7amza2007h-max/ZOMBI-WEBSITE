@@ -1,0 +1,20 @@
+{
+  "name": "zombi-dashboard-website",
+  "version": "1.0.0",
+  "description": "ZOMBI public website and Discord dashboard",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check shared/sharedStore.js && node --check shared/guildStore.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "pg": "^8.13.1"
+  }
+}

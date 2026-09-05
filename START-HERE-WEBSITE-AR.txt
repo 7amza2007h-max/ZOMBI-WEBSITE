@@ -1,0 +1,44 @@
+ZOMBI WEBSITE — الموقع والـ Dashboard
+====================================
+
+هذه النسخة ترفعها على استضافة مواقع Node.js منفصلة عن Lunafy.
+
+تحتاج:
+1) استضافة Node.js للموقع.
+2) PostgreSQL Database (DATABASE_URL).
+3) نفس Discord Application الخاصة بالبوت.
+
+متغيرات البيئة المطلوبة:
+PUBLIC_BASE_URL=https://YOUR-WEBSITE-DOMAIN
+DISCORD_CALLBACK_URL=https://YOUR-WEBSITE-DOMAIN/auth/discord/callback
+DISCORD_CLIENT_ID=Application ID
+DISCORD_CLIENT_SECRET=OAuth2 Client Secret
+BOT_TOKEN=Bot Token
+OWNER_IDS=Discord User ID الخاص بك
+SESSION_SECRET=نص طويل وعشوائي
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
+DATABASE_SSL=true
+PORT=3000
+HOST=0.0.0.0
+PREMIUM_PURCHASE_URL=
+
+مهم جدا:
+- لا ترسل BOT_TOKEN أو DISCORD_CLIENT_SECRET لأي شخص.
+- نفس DATABASE_URL يوضع أيضا في .env للبوت على Lunafy.
+- داخل Discord Developer Portal > OAuth2 > Redirects أضف نفس DISCORD_CALLBACK_URL حرفيا.
+
+تشغيل الموقع:
+npm install
+npm start
+
+فحص الموقع:
+https://YOUR-WEBSITE-DOMAIN/health
+
+الموقع لا يفتح Discord Gateway ولا يشغل نسخة ثانية من البوت.
+هو يستخدم Bot Token فقط عبر Discord REST لعرض الرومات والرتب وإرسال/تحديث لوحات Tickets/Store/Self Roles.
+
+التحكم:
+/dashboard        = سيرفرات المستخدم التي يملك فيها Manage Server
+/dashboard/ID     = إعدادات السيرفر المحدد
+/owner            = لوحة المالك، فقط IDs الموجودة في OWNER_IDS
+/premium          = صفحة Premium
