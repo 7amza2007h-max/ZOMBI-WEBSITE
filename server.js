@@ -60,7 +60,7 @@ async function start(){
   const required=['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','PUBLIC_BASE_URL','SESSION_SECRET','BOT_TOKEN','DATABASE_URL'];
   const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
   await store.ensureDb();
-  const app=express();app.set('trust proxy',1);app.use(express.urlencoded({extended:true}));app.use(express.json());app.use('/site',express.static(path.join(__dirname,'public','site')));app.use('/assets',express.static(path.join(__dirname,'assets')));
+  const app=express();app.set('trust proxy',1);app.use(express.urlencoded({extended:true}));app.use(express.json());app.use('/site', express.static(__dirname)); app.use('/assets', express.static(__dirname));
   let sessionStore;
   if(String(process.env.DATABASE_URL||'').trim()){
     const {Pool}=require('pg');
@@ -77,7 +77,42 @@ async function start(){
   app.use((req,_res,next)=>{req.user=req.session.user||null;next();});
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
   app.get('/auth/discord',(req,res)=>{const state=crypto.randomBytes(24).toString('hex');req.session.oauthState=state;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state,prompt:'none'});res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
-  app.get('/auth/discord/callback',async(req,res,next)=>{try{if(!req.query.code||!req.query.state||String(req.query.state)!==String(req.session.oauthState||''))return res.status(400).send('OAuth state invalid');delete req.session.oauthState;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const body=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',client_secret:process.env.DISCORD_CLIENT_SECRET||'',grant_type:'authorization_code',code:String(req.query.code),redirect_uri:redirect});const tr=await fetch(`${API}/oauth2/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const td=await tr.json();if(!tr.ok)throw new Error(td?.error_description||td?.error||'Discord OAuth token failed');const headers={Authorization:`Bearer ${td.access_token}`};const [ur,gr]=await Promise.all([fetch(`${API}/users/@me`,{headers}),fetch(`${API}/users/@me/guilds`,{headers})]);const user=await ur.json(),guilds=await gr.json();if(!ur.ok||!gr.ok)throw new Error('Discord OAuth profile failed');req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);}catch(e){next(e);}});
+  app.get('/auth/discord/callback',async(req,res,next)=>{try{
+    if(req.query.error){
+      throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
+    }
+    if(!req.query.code||!req.query.state||String(req.query.state)!==String(req.session.oauthState||'')){
+      return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة. جرّب تسجيل الدخول مرة ثانية.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));
+    }
+    delete req.session.oauthState;
+    const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
+    const body=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',client_secret:process.env.DISCORD_CLIENT_SECRET||'',grant_type:'authorization_code',code:String(req.query.code),redirect_uri:redirect});
+
+    async function readJsonResponse(response,label){
+      const raw=await response.text();
+      let data=null;
+      try{ data=raw?JSON.parse(raw):{}; }
+      catch{
+        const preview=raw.replace(/\s+/g,' ').slice(0,180);
+        throw new Error(`${label} رجّع رد غير متوقع (${response.status}). ${preview.startsWith('<!')||preview.startsWith('<html')?'HTML بدل JSON. تأكد من إعدادات OAuth وجرّب مرة ثانية.':preview}`);
+      }
+      if(!response.ok){
+        throw new Error(data?.error_description||data?.message||data?.error||`${label} failed (${response.status})`);
+      }
+      return data;
+    }
+
+    const tr=await fetch(`${API}/oauth2/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'follow'});
+    const td=await readJsonResponse(tr,'Discord OAuth token');
+    if(!td?.access_token) throw new Error('Discord لم يرجع access token. تأكد من Client ID وClient Secret وRedirect URL.');
+
+    const headers={Authorization:`Bearer ${td.access_token}`,'Accept':'application/json'};
+    const [ur,gr]=await Promise.all([fetch(`${API}/users/@me`,{headers}),fetch(`${API}/users/@me/guilds`,{headers})]);
+    const user=await readJsonResponse(ur,'Discord user profile');
+    const guilds=await readJsonResponse(gr,'Discord guild list');
+    req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};
+    const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
+  }catch(e){next(e);}});
   app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>req.session.destroy(()=>res.redirect('/')));
   app.get('/dashboard',requireLogin,async(req,res,next)=>{try{const manageable=(req.user.guilds||[]).filter(canManage);const statuses=await Promise.all(manageable.slice(0,50).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))})));const installed=statuses.filter(x=>x.installed),missing=statuses.filter(x=>!x.installed);const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${store.isPremium(cfg)?'💎 Premium':'🆓 Free'}</span></div><em>إدارة ←</em></a>`;}))).join('');const add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر فقط السيرفرات التي لديك فيها Manage Server.</p></div></section><div class="servers">${cards||'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>'}</div>${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));}catch(e){next(e);}});
   app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
