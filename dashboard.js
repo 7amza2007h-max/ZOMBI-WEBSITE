@@ -140,18 +140,19 @@
   if (settingsForm) {
     settingsForm.classList.add('z-settings-hub');
     const csrf = settingsForm.querySelector(':scope > input[name="_csrf"]');
-    const saveButton = settingsForm.querySelector(':scope > button[type="submit"]');
-    const nodes = [...settingsForm.children].filter(el => el !== csrf && el !== saveButton);
+    const actionBar = settingsForm.querySelector(':scope > .card-actions');
+    const nodes = [...settingsForm.children].filter(el => el !== csrf && el !== actionBar);
     let page = 'overview';
     for (const node of nodes) {
       if (node.tagName === 'H3') page = headingPage(node.textContent);
       ensureSettingsGroup(page).appendChild(node);
     }
     settingsGroups.forEach(w => settingsForm.appendChild(w));
-    if (saveButton) {
+    if (actionBar) {
       const bar = document.createElement('div');
       bar.className = 'z-save-bar';
-      bar.appendChild(saveButton);
+      while (actionBar.firstChild) bar.appendChild(actionBar.firstChild);
+      actionBar.remove();
       settingsForm.appendChild(bar);
     }
   }
