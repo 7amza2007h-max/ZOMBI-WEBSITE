@@ -3,7 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const crypto = require('crypto');
 const path = require('path');
-const store = require('./shared/sharedStore');
+const store = require('./sharedStore');
 
 const API = 'https://discord.com/api/v10';
 const MANAGE_GUILD = 0x20n;
