@@ -6,6 +6,7 @@ const path = require('path');
 const store = require('./sharedStore');
 
 const API = 'https://discord.com/api/v10';
+const OAUTH_TOKEN_URL = 'https://discord.com/api/oauth2/token';
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
 
@@ -76,7 +77,7 @@ async function start(){
   app.use(session({store:sessionStore,secret:process.env.SESSION_SECRET||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:baseUrl().startsWith('https://'),maxAge:7*86400000}}));
   app.use((req,_res,next)=>{req.user=req.session.user||null;next();});
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
-  app.get('/auth/discord',(req,res)=>{const state=crypto.randomBytes(24).toString('hex');req.session.oauthState=state;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state,prompt:'none'});res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
+  app.get('/auth/discord',(req,res)=>{const state=crypto.randomBytes(24).toString('hex');req.session.oauthState=state;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
   app.get('/auth/discord/callback',async(req,res,next)=>{try{
     if(req.query.error){
       throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
@@ -86,7 +87,6 @@ async function start(){
     }
     delete req.session.oauthState;
     const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
-    const body=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',client_secret:process.env.DISCORD_CLIENT_SECRET||'',grant_type:'authorization_code',code:String(req.query.code),redirect_uri:redirect});
 
     async function readJsonResponse(response,label){
       const raw=await response.text();
@@ -97,13 +97,51 @@ async function start(){
         throw new Error(`${label} رجّع رد غير متوقع (${response.status}). ${preview.startsWith('<!')||preview.startsWith('<html')?'HTML بدل JSON. تأكد من إعدادات OAuth وجرّب مرة ثانية.':preview}`);
       }
       if(!response.ok){
-        throw new Error(data?.error_description||data?.message||data?.error||`${label} failed (${response.status})`);
+        const err=new Error(data?.error_description||data?.message||data?.error||`${label} failed (${response.status})`);
+        err.status=response.status;
+        err.data=data;
+        err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||response.headers.get('x-ratelimit-reset-after')||0);
+        throw err;
       }
       return data;
     }
 
-    const tr=await fetch(`${API}/oauth2/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'follow'});
-    const td=await readJsonResponse(tr,'Discord OAuth token');
+    async function exchangeCodeWithRetry(code){
+      const clientId=String(process.env.DISCORD_CLIENT_ID||'').trim();
+      const clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim();
+      const auth=Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const body=()=>new URLSearchParams({grant_type:'authorization_code',code:String(code),redirect_uri:redirect});
+
+      for(let attempt=0; attempt<2; attempt++){
+        const tr=await fetch(OAUTH_TOKEN_URL,{
+          method:'POST',
+          headers:{
+            'Authorization':`Basic ${auth}`,
+            'Content-Type':'application/x-www-form-urlencoded',
+            'Accept':'application/json',
+            'User-Agent':'DiscordBot (https://zombi-website.onrender.com, 1.0)'
+          },
+          body:body(),
+          redirect:'follow'
+        });
+        try{
+          return await readJsonResponse(tr,'Discord OAuth token');
+        }catch(err){
+          if(err.status!==429) throw err;
+          const wait=Math.max(1,Number(err.retryAfter||1));
+          if(attempt===0 && wait<=10){
+            await new Promise(resolve=>setTimeout(resolve,Math.ceil(wait*1000)+250));
+            continue;
+          }
+          const seconds=Math.ceil(wait);
+          const rateErr=new Error(`Discord حدّد طلبات تسجيل الدخول مؤقتًا. انتظر ${seconds} ثانية ثم اضغط تسجيل الدخول مرة ثانية.`);
+          rateErr.status=429;
+          throw rateErr;
+        }
+      }
+    }
+
+    const td=await exchangeCodeWithRetry(req.query.code);
     if(!td?.access_token) throw new Error('Discord لم يرجع access token. تأكد من Client ID وClient Secret وRedirect URL.');
 
     const headers={Authorization:`Bearer ${td.access_token}`,'Accept':'application/json'};
