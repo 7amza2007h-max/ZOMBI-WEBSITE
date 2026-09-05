@@ -1,0 +1,10 @@
+تدقيق ZOMBI Dashboard V8.9.3
+
+Premium Bot Profile:
+- Nickname: موجود + maxlength 32 + حفظ وتطبيق.
+- Avatar URL: موجود + HTTPS image validation + تطبيق عبر Modify Current Member.
+- Banner URL: موجود + HTTPS image validation + تطبيق عبر Modify Current Member.
+- Bio: موجود + maxlength 190 + حفظ وتطبيق.
+- Free protection: موجود في الواجهة + route server-side.
+- Save/apply route مستقل: /dashboard/:guildId/bot-profile
+- Reset: يعيد nick/avatar/banner/bio إلى null/فارغ لهذا السيرفر.

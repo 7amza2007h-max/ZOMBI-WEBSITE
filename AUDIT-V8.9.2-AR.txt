@@ -1,0 +1,41 @@
+تدقيق ZOMBI Dashboard V8.9.2
+
+{
+  "post_forms_in_server_templates": 28,
+  "post_forms_missing_csrf": [],
+  "unique_dashboard_actions_checked": 34,
+  "actions_missing_route": [],
+  "settings_field_count": 149,
+  "settings_fields_missing_handler": [],
+  "explicit_local_save_in_each_settings_group": true,
+  "settings_pages_with_save": [
+    "overview",
+    "economy",
+    "members",
+    "store",
+    "games",
+    "city",
+    "roles",
+    "name",
+    "tickets",
+    "voice"
+  ],
+  "standalone_save_actions": [
+    "game-content: حفظ المحتوى",
+    "killer: إضافة/حفظ/حذف قضية",
+    "city: إضافة/حفظ/حذف مهمة + خزنة/تصفير",
+    "tickets: إضافة/حفظ/حذف نوع",
+    "store: إضافة/حفظ/حذف رتبة",
+    "roles: إضافة/حفظ/حذف Self Role",
+    "members: تنفيذ إدارة الرصيد",
+    "premium: تفعيل كود"
+  ],
+  "syntax_checks": [
+    "dashboard.js OK",
+    "server.js OK",
+    "sharedStore.js OK",
+    "guildStore.js OK",
+    "discordCommands.js OK",
+    "cloudflare-worker.js ESM OK"
+  ]
+}

@@ -23,7 +23,7 @@
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
-    premium: { label: 'Premium', icon: '💎', desc: 'حالة الاشتراك وحدود الخطة والميزات المقفلة.' }
+    premium: { label: 'Premium', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
   };
 
   const groups = [
@@ -147,7 +147,20 @@
       if (node.tagName === 'H3') page = headingPage(node.textContent);
       ensureSettingsGroup(page).appendChild(node);
     }
-    settingsGroups.forEach(w => settingsForm.appendChild(w));
+    settingsGroups.forEach((w, pageId) => {
+      // Keep an explicit save button inside every settings section so the user
+      // never has to hunt for the global/sticky save bar.
+      const localBar = document.createElement('div');
+      localBar.className = 'z-local-save-bar';
+      const localSave = document.createElement('button');
+      localSave.type = 'submit';
+      localSave.className = 'btn primary z-local-save';
+      localSave.dataset.page = pageId;
+      localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
+      localBar.appendChild(localSave);
+      w.appendChild(localBar);
+      settingsForm.appendChild(w);
+    });
     if (actionBar) {
       const bar = document.createElement('div');
       bar.className = 'z-save-bar';
@@ -206,7 +219,7 @@
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';
-    if (title.includes('Premium') || title.includes('حدود الخطة')) return 'premium';
+    if (title.includes('Premium') || title.includes('حدود الخطة') || title.includes('تخصيص بروفايل البوت')) return 'premium';
     return null;
   };
 
@@ -357,8 +370,13 @@
       const hasSettings = settingsGroups.has(section);
       showNode(settingsForm, hasSettings);
       settingsGroups.forEach((group, key) => showNode(group, key === section));
-      const saveBtn = settingsForm.querySelector('.z-save-bar button');
+      const saveBtn = settingsForm.querySelector('.z-save-bar button[type="submit"]:not([name="forceBotProfile"])');
       if (saveBtn) saveBtn.textContent = section === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${def.label}`;
+      settingsForm.querySelectorAll('.z-local-save').forEach(btn => {
+        btn.textContent = btn.dataset.page === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${pageDefs[btn.dataset.page]?.label || 'القسم'}`;
+      });
+      const profileBtn = settingsForm.querySelector('.z-save-bar button[name="forceBotProfile"]');
+      if (profileBtn) profileBtn.classList.toggle('z-section-hidden', section !== 'overview');
     }
 
     [...content.querySelectorAll('[data-z-page]')].forEach(el => {

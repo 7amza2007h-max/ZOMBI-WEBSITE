@@ -50,3 +50,9 @@
 .zombi-dashboard .panel{border-color:#1e3049;background:linear-gradient(150deg,#0d1726,#09111d);box-shadow:none}.zombi-dashboard input,.zombi-dashboard select,.zombi-dashboard textarea{background:#07111d;border-color:#20354f}.zombi-dashboard input:focus,.zombi-dashboard select:focus,.zombi-dashboard textarea:focus{border-color:#3f82ff}.zombi-dashboard .btn.primary{background:linear-gradient(135deg,#3781ff,#6658ff);border-color:#648fff}.zombi-dashboard .tabs-note{background:#0d1928;border-color:#1f3653}
 @media(max-width:1050px){.zombi-dashboard .z-dashboard-shell{grid-template-columns:minmax(0,1fr) 220px}.z-dashboard-content{padding:28px 24px 60px}.z-side-nav a{font-size:13px}.z-role-layout{grid-template-columns:1fr}}
 @media(max-width:760px){.zombi-dashboard .z-dashboard-shell{display:block}.z-dashboard-sidebar{position:relative;height:auto;border-left:0;border-bottom:1px solid #172337;padding:10px}.z-side-brand,.z-side-status,.z-side-back,.z-nav-title{display:none}.z-side-nav{display:flex;gap:6px;overflow:auto;padding:2px}.z-nav-group{display:contents}.z-side-nav a{flex:0 0 auto;padding:9px 11px}.z-dashboard-content{padding:22px 13px 60px}.z-page-heading h1{font-size:30px}.z-page-heading img{display:none}.z-settings-hub{padding:15px!important}.z-save-bar{bottom:8px}.z-save-bar .btn{width:100%}}
+
+
+/* V8.9.2 — explicit per-section save controls */
+.z-local-save-bar{display:flex;justify-content:flex-start;margin-top:22px;padding-top:16px;border-top:1px solid #203048}
+.z-local-save-bar .btn{min-width:210px}
+@media(max-width:760px){.z-local-save-bar .btn{width:100%}}
