@@ -23,6 +23,48 @@ function userGuild(req,gid){return (req.user?.guilds||[]).find(g=>String(g.id)==
 function color(cfg){const n=parseInt(String(cfg?.branding?.color||'#7c3aed').replace('#',''),16);return Number.isFinite(n)?n:0x7c3aed;}
 
 async function botFetch(route, options={}){
+  const oauthProxy=String(process.env.OAUTH_PROXY_URL||'').trim();
+  const proxySecret=String(process.env.OAUTH_PROXY_SECRET||'').trim();
+
+  // When the Cloudflare proxy is configured, route ALL Discord REST calls through it.
+  if(oauthProxy && proxySecret){
+    let proxyUrl;
+    try{
+      const u=new URL(oauthProxy);
+      proxyUrl=`${u.origin}/bot/request`;
+    }catch{
+      throw new Error('OAUTH_PROXY_URL غير صالح.');
+    }
+
+    const method=String(options.method||'GET').toUpperCase();
+    let bodyValue=null;
+    if(options.body!==undefined && options.body!==null){
+      if(typeof options.body==='string'){
+        try{bodyValue=JSON.parse(options.body);}catch{bodyValue=options.body;}
+      }else bodyValue=options.body;
+    }
+
+    const res=await fetch(proxyUrl,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${proxySecret}`,
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify({route:String(route),method,body:bodyValue})
+    });
+    const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
+    if(!res.ok||payload?.ok===false){
+      const e=new Error(payload?.error||`Discord API ${res.status}`);
+      e.status=Number(payload?.status||res.status);
+      e.discord=payload?.data||payload;
+      e.retryAfter=Number(payload?.retry_after||res.headers.get('retry-after')||0);
+      throw e;
+    }
+    return payload?.data??null;
+  }
+
+  // Fallback for local development only.
   const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();
   if(!token) throw new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');
   const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',...(options.headers||{})}});
