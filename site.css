@@ -27,3 +27,10 @@
 .table-wrap .btn{padding:8px 11px;font-size:12px}
 @media(max-width:900px){.ticket-add{grid-template-columns:1fr 1fr}.ticket-add .btn{grid-column:1/-1}.item-card{align-items:flex-start;flex-direction:column}.owner-actions{align-items:flex-start}.code-form{max-width:none}}
 @media(max-width:560px){.ticket-add{grid-template-columns:1fr}.ticket-add .btn{grid-column:auto}.game-table,.plan-table{min-width:680px}.code-form{flex-direction:column;align-items:stretch}}
+
+/* ===== ZOMBI V6.2 full-control additions ===== */
+.command-sync{border-color:#6045a8;background:linear-gradient(135deg,#171329,#0d1222)}
+.command-sync p{color:var(--muted);line-height:1.7}.command-checks{margin-bottom:8px}
+.panel-subform{padding:14px;margin:10px 0 18px;background:#0a0e1b;border:1px solid #252c43;border-radius:14px}
+.panel-subform .btn{align-self:end}.panel code{user-select:all}
+.editable-item{display:flex;gap:.65rem;align-items:stretch;padding:.75rem;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.35);margin:.6rem 0}.editable-item>form:last-child{display:flex;align-items:center}.item-edit-grid{display:grid;grid-template-columns:minmax(130px,1.2fr) 90px minmax(180px,2fr) minmax(160px,1.5fr) auto;gap:.55rem;align-items:center;flex:1}.item-edit-grid.compact{grid-template-columns:minmax(140px,2fr) minmax(90px,1fr) 80px auto}.item-edit-grid input,.item-edit-grid select{min-width:0}@media(max-width:900px){.editable-item{flex-direction:column}.item-edit-grid,.item-edit-grid.compact{grid-template-columns:1fr}.editable-item>form:last-child button{width:100%}}

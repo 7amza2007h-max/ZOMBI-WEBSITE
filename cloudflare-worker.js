@@ -24,9 +24,10 @@ async function readDiscordResponse(response) {
 }
 
 function authorized(request, env) {
-  const provided = String(request.headers.get('authorization') || '');
-  const expected = `Bearer ${String(env.PROXY_SECRET || '')}`;
-  return Boolean(env.PROXY_SECRET && provided === expected);
+  const provided = String(request.headers.get('authorization') || '').trim();
+  const secret = String(env.PROXY_SECRET || '').trim();
+  const expected = `Bearer ${secret}`;
+  return Boolean(secret && provided === expected);
 }
 
 async function discordRequest(url, options = {}) {
@@ -55,7 +56,7 @@ export default {
         ok: true,
         service: 'zombi-discord-proxy',
         oauthConfigured: Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET),
-        botConfigured: Boolean(env.BOT_TOKEN)
+        botConfigured: Boolean(String(env.BOT_TOKEN || '').trim())
       });
     }
 
@@ -190,7 +191,7 @@ export default {
       }
 
       const headers = {
-        authorization: `Bot ${String(env.BOT_TOKEN)}`,
+        authorization: `Bot ${String(env.BOT_TOKEN).trim()}`,
         accept: 'application/json'
       };
       const fetchOptions = { method, headers };
