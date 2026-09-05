@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { GAME_DEFS, COMMAND_DEFS, QUICK_RULE_GAME_IDS, normalizePlans } = require('./planPolicy');
+const { GAME_DEFS, QUICK_RULE_GAME_IDS, normalizePlans } = require('./planPolicy');
 const { DEFAULT_GAME_CONTENT, normalizeGameContent } = require('./gameDefaults');
 
 const BASE_DATA = process.env.ZOMBI_LOCAL_DATA_DIR
@@ -27,22 +27,21 @@ function defaultGameSettings(){
   const out={}; for(const g of GAME_DEFS) out[g.id]=gameRuleDefaults(g.id); return out;
 }
 function defaultGameEnabled(){ return Object.fromEntries(GAME_DEFS.map(g=>[g.id,true])); }
-function defaultCommandEnabled(){ return Object.fromEntries(COMMAND_DEFS.map(c=>[c.id,true])); }
 function defaultTicketTypes(){ return [{id:'general',label:'دعم عام',emoji:'🎫',description:'تذكرة دعم عامة',supportRoleIds:[]}]; }
 
 function defaults(guildId){
   return {
     guildId:String(guildId), plan:'free', premiumUntil:0, createdAt:Date.now(), updatedAt:Date.now(), setupComplete:false,
-    features:{economy:true,bank:true,games:true,tickets:true,store:true,rolePanel:true,levels:true,voiceRewards:true,moderation:true,gangs:false,memberManagement:false},
-    commands:defaultCommandEnabled(),
+    features:{economy:true,bank:true,games:true,tickets:true,store:true,rolePanel:true,levels:true,voiceRewards:true,moderation:true,gangs:false},
     branding:{color:'#7c3aed',name:'ZOMBI',footer:'Powered by ZOMBI',customName:'',customFooter:''},
     currency:{name:'ZOM',emoji:'🪙'},
-    channels:{logs:'',ticketPanel:'',ticketCategory:'',storePanel:'',rolePanel:'',levelUp:''},
+    channels:{logs:'',gamePanel:'',ticketPanel:'',ticketCategory:'',storePanel:'',rolePanel:'',levelUp:''},
     economy:{dailyAmount:500,dailyCooldownHours:24,messageEvery:15,messageReward:10,messageCooldownSeconds:60,transferCooldownSeconds:10,voiceEveryMinutes:10,voiceReward:10},
-    games:{rounds:5,roundTimeSeconds:25,winnerReward:300,enabled:defaultGameEnabled(),quickGameSettings:defaultGameSettings()},
-    gangs:{maxMembers:7},
+    bank:{depositEnabled:true,withdrawEnabled:true,maxTransaction:1000000000},
+    moderation:{clearEnabled:true,kickEnabled:true,banEnabled:true,lockEnabled:true,logActions:true},
+    games:{rounds:5,roundTimeSeconds:25,winnerReward:300,enabled:defaultGameEnabled(),quickGameSettings:defaultGameSettings(),lobby:{roulette:{minPlayers:2,maxPlayers:20},chairs:{minPlayers:2,maxPlayers:20},mafia:{minPlayers:4,maxPlayers:20}}},
+    gangs:{maxMembers:7,maxDeputies:2,createCost:0,bankEnabled:true,missionsEnabled:true,missionCooldownMinutes:240,missionRewardMin:250,missionRewardMax:750},
     levels:{xpPerMessage:10,xpCooldownSeconds:30,baseXp:100,growth:50},
-    moderation:{maxClear:100},
     tickets:{title:'🎫 ZOMBI Support',description:'اختر نوع التذكرة من الأزرار بالأسفل.',buttonLabel:'فتح تذكرة',buttonEmoji:'🎫',supportRoleIds:[],types:defaultTicketTypes(),panelMessageId:''},
     store:{title:'🛒 ZOMBI Store',description:'اختر الرتبة التي تريد شراءها.',products:[],panelMessageId:''},
     rolePanel:{title:'🔔 رتب الإشعارات',description:'اختر الرتب التي تريدها.',items:[],panelMessageId:''}
@@ -67,13 +66,12 @@ function normalizeConfig(input,guildId){
   const d=defaults(guildId),x=input||{}; const premiumUntil=Number(x.premiumUntil||0); const plan=(x.plan==='premium'&&premiumUntil>Date.now())?'premium':'free';
   const cfg={
     ...d,...x,guildId:String(guildId),plan,premiumUntil:plan==='premium'?premiumUntil:0,
-    features:{...d.features,...(x.features||{})},commands:{...d.commands,...(x.commands||{})},branding:{...d.branding,...(x.branding||{})},currency:{...d.currency,...(x.currency||{})},
-    channels:{...d.channels,...(x.channels||{})},economy:{...d.economy,...(x.economy||{})},games:{...d.games,...(x.games||{})},
-    gangs:{...d.gangs,...(x.gangs||{})},levels:{...d.levels,...(x.levels||{})},moderation:{...d.moderation,...(x.moderation||{})},tickets:{...d.tickets,...(x.tickets||{})},
+    features:{...d.features,...(x.features||{})},branding:{...d.branding,...(x.branding||{})},currency:{...d.currency,...(x.currency||{})},
+    channels:{...d.channels,...(x.channels||{})},economy:{...d.economy,...(x.economy||{})},bank:{...d.bank,...(x.bank||{})},moderation:{...d.moderation,...(x.moderation||{})},games:{...d.games,...(x.games||{}),lobby:{...d.games.lobby,...(x.games?.lobby||{})}},
+    gangs:{...d.gangs,...(x.gangs||{})},levels:{...d.levels,...(x.levels||{})},tickets:{...d.tickets,...(x.tickets||{})},
     store:{...d.store,...(x.store||{})},rolePanel:{...d.rolePanel,...(x.rolePanel||{})}
   };
   cfg.features=Object.fromEntries(Object.entries(d.features).map(([k,v])=>[k,bool(cfg.features[k],v)]));
-  cfg.commands=Object.fromEntries(COMMAND_DEFS.map(c=>[c.id,bool(cfg.commands?.[c.id],true)]));
   for(const k of Object.keys(cfg.channels)) cfg.channels[k]=snowflake(cfg.channels[k]);
   cfg.branding.color=/^#[0-9a-f]{6}$/i.test(String(cfg.branding.color||''))?String(cfg.branding.color):d.branding.color;
   cfg.branding.customName=text(cfg.branding.customName,80); cfg.branding.customFooter=text(cfg.branding.customFooter,160);
@@ -82,12 +80,19 @@ function normalizeConfig(input,guildId){
   cfg.economy.messageEvery=integer(cfg.economy.messageEvery,15,1,10000); cfg.economy.messageReward=integer(cfg.economy.messageReward,10,0,1e9);
   cfg.economy.messageCooldownSeconds=integer(cfg.economy.messageCooldownSeconds,60,0,86400); cfg.economy.transferCooldownSeconds=integer(cfg.economy.transferCooldownSeconds,10,0,86400);
   cfg.economy.voiceEveryMinutes=integer(cfg.economy.voiceEveryMinutes,10,1,1440); cfg.economy.voiceReward=integer(cfg.economy.voiceReward,10,0,1e9);
+  cfg.bank.depositEnabled=bool(cfg.bank.depositEnabled,true); cfg.bank.withdrawEnabled=bool(cfg.bank.withdrawEnabled,true); cfg.bank.maxTransaction=integer(cfg.bank.maxTransaction,1000000000,1,1000000000);
+  cfg.moderation.clearEnabled=bool(cfg.moderation.clearEnabled,true); cfg.moderation.kickEnabled=bool(cfg.moderation.kickEnabled,true); cfg.moderation.banEnabled=bool(cfg.moderation.banEnabled,true); cfg.moderation.lockEnabled=bool(cfg.moderation.lockEnabled,true); cfg.moderation.logActions=bool(cfg.moderation.logActions,true);
   cfg.games.rounds=integer(cfg.games.rounds,5,1,25); cfg.games.roundTimeSeconds=integer(cfg.games.roundTimeSeconds,25,5,300); cfg.games.winnerReward=integer(cfg.games.winnerReward,300,0,1e9);
   const enabled={...defaultGameEnabled(),...(cfg.games.enabled||{})}; cfg.games.enabled=Object.fromEntries(GAME_DEFS.map(g=>[g.id,bool(enabled[g.id],true)]));
   const rules={...defaultGameSettings(),...(cfg.games.quickGameSettings||{})}; cfg.games.quickGameSettings={};
   for(const g of GAME_DEFS){ const r=rules[g.id]||{}; const f=gameRuleDefaults(g.id); cfg.games.quickGameSettings[g.id]={rounds:integer(r.rounds,f.rounds,1,25),roundTimeSeconds:integer(r.roundTimeSeconds,f.roundTimeSeconds,5,300),winnerReward:integer(r.winnerReward,f.winnerReward,0,1e9)}; }
+  const lobbyDefaults=d.games.lobby; cfg.games.lobby={...lobbyDefaults,...(cfg.games.lobby||{})};
+  for(const id of ['roulette','chairs']){const raw=cfg.games.lobby[id]||{};cfg.games.lobby[id]={minPlayers:integer(raw.minPlayers,lobbyDefaults[id].minPlayers,2,25),maxPlayers:integer(raw.maxPlayers,lobbyDefaults[id].maxPlayers,2,25)};if(cfg.games.lobby[id].maxPlayers<cfg.games.lobby[id].minPlayers)cfg.games.lobby[id].maxPlayers=cfg.games.lobby[id].minPlayers;}
+  {const raw=cfg.games.lobby.mafia||{};cfg.games.lobby.mafia={minPlayers:integer(raw.minPlayers,lobbyDefaults.mafia.minPlayers,4,25),maxPlayers:integer(raw.maxPlayers,lobbyDefaults.mafia.maxPlayers,4,25)};if(cfg.games.lobby.mafia.maxPlayers<cfg.games.lobby.mafia.minPlayers)cfg.games.lobby.mafia.maxPlayers=cfg.games.lobby.mafia.minPlayers;}
   cfg.gangs.maxMembers=integer(cfg.gangs.maxMembers,7,2,50);
-  cfg.moderation.maxClear=integer(cfg.moderation.maxClear,100,1,100);
+  cfg.gangs.maxDeputies=integer(cfg.gangs.maxDeputies,2,0,10); cfg.gangs.createCost=integer(cfg.gangs.createCost,0,0,1e9);
+  cfg.gangs.bankEnabled=bool(cfg.gangs.bankEnabled,true); cfg.gangs.missionsEnabled=bool(cfg.gangs.missionsEnabled,true);
+  cfg.gangs.missionCooldownMinutes=integer(cfg.gangs.missionCooldownMinutes,240,1,10080); cfg.gangs.missionRewardMin=integer(cfg.gangs.missionRewardMin,250,0,1e9); cfg.gangs.missionRewardMax=integer(cfg.gangs.missionRewardMax,750,0,1e9); if(cfg.gangs.missionRewardMax<cfg.gangs.missionRewardMin)cfg.gangs.missionRewardMax=cfg.gangs.missionRewardMin;
   cfg.levels.xpPerMessage=integer(cfg.levels.xpPerMessage,10,1,10000); cfg.levels.xpCooldownSeconds=integer(cfg.levels.xpCooldownSeconds,30,5,3600); cfg.levels.baseXp=integer(cfg.levels.baseXp,100,10,1000000); cfg.levels.growth=integer(cfg.levels.growth,50,0,1000000);
   cfg.tickets.title=text(cfg.tickets.title,256)||d.tickets.title; cfg.tickets.description=text(cfg.tickets.description,2000)||d.tickets.description;
   cfg.tickets.buttonLabel=text(cfg.tickets.buttonLabel,80)||d.tickets.buttonLabel; cfg.tickets.buttonEmoji=text(cfg.tickets.buttonEmoji,32)||'🎫';
@@ -119,7 +124,7 @@ function removePremium(guildId){const cfg=getConfig(guildId);cfg.plan='free';cfg
 function globalDefaults(){return{premiumPrice:'4.99 JD / month',purchaseUrl:'',announcement:'',supportUrl:'',plans:normalizePlans({}),updatedAt:Date.now()};}
 function normalizeGlobalConfig(input={}){const d=globalDefaults();return{...d,...input,premiumPrice:text(input.premiumPrice??d.premiumPrice,80),purchaseUrl:text(input.purchaseUrl??'',500),announcement:text(input.announcement??'',500),supportUrl:text(input.supportUrl??'',500),plans:normalizePlans(input.plans||{}),updatedAt:Date.now()};}
 function getGlobalConfig(){return normalizeGlobalConfig(readJson(GLOBAL_FILE,globalDefaults()));}
-function saveGlobalConfig(input={}){const current=getGlobalConfig();const merged={...current,...input,plans:input.plans?{free:{...current.plans.free,...input.plans.free,features:{...current.plans.free.features,...(input.plans.free?.features||{})},games:{...current.plans.free.games,...(input.plans.free?.games||{})},commands:{...current.plans.free.commands,...(input.plans.free?.commands||{})},limits:{...current.plans.free.limits,...(input.plans.free?.limits||{})}},premium:{...current.plans.premium,...input.plans.premium,features:{...current.plans.premium.features,...(input.plans.premium?.features||{})},games:{...current.plans.premium.games,...(input.plans.premium?.games||{})},commands:{...current.plans.premium.commands,...(input.plans.premium?.commands||{})},limits:{...current.plans.premium.limits,...(input.plans.premium?.limits||{})}}}:current.plans};const next=normalizeGlobalConfig(merged);writeJson(GLOBAL_FILE,next);return next;}
+function saveGlobalConfig(input={}){const current=getGlobalConfig();const merged={...current,...input,plans:input.plans?{free:{...current.plans.free,...input.plans.free,features:{...current.plans.free.features,...(input.plans.free?.features||{})},games:{...current.plans.free.games,...(input.plans.free?.games||{})},limits:{...current.plans.free.limits,...(input.plans.free?.limits||{})}},premium:{...current.plans.premium,...input.plans.premium,features:{...current.plans.premium.features,...(input.plans.premium?.features||{})},games:{...current.plans.premium.games,...(input.plans.premium?.games||{})},limits:{...current.plans.premium.limits,...(input.plans.premium?.limits||{})}}}:current.plans};const next=normalizeGlobalConfig(merged);writeJson(GLOBAL_FILE,next);return next;}
 function getCodes(){return readJson(CODES_FILE,[]);} function saveCodes(c){writeJson(CODES_FILE,c);return c;}
 function createCode(days=30){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='ZOMBI-';for(let i=0;i<12;i++)s+=chars[Math.floor(Math.random()*chars.length)];const list=getCodes(),item={code:s,days:integer(days,30,1,3650),createdAt:Date.now(),usedAt:0,usedByGuildId:''};list.push(item);saveCodes(list);return item;}
 function redeemCode(guildId,code){const list=getCodes(),item=list.find(x=>x.code===String(code||'').trim().toUpperCase());if(!item)throw new Error('كود التفعيل غير صحيح.');if(item.usedAt)throw new Error('هذا الكود مستخدم مسبقًا.');item.usedAt=Date.now();item.usedByGuildId=String(guildId);saveCodes(list);return{item,config:setPremium(guildId,item.days)};}

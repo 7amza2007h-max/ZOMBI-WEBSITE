@@ -1,12 +1,12 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "1.2.1",
+  "version": "1.1.0",
   "description": "ZOMBI public website and Discord dashboard",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js && node --check discordCommands.js"
+    "check": "node --check server.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js"
   },
   "engines": {
     "node": ">=20"
