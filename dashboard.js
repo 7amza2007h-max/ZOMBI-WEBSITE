@@ -18,17 +18,20 @@
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
     'game-content': { label: 'محتوى الألعاب', icon: '▤', desc: 'الأسئلة والكلمات والمحتوى الذي تستخدمه الألعاب.' },
     killer: { label: 'من القاتل', icon: '⌕', desc: 'إنشاء وتعديل قضايا من القاتل من الداشبورد.' },
-    city: { label: 'ZOMBI City', icon: '▰', desc: 'البنك المركزي، العصابات، المهمات وسرقة البنك.' },
+    city: { label: 'البنك', icon: '▰', desc: 'لوحة البنك، الوظائف، الشركات والقروض.' },
+    heist: { label: 'النهب والحماية', icon: '🎯', desc: 'تحديات النهب، السجن، الكفالة وحماية الكاش.' },
+    gangs: { label: 'العصابات والمهمات', icon: '🏴', desc: 'العصابات، الأعضاء، الخزنة وقوالب المهمات.' },
+    robbery: { label: 'البنك المركزي', icon: '🚨', desc: 'فتح السرقة، المشاركون، التجهيزات والجوائز.' },
     roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
-    premium: { label: 'Premium', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
+    premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
   };
 
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city']],
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
     ['الأنظمة', ['roles', 'name', 'tickets', 'voice', 'premium']]
   ];
 
@@ -82,7 +85,8 @@
   main.append(content, sidebar);
 
   const oldHead = content.querySelector('.dash-head');
-  const guildName = oldHead?.querySelector('h1')?.textContent?.trim() || 'ZOMBI Server';
+  const guildNameText = oldHead?.querySelector('h1')?.textContent?.trim() || 'ZOMBI Server';
+  const escapeNode=document.createElement('span');escapeNode.textContent=guildNameText;const guildName=escapeNode.innerHTML;
   const guildMeta = oldHead?.querySelector('p')?.innerHTML || '';
   const guildIcon = oldHead?.querySelector('.guild-icon')?.getAttribute('src') || '';
   if (oldHead) oldHead.classList.add('z-hidden-source');
@@ -124,8 +128,8 @@
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
     if (text.includes('Levels')) return 'members';
-    if (text.includes('العصابات')) return 'city';
-    if (text.includes('سرقة البنك')) return 'city';
+    if (text.includes('العصابات')) return 'gangs';
+    if (text.includes('سرقة البنك')) return 'robbery';
     if (text.includes('الرومات الصوتية')) return 'voice';
     if (text.includes('Moderation')) return 'members';
     if (text.includes('عجلة الحظ')) return 'games';
@@ -197,9 +201,9 @@
   moveControl('rolePanel', 'roles', 'القناة التي تُرسل فيها لوحة رتب الإشعارات');
   moveControl('levelUp', 'members', 'قناة إشعارات المستويات');
   moveControl('bankPanel', 'city', 'قنوات ZOMBI City');
-  moveControl('centralBank', 'city', 'قنوات ZOMBI City');
-  moveControl('gangCategory', 'city', 'قنوات ZOMBI City');
-  moveControl('gangLogs', 'city', 'قنوات ZOMBI City');
+  moveControl('centralBank', 'robbery', 'قنوات ZOMBI City');
+  moveControl('gangCategory', 'gangs', 'قنوات ZOMBI City');
+  moveControl('gangLogs', 'gangs', 'قنوات ZOMBI City');
   moveControl('voiceCreate', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('voiceControl', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('voiceCategory', 'voice', 'إعداد قنوات الرومات الصوتية');
@@ -209,12 +213,19 @@
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
+  if(settingsForm){
+    const heistGroup=ensureSettingsGroup('heist');
+    heistGroup.innerHTML='<h3>🎯 النهب والحماية والكفالة</h3><div class="form-grid z-heist-fields"></div>';
+    settingsForm.querySelectorAll('[name]').forEach(field=>{if(/^(heist|cashProtection)/.test(field.name)){const label=field.closest('label');if(label)heistGroup.querySelector('.z-heist-fields').appendChild(label);}});
+    const bar=document.createElement('div');bar.className='z-local-save-bar';bar.innerHTML='<button type="submit" class="btn primary">💾 حفظ النهب والحماية</button>';heistGroup.appendChild(bar);settingsForm.appendChild(heistGroup);
+  }
+
   // Mark major dashboard cards so only their section is visible.
   const pageByPanelTitle = title => {
     title = String(title || '');
     if (title.includes('محتوى الألعاب')) return 'game-content';
     if (title.includes('من القاتل')) return 'killer';
-    if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'city';
+    if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
@@ -406,7 +417,8 @@
  label.className='z-dirty-status';label.setAttribute('role','status');if(bar)bar.prepend(label);
  form.addEventListener('input',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
  form.addEventListener('change',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
- form.addEventListener('submit',()=>{submitting=true;label.textContent='جارٍ حفظ الإعدادات…';});
+ form.addEventListener('submit',e=>{if(!e.defaultPrevented){submitting=true;label.textContent='جارٍ حفظ الإعدادات…';}});
+ form.addEventListener('z-save-failed',()=>{submitting=false;label.textContent='لم تُحفظ التغييرات';});
  window.addEventListener('beforeunload',e=>{if(dirty&&!submitting){e.preventDefault();e.returnValue='';}});
  const update=()=>nav.querySelectorAll('a').forEach(a=>{if(a.classList.contains('active'))a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  nav.addEventListener('click',()=>queueMicrotask(update));update();

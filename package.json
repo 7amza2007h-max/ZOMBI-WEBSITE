@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "1.7.0",
-  "description": "ZOMBI V9.2 professional website and Discord dashboard for Render",
+  "version": "9.4.0",
+  "description": "ZOMBI V9.4 — Free, Premium and Premium+ with shared plan policy",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
