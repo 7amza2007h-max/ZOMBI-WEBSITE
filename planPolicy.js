@@ -144,7 +144,7 @@ function normalizePlan(planName,input={}){
 function normalizePlans(input={}){ return Object.fromEntries(PLAN_IDS.map(p=>[p,normalizePlan(p,input[p]||{})])); }
 function planNameForConfig(cfg){ return ['premium','premium_plus'].includes(cfg?.plan)&&Number(cfg?.premiumUntil||0)>Date.now()?cfg.plan:'free'; }
 function planForConfig(site,cfg){ return normalizePlans(site?.plans||{})[planNameForConfig(cfg)]; }
-function featureAllowed(site,cfg,key){ return Boolean(planForConfig(site,cfg)?.features?.[key]); }
+function featureAllowed(site,cfg,key){ const plan=planNameForConfig(cfg); if(key==='customBotProfile'&&plan==='free')return false; return Boolean(planForConfig(site,cfg)?.features?.[key]); }
 function gameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'games')&&planForConfig(site,cfg)?.games?.[gameId]); }
 function heistGameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'bank')&&planForConfig(site,cfg)?.heistGames?.[gameId]); }
 function limitFor(site,cfg,key){ const p=planForConfig(site,cfg),def=LIMIT_DEFS.find(x=>x.key===key); if(!def)return 0; return integer(p?.limits?.[key],DEFAULT_PLAN_RULES[planNameForConfig(cfg)].limits[key],def.min,def.max); }

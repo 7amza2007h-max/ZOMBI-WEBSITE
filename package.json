@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.5.0",
-  "description": "ZOMBI V9.5 — plan-aware game limits, Owner controls and subscription upgrade flow",
+  "version": "9.6.0",
+  "description": "ZOMBI V9.6 — strict subscription locks, professional dashboard and owner control center",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

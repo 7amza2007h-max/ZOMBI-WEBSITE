@@ -423,3 +423,5 @@
  const update=()=>nav.querySelectorAll('a').forEach(a=>{if(a.classList.contains('active'))a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  nav.addEventListener('click',()=>queueMicrotask(update));update();
 })();
+
+// ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
