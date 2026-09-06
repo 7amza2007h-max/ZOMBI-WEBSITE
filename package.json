@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "1.6.3",
-  "description": "ZOMBI public website and Discord dashboard",
+  "version": "1.7.0",
+  "description": "ZOMBI V9.2 professional website and Discord dashboard for Render",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
