@@ -393,3 +393,21 @@
   window.addEventListener('popstate', () => render(currentFromUrl()));
   render(currentFromUrl());
 })();
+
+// ZOMBI 9: section search, accessible navigation, unsaved change feedback.
+(() => {
+ const sidebar=document.querySelector('.z-dashboard-sidebar');if(!sidebar)return;
+ const status=sidebar.querySelector('.z-side-status');if(status)status.textContent='إعدادات هذا السيرفر';
+ const nav=sidebar.querySelector('nav'),search=document.createElement('input');
+ search.type='search';search.placeholder='ابحث عن قسم…';search.className='z-section-search';search.setAttribute('aria-label','البحث في أقسام التحكم');sidebar.insertBefore(search,nav);
+ search.addEventListener('input',()=>{const q=search.value.trim();nav.querySelectorAll('a').forEach(a=>a.hidden=!a.textContent.includes(q));});
+ const form=document.querySelector('form[action$="/settings"]');if(!form)return;
+ let dirty=false,submitting=false;const bar=form.querySelector('.z-save-bar'),label=document.createElement('span');
+ label.className='z-dirty-status';label.setAttribute('role','status');if(bar)bar.prepend(label);
+ form.addEventListener('input',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
+ form.addEventListener('change',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
+ form.addEventListener('submit',()=>{submitting=true;label.textContent='جارٍ حفظ الإعدادات…';});
+ window.addEventListener('beforeunload',e=>{if(dirty&&!submitting){e.preventDefault();e.returnValue='';}});
+ const update=()=>nav.querySelectorAll('a').forEach(a=>{if(a.classList.contains('active'))a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+ nav.addEventListener('click',()=>queueMicrotask(update));update();
+})();
