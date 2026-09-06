@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.4.0",
-  "description": "ZOMBI V9.4 — Free, Premium and Premium+ with shared plan policy",
+  "version": "9.5.0",
+  "description": "ZOMBI V9.5 — plan-aware game limits, Owner controls and subscription upgrade flow",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

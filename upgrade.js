@@ -28,9 +28,13 @@
   form.addEventListener('submit',e=>{e.preventDefault();show(form.dataset.planLockedForm);});
  });
  // Show server-side denials in the same dialog, including a plan expiring after page load.
+ // حدود الألعاب يحددها Owner لكل خطة. لا نترك المتصفح يقص/يرفض القيمة بصمت؛ نظهر نافذة الاشتراك بدلًا من ذلك.
+ document.querySelectorAll('[data-plan-max]').forEach(field=>{field.removeAttribute('max');field.addEventListener('input',()=>{const max=Number(field.dataset.planMax);field.classList.toggle('z-over-plan-limit',Number(field.value)>max);});});
  document.querySelectorAll('form[method="post" i]').forEach(form=>{
   form.addEventListener('submit',async e=>{
    if(e.defaultPrevented)return;
+   const over=[...form.querySelectorAll('[data-plan-max]')].find(field=>field.value!==''&&Number(field.value)>Number(field.dataset.planMax));
+   if(over){e.preventDefault();const max=Number(over.dataset.planMax),label=over.dataset.limitLabel||'هذا الإعداد',plans=data.current==='Free'||data.current==='free'?'premium,premium_plus':data.current==='Premium'||data.current==='premium'?'premium_plus':'premium,premium_plus';show(plans,`${label}: الحد الحالي في خطتك هو ${max.toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك أو تعديل الحد من Owner.`);over.focus();return;}
    if(!form.checkValidity())return;
    e.preventDefault();
    const body=new URLSearchParams(new FormData(form));if(e.submitter?.name)body.set(e.submitter.name,e.submitter.value);

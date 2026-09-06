@@ -61,8 +61,8 @@ const LIMIT_DEFS = [
   { key:'ticketSupportRoles', label:'رتب دعم التذاكر', min:0, max:50 },
   { key:'questionsPerGame', label:'أسئلة لكل لعبة', min:1, max:1000 },
   { key:'killerCases', label:'قضايا من القاتل', min:1, max:500 },
-  { key:'maxRounds', label:'أقصى عدد جولات', min:1, max:25 },
-  { key:'maxRoundTimeSeconds', label:'أقصى وقت للجولة (ثانية)', min:5, max:300 },
+  { key:'maxRounds', label:'أقصى عدد جولات', min:1, max:100 },
+  { key:'maxRoundTimeSeconds', label:'أقصى وقت للجولة (ثانية)', min:5, max:600 },
   { key:'maxWinnerReward', label:'أقصى جائزة للفائز', min:0, max:1000000000 },
   { key:'gangMembers', label:'أقصى أعضاء العصابة', min:2, max:50 },
   { key:'gangDeputies', label:'أقصى عدد نواب العصابة', min:0, max:10 },
@@ -89,7 +89,7 @@ const DEFAULT_PLAN_RULES = {
       levels:true, voiceRewards:true, moderation:true,
       voiceRooms:false, gangs:false, gangMissions:false, bankRobbery:false,
       customBranding:false, customCurrency:false, customBotProfile:false,
-      gameSettings:false, gameQuestions:false, economyAdmin:false
+      gameSettings:true, gameQuestions:false, economyAdmin:false
     },
     games: {
       ...allGameDefaults(false),
