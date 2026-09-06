@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.6.1",
-  "description": "ZOMBI V9.6.1 — strict subscription locks, professional dashboard and owner control center",
+  "version": "9.6.2",
+  "description": "ZOMBI V9.6.2 — game stop controls, strict subscription locks and professional owner control center",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

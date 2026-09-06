@@ -25,8 +25,8 @@ const commands=[
   {name:'chairs',default_member_permissions:'8',description:'تشغيل لعبة الكراسي'},
   {name:'mafia',default_member_permissions:'8',description:'تشغيل لعبة المافيا'},
   {name:'killer',default_member_permissions:'8',description:'تشغيل لعبة من القاتل'},
-  {name:'ايقاف',description:'إيقاف أي لعبة ZOMBI تعمل في الروم الحالي',default_member_permissions:MANAGE_GUILD},
-  {name:'stopgame',description:'Stop any active ZOMBI game in this channel',default_member_permissions:MANAGE_GUILD},
+  {name:'ايقاف',description:'إيقاف اللعبة للمضيف أو الرتب المسموحة أو إدارة السيرفر'},
+  {name:'stopgame',description:'Stop the active game if you are host or allowed game staff'},
   {name:'store',description:'فتح متجر السيرفر'},
   {name:'premium',description:'عرض حالة Premium أو تفعيل كود',options:[{type:3,name:'code',description:'كود Premium',required:false}]},
   {name:'gang',description:'نظام العصابات',options:[
