@@ -75,7 +75,7 @@ async function profileImageData(urlValue,label='الصورة'){
   let u;try{u=new URL(raw);}catch{throw new Error(`${label}: الرابط غير صالح.`);}
   if(u.protocol!=='https:')throw new Error(`${label}: استخدم رابط HTTPS مباشر للصورة.`);
   if(['localhost','127.0.0.1','0.0.0.0','::1'].includes(u.hostname.toLowerCase()))throw new Error(`${label}: رابط محلي غير مسموح.`);
-  const response=await fetch(u,{redirect:'follow',headers:{'User-Agent':'ZOMBI-Dashboard/9.6.2','Accept':'image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.2'}});
+  const response=await fetch(u,{redirect:'follow',headers:{'User-Agent':'ZOMBI-Dashboard/9.6.3','Accept':'image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.2'}});
   if(!response.ok)throw new Error(`${label}: تعذر تحميل الصورة (HTTP ${response.status}).`);
   const headerType=String(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
   if(!headerType.startsWith('image/'))throw new Error(`${label}: الرابط يجب أن يرجع ملف صورة مباشر.`);
@@ -112,7 +112,7 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.6.2"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a>${isOwner(user)?'<a href="/owner">Owner</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.6.2"></script><script defer src="/site/upgrade.js?v=9.6.2"></script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.6.3"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a>${isOwner(user)?'<a href="/owner">Owner</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.6.3"></script><script defer src="/site/upgrade.js?v=9.6.3"></script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=await store.getGlobalConfig();return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
@@ -374,47 +374,345 @@ async function start(){
   app.post('/dashboard/:guildId/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
     const beforeSettings=structuredClone(cfg);
-    {
+    const requestedSection=String(req.body?._settingsSection||'all').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'all';
+    const knownSections=new Set(['all','overview','economy','members','store','games','city','heist','gangs','robbery','roles','name','tickets','voice']);
+    const settingsSection=knownSections.has(requestedSection)?requestedSection:'all';
+    const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
+    const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
+
+    // Only validate the section that is actually being saved. Hidden fields in
+    // other dashboard pages must never block this request.
+    const rejectOverLimit=(raw,limitKey,label)=>{
+      if(raw===undefined||raw===''||Number(raw)<=Number(maxFor(req,cfg,site,limitKey)))return false;
+      return sendUpgradeRequired(req,res,site,cfg,`${label}: الحد الحالي في خطتك هو ${Number(maxFor(req,cfg,site,limitKey)).toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك، أو يرفع Owner الحد المسموح للخطة من لوحة المالك.`);
+    };
+    if(saves('economy')){
+      if(rejectOverLimit(req.body.dailyAmount,'maxDailyReward','Daily Reward'))return;
+      if(rejectOverLimit(req.body.messageReward,'maxMessageReward','مكافأة الرسائل'))return;
+      if(rejectOverLimit(req.body.voiceReward,'maxVoiceReward','Voice Reward'))return;
+    }
+    if(saves('city')&&rejectOverLimit(req.body.bankMaxTransaction,'maxBankTransaction','أقصى عملية بالبنك'))return;
+    if(saves('gangs')){
+      if(rejectOverLimit(req.body.gangMaxMembers,'gangMembers','أقصى أعضاء العصابة'))return;
+      if(rejectOverLimit(req.body.gangMaxDeputies,'gangDeputies','أقصى نواب العصابة'))return;
+    }
+    if(saves('robbery')&&rejectOverLimit(req.body.robberyMinParticipants,'robberyParticipants','عدد المشاركين بسرقة البنك'))return;
+
+    if(saves('games')){
       const checks=[];
-      const limits={maxRounds:limitFor(site,cfg,'maxRounds'),maxRoundTimeSeconds:limitFor(site,cfg,'maxRoundTimeSeconds'),maxWinnerReward:limitFor(site,cfg,'maxWinnerReward'),maxGamePlayers:limitFor(site,cfg,'maxGamePlayers')};
-      for(const g of GAME_DEFS){checks.push([req.body[`game_rounds_${g.id}`],limits.maxRounds,`${g.label}: عدد الجولات`],[req.body[`game_time_${g.id}`],limits.maxRoundTimeSeconds,`${g.label}: وقت الجولة`],[req.body[`game_reward_${g.id}`],limits.maxWinnerReward,`${g.label}: جائزة الفائز`]);}
-      for(const name of ['rouletteMinPlayers','rouletteMaxPlayers','chairsMinPlayers','chairsMaxPlayers','mafiaMinPlayers','mafiaMaxPlayers'])checks.push([req.body[name],limits.maxGamePlayers,'عدد اللاعبين']);
+      const limits={
+        maxRounds:limitFor(site,cfg,'maxRounds'),
+        maxRoundTimeSeconds:limitFor(site,cfg,'maxRoundTimeSeconds'),
+        maxWinnerReward:limitFor(site,cfg,'maxWinnerReward'),
+        maxGamePlayers:limitFor(site,cfg,'maxGamePlayers')
+      };
+      for(const g of GAME_DEFS){
+        checks.push(
+          [req.body[`game_rounds_${g.id}`],limits.maxRounds,`${g.label}: عدد الجولات`],
+          [req.body[`game_time_${g.id}`],limits.maxRoundTimeSeconds,`${g.label}: وقت الجولة`],
+          [req.body[`game_reward_${g.id}`],limits.maxWinnerReward,`${g.label}: جائزة الفائز`]
+        );
+      }
+      for(const name of ['rouletteMinPlayers','rouletteMaxPlayers','chairsMinPlayers','chairsMaxPlayers','mafiaMinPlayers','mafiaMaxPlayers']){
+        checks.push([req.body[name],limits.maxGamePlayers,'عدد اللاعبين']);
+      }
       const exceeded=checks.find(([raw,max])=>raw!==undefined&&raw!==''&&Number(raw)>Number(max));
       if(exceeded)return sendUpgradeRequired(req,res,site,cfg,`${exceeded[2]}: الحد الحالي في خطتك هو ${Number(exceeded[1]).toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك، أو يرفع Owner الحد المسموح للخطة من لوحة المالك.`);
     }
-    const oldBotProfile={botNickname:String(cfg.branding?.botNickname||''),avatarUrl:String(cfg.branding?.avatarUrl||''),bannerUrl:String(cfg.branding?.bannerUrl||''),bio:String(cfg.branding?.bio||'')};
-    cfg.system={...cfg.system,presenceText:String(req.body.presenceText||cfg.system?.presenceText||'ZOM Economy | /help').slice(0,128),presenceStatus:['online','idle','dnd','invisible'].includes(String(req.body.presenceStatus))?String(req.body.presenceStatus):(cfg.system?.presenceStatus||'online')};
-    for(const k of CORE_FEATURES) cfg.features[k]=featureAllowed(site,cfg,k)?Boolean(req.body[`feature_${k}`]):false;
-    if(featureAllowed(site,cfg,'customCurrency')) cfg.currency.name=String(req.body.currencyName||cfg.currency.name).slice(0,20);
-    cfg.currency.emoji=String(req.body.currencyEmoji||cfg.currency.emoji).slice(0,16);
-    if(featureAllowed(site,cfg,'customBranding')){cfg.branding.color=String(req.body.brandColor||cfg.branding.color);cfg.branding.customName=String(req.body.customName||'').slice(0,80);cfg.branding.customFooter=String(req.body.customFooter||'').slice(0,160);}
-    if(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')){cfg.branding.botNickname=String(req.body.botNickname||'').slice(0,32);cfg.branding.avatarUrl=String(req.body.avatarUrl||'').trim();cfg.branding.bannerUrl=String(req.body.bannerUrl||'').trim();cfg.branding.bio=String(req.body.botBio||'').trim().slice(0,190);cfg.branding.panelLogoUrl=String(req.body.panelLogoUrl||'').trim();cfg.branding.panelBannerUrl=String(req.body.panelBannerUrl||'').trim();}
-    cfg.channels={...cfg.channels,logs:req.body.logs,levelUp:req.body.levelUp,gamePanel:req.body.gamePanel,ticketPanel:req.body.ticketPanel,ticketCategory:req.body.ticketCategory,storePanel:req.body.storePanel,rolePanel:req.body.rolePanel,bankPanel:req.body.bankPanel,centralBank:req.body.centralBank,gangCategory:req.body.gangCategory,gangLogs:req.body.gangLogs,voiceCreate:req.body.voiceCreate,voiceControl:req.body.voiceControl,voiceCategory:req.body.voiceCategory,nameChangePanel:req.body.nameChangePanel};
-    cfg.economy={...cfg.economy,dailyAmount:int(req.body.dailyAmount,cfg.economy.dailyAmount,0,maxFor(req,cfg,site,'maxDailyReward')),dailyCooldownHours:int(req.body.dailyCooldownHours,cfg.economy.dailyCooldownHours,1,720),messageEvery:int(req.body.messageEvery,cfg.economy.messageEvery,1,10000),messageReward:int(req.body.messageReward,cfg.economy.messageReward,0,maxFor(req,cfg,site,'maxMessageReward')),messageCooldownSeconds:int(req.body.messageCooldownSeconds,cfg.economy.messageCooldownSeconds,0,86400),transferCooldownSeconds:int(req.body.transferCooldownSeconds,cfg.economy.transferCooldownSeconds,0,86400),voiceEveryMinutes:int(req.body.voiceEveryMinutes,cfg.economy.voiceEveryMinutes,1,1440),voiceReward:int(req.body.voiceReward,cfg.economy.voiceReward,0,maxFor(req,cfg,site,'maxVoiceReward')),messageChannelIds:arr(req.body.messageChannelIds).slice(0,50),voiceChannelIds:arr(req.body.voiceChannelIds).slice(0,50)};
-    cfg.bank={...cfg.bank,heistEnabled:Boolean(req.body.heistEnabled),heistGameCooldownSeconds:int(req.body.heistGameCooldownSeconds,cfg.bank?.heistGameCooldownSeconds||7200,60,604800),heistTimeSeconds:int(req.body.heistTimeSeconds,25,10,120),heistJailHours:int(req.body.heistJailHours,cfg.bank?.heistJailHours||2,1,24),heistBailPrice:int(req.body.heistBailPrice,cfg.bank?.heistBailPrice||50000,0,1000000000),cashProtectionPrice:int(req.body.cashProtectionPrice,cfg.bank?.cashProtectionPrice||25000,0,1000000000),cashProtectionMinutes:int(req.body.cashProtectionMinutes,cfg.bank?.cashProtectionMinutes||60,1,10080),cashProtectionCooldownMinutes:int(req.body.cashProtectionCooldownMinutes,cfg.bank?.cashProtectionCooldownMinutes||240,1,43200),depositEnabled:Boolean(req.body.bankDepositEnabled),withdrawEnabled:Boolean(req.body.bankWithdrawEnabled),maxTransaction:int(req.body.bankMaxTransaction,cfg.bank?.maxTransaction||1,1,maxFor(req,cfg,site,'maxBankTransaction')),title:String(req.body.bankTitle||cfg.bank?.title||'').slice(0,256),description:String(req.body.bankDescription||cfg.bank?.description||'').slice(0,2000),goldValue:int(req.body.bankGoldValue,cfg.bank?.goldValue||100000,1,1000000000),salaryCooldownHours:int(req.body.bankSalaryCooldownHours,cfg.bank?.salaryCooldownHours??4,0,720),maxSalary:int(req.body.bankMaxSalary,cfg.bank?.maxSalary??1000,0,1000000000),tradeProfitPercent:int(req.body.bankTradeProfitPercent,cfg.bank?.tradeProfitPercent??15,0,1000),tradeSessionMinutes:int(req.body.bankTradeSessionMinutes,cfg.bank?.tradeSessionMinutes??5,1,1440),maxLoan:int(req.body.bankMaxLoan,cfg.bank?.maxLoan??100000,0,1000000000),loanInterestPercent:int(req.body.bankLoanInterestPercent,cfg.bank?.loanInterestPercent??10,0,1000),companyEmployeeStartSalary:int(req.body.companyEmployeeStartSalary,cfg.bank?.companyEmployeeStartSalary??4000,0,1000000000),companyEmployeeSalaryIncrease:int(req.body.companyEmployeeSalaryIncrease,cfg.bank?.companyEmployeeSalaryIncrease??500,0,1000000000),companyLevelUpHours:int(req.body.companyLevelUpHours,cfg.bank?.companyLevelUpHours??24,1,8760),companyOwnerStartSalary:int(req.body.companyOwnerStartSalary,cfg.bank?.companyOwnerStartSalary??100000,0,1000000000),companyOwnerSalaryIncrease:int(req.body.companyOwnerSalaryIncrease,cfg.bank?.companyOwnerSalaryIncrease??5000,0,1000000000)};
-    cfg.bank.heistGamesEnabled={...(cfg.bank.heistGamesEnabled||{})};for(const g of HEIST_GAME_DEFS){if(heistGameAllowed(site,cfg,g.id))cfg.bank.heistGamesEnabled[g.id]=Boolean(req.body[`heist_game_${g.id}`]);}
-    if(featureAllowed(site,cfg,'bank'))await store.saveData(req.params.guildId,'bank-catalog.json',{jobs:parseBankJobs(req.body.bankJobsText),companies:parseBankCompanies(req.body.bankCompaniesText),stocks:parseBankStocks(req.body.bankStocksText)});
-    cfg.levels={...cfg.levels,xpPerMessage:int(req.body.xpPerMessage,cfg.levels.xpPerMessage,1,10000),xpCooldownSeconds:int(req.body.xpCooldownSeconds,cfg.levels.xpCooldownSeconds,5,3600),baseXp:int(req.body.baseXp,cfg.levels.baseXp,10,1000000),growth:int(req.body.levelGrowth,cfg.levels.growth,0,1000000)};
-    cfg.gangs={...cfg.gangs,maxMembers:int(req.body.gangMaxMembers,cfg.gangs.maxMembers,2,maxFor(req,cfg,site,'gangMembers')),maxDeputies:int(req.body.gangMaxDeputies,cfg.gangs.maxDeputies||0,0,maxFor(req,cfg,site,'gangDeputies')),createCost:int(req.body.gangCreateCost,cfg.gangs.createCost||0,0,1000000000),bankEnabled:Boolean(req.body.gangBankEnabled),missionsEnabled:Boolean(req.body.gangMissionsEnabled),missionCooldownMinutes:int(req.body.gangMissionCooldownMinutes,cfg.gangs.missionCooldownMinutes||240,1,10080),missionDurationMinutes:int(req.body.gangMissionDurationMinutes,cfg.gangs.missionDurationMinutes||30,5,180),missionRewardMin:int(req.body.gangMissionRewardMin,cfg.gangs.missionRewardMin||0,0,1000000000),missionRewardMax:int(req.body.gangMissionRewardMax,cfg.gangs.missionRewardMax||0,0,1000000000),minMissionParticipants:int(req.body.gangMinMissionParticipants,cfg.gangs.minMissionParticipants||2,2,25),maxMissionSteps:int(req.body.gangMaxMissionSteps,cfg.gangs.maxMissionSteps||5,1,10),puzzleMaxAttempts:int(req.body.gangPuzzleMaxAttempts,cfg.gangs.puzzleMaxAttempts||2,1,20),chatMaxAttempts:int(req.body.gangChatMaxAttempts,cfg.gangs.chatMaxAttempts||2,1,20),relayMaxAttempts:int(req.body.gangRelayMaxAttempts,cfg.gangs.relayMaxAttempts||2,1,20),missionVoiceSeconds:int(req.body.gangMissionVoiceSeconds,cfg.gangs.missionVoiceSeconds||60,10,3600),roleColor:String(req.body.gangRoleColor||cfg.gangs.roleColor||'#2b2d31')};
-    if(cfg.gangs.missionRewardMax<cfg.gangs.missionRewardMin)cfg.gangs.missionRewardMax=cfg.gangs.missionRewardMin;
-    cfg.robbery={...cfg.robbery,enabled:Boolean(req.body.robberyEnabled),minParticipants:int(req.body.robberyMinParticipants,cfg.robbery?.minParticipants||5,2,maxFor(req,cfg,site,'robberyParticipants')),lobbyMinutes:int(req.body.robberyLobbyMinutes,cfg.robbery?.lobbyMinutes||10,2,60),missionMinutes:int(req.body.robberyMissionMinutes,cfg.robbery?.missionMinutes||25,5,180),reward:int(req.body.robberyReward,cfg.robbery?.reward||50000,1,1000000000),cooldownHours:int(req.body.robberyCooldownHours,cfg.robbery?.cooldownHours||12,0,720),equipment:{mask:int(req.body.robberyMask,cfg.robbery?.equipment?.mask||0,0,1000000000),hacking:int(req.body.robberyHacking,cfg.robbery?.equipment?.hacking||0,0,1000000000),drill:int(req.body.robberyDrill,cfg.robbery?.equipment?.drill||0,0,1000000000),radio:int(req.body.robberyRadio,cfg.robbery?.equipment?.radio||0,0,1000000000),car:int(req.body.robberyCar,cfg.robbery?.equipment?.car||0,0,1000000000)}};
-    cfg.voiceRooms={...cfg.voiceRooms,enabled:Boolean(req.body.voiceRoomsEnabled),roomName:String(req.body.voiceRoomName||cfg.voiceRooms?.roomName||'🎙️・{username}').slice(0,80),userLimit:int(req.body.voiceUserLimit,cfg.voiceRooms?.userLimit||0,0,99),bitrate:int(req.body.voiceBitrate,cfg.voiceRooms?.bitrate||64000,8000,384000)};
-    cfg.moderation={...cfg.moderation,clearEnabled:Boolean(req.body.modClearEnabled),kickEnabled:Boolean(req.body.modKickEnabled),banEnabled:Boolean(req.body.modBanEnabled),lockEnabled:Boolean(req.body.modLockEnabled),logActions:Boolean(req.body.modLogActions)};
-    cfg.warnings={role1Id:String(req.body.warningRole1Id||''),role2Id:String(req.body.warningRole2Id||''),role3Id:String(req.body.warningRole3Id||'')};
-    cfg.nameChange={...cfg.nameChange,enabled:Boolean(req.body.nameChangeEnabled),title:String(req.body.nameChangeTitle||cfg.nameChange?.title||'').slice(0,160),description:String(req.body.nameChangeDescription||cfg.nameChange?.description||'').slice(0,1200),buttonLabel:String(req.body.nameChangeButtonLabel||cfg.nameChange?.buttonLabel||'تغيير اسمي').slice(0,80),buttonEmoji:String(req.body.nameChangeButtonEmoji||cfg.nameChange?.buttonEmoji||'✏️').slice(0,32),modalTitle:String(req.body.nameChangeModalTitle||cfg.nameChange?.modalTitle||'').slice(0,80),inputLabel:String(req.body.nameChangeInputLabel||cfg.nameChange?.inputLabel||'').slice(0,80),inputPlaceholder:String(req.body.nameChangeInputPlaceholder||cfg.nameChange?.inputPlaceholder||'').slice(0,120),successMessage:String(req.body.nameChangeSuccessMessage||cfg.nameChange?.successMessage||'').slice(0,1200),cooldownSeconds:int(req.body.nameChangeCooldownSeconds,cfg.nameChange?.cooldownSeconds||30,0,86400),color:String(req.body.nameChangeColor||cfg.nameChange?.color||'#8B5CF6'),bannerUrl:String(req.body.nameChangeBannerUrl||'').trim()};
-    cfg.tickets={...cfg.tickets,title:String(req.body.ticketTitle||cfg.tickets.title).slice(0,256),description:String(req.body.ticketDescription||cfg.tickets.description).slice(0,2000),buttonLabel:String(req.body.ticketButtonLabel||cfg.tickets.buttonLabel).slice(0,80),buttonEmoji:String(req.body.ticketButtonEmoji||cfg.tickets.buttonEmoji).slice(0,32),supportRoleIds:arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles'))};
-    cfg.store={...cfg.store,title:String(req.body.storeTitle||cfg.store.title).slice(0,256),description:String(req.body.storeDescription||cfg.store.description).slice(0,2000),footer:String(req.body.storeFooter||cfg.store.footer||'ZOMBI • ZOM Store').slice(0,160),accentColor:String(req.body.storeAccentColor||cfg.store.accentColor||cfg.branding.color),thumbnailUrl:String(req.body.storeThumbnailUrl||'').trim(),bannerUrl:String(req.body.storeBannerUrl||'').trim(),detailBannerUrl:String(req.body.storeDetailBannerUrl||'').trim()};
-    cfg.rolePanel={...cfg.rolePanel,title:String(req.body.rolePanelTitle||cfg.rolePanel.title).slice(0,256),description:String(req.body.rolePanelDescription||cfg.rolePanel.description).slice(0,2000),footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)};
-    const canRules=featureAllowed(site,cfg,'gameSettings');for(const g of GAME_DEFS){const allowed=gameAllowed(site,cfg,g.id);cfg.games.enabled[g.id]=allowed&&Boolean(req.body[`game_enabled_${g.id}`]);if(canRules&&allowed){const old=cfg.games.quickGameSettings[g.id]||{};cfg.games.quickGameSettings[g.id]={rounds:int(req.body[`game_rounds_${g.id}`],old.rounds||5,1,maxFor(req,cfg,site,'maxRounds')),roundTimeSeconds:int(req.body[`game_time_${g.id}`],old.roundTimeSeconds||25,5,maxFor(req,cfg,site,'maxRoundTimeSeconds')),winnerReward:int(req.body[`game_reward_${g.id}`],old.winnerReward||300,0,maxFor(req,cfg,site,'maxWinnerReward'))};}}cfg.games.startRoleIds=arr(req.body.gameStartRoleIds).map(String).filter(id=>/^\d{15,25}$/.test(id)).slice(0,25);
-    cfg.games.wheelRewards=String(req.body.wheelRewards||'').split(/[\s,]+/).map(x=>Number(x)).filter(Number.isFinite).map(x=>Math.max(0,Math.round(x))).slice(0,30);if(!cfg.games.wheelRewards.length)cfg.games.wheelRewards=[50,75,100,150,200,300];cfg.games.rouletteEnabled=Boolean(req.body.rouletteEnabled);cfg.games.rouletteTurnSeconds=int(req.body.rouletteTurnSeconds,cfg.games.rouletteTurnSeconds||25,10,120);cfg.games.rouletteActionCosts={revive:int(req.body.rouletteCostRevive,cfg.games.rouletteActionCosts?.revive||0,0,1000000000),link:int(req.body.rouletteCostLink,cfg.games.rouletteActionCosts?.link||0,0,1000000000),protect:int(req.body.rouletteCostProtect,cfg.games.rouletteActionCosts?.protect||0,0,1000000000),freeze:int(req.body.rouletteCostFreeze,cfg.games.rouletteActionCosts?.freeze||0,0,1000000000),double:int(req.body.rouletteCostDouble,cfg.games.rouletteActionCosts?.double||0,0,1000000000),curse:int(req.body.rouletteCostCurse,cfg.games.rouletteActionCosts?.curse||0,0,1000000000),unlink:int(req.body.rouletteCostUnlink,cfg.games.rouletteActionCosts?.unlink||0,0,1000000000),add:int(req.body.rouletteCostAdd,cfg.games.rouletteActionCosts?.add||0,0,1000000000)};cfg.games.chairs={...cfg.games.chairs,startCountdownSeconds:int(req.body.chairsStartCountdownSeconds,cfg.games.chairs?.startCountdownSeconds||5,1,60),betweenRoundsMs:int(req.body.chairsBetweenRoundsMs,cfg.games.chairs?.betweenRoundsMs||2500,250,30000)};
-    const playerMax=maxFor(req,cfg,site,'maxGamePlayers');cfg.games.lobby=cfg.games.lobby||{};for(const id of ['roulette','chairs']){const min=int(req.body[`${id}MinPlayers`],cfg.games.lobby?.[id]?.minPlayers||2,2,playerMax),max=int(req.body[`${id}MaxPlayers`],cfg.games.lobby?.[id]?.maxPlayers||playerMax,min,playerMax);cfg.games.lobby[id]={minPlayers:min,maxPlayers:max};}{const min=int(req.body.mafiaMinPlayers,cfg.games.lobby?.mafia?.minPlayers||4,4,playerMax),max=int(req.body.mafiaMaxPlayers,cfg.games.lobby?.mafia?.maxPlayers||playerMax,min,playerMax);cfg.games.lobby.mafia={minPlayers:min,maxPlayers:max};}
+
+    const oldBotProfile={
+      botNickname:String(cfg.branding?.botNickname||''),
+      avatarUrl:String(cfg.branding?.avatarUrl||''),
+      bannerUrl:String(cfg.branding?.bannerUrl||''),
+      bio:String(cfg.branding?.bio||'')
+    };
+
+    if(saves('overview')){
+      cfg.system={
+        ...cfg.system,
+        presenceText:String(req.body.presenceText||cfg.system?.presenceText||'ZOM Economy | /help').slice(0,128),
+        presenceStatus:['online','idle','dnd','invisible'].includes(String(req.body.presenceStatus))?String(req.body.presenceStatus):(cfg.system?.presenceStatus||'online')
+      };
+      for(const k of CORE_FEATURES){
+        cfg.features[k]=featureAllowed(site,cfg,k)?Boolean(req.body[`feature_${k}`]):false;
+      }
+      if(featureAllowed(site,cfg,'customBranding')){
+        cfg.branding.color=String(req.body.brandColor||cfg.branding.color);
+        cfg.branding.customName=String(req.body.customName||'').slice(0,80);
+        cfg.branding.customFooter=String(req.body.customFooter||'').slice(0,160);
+      }
+      if(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')){
+        cfg.branding.botNickname=String(req.body.botNickname||'').slice(0,32);
+        cfg.branding.avatarUrl=String(req.body.avatarUrl||'').trim();
+        cfg.branding.bannerUrl=String(req.body.bannerUrl||'').trim();
+        cfg.branding.bio=String(req.body.botBio||'').trim().slice(0,190);
+        cfg.branding.panelLogoUrl=String(req.body.panelLogoUrl||'').trim();
+        cfg.branding.panelBannerUrl=String(req.body.panelBannerUrl||'').trim();
+      }
+    }
+
+    if(saves('economy')){
+      if(featureAllowed(site,cfg,'customCurrency'))cfg.currency.name=String(req.body.currencyName||cfg.currency.name).slice(0,20);
+      cfg.currency.emoji=String(req.body.currencyEmoji||cfg.currency.emoji).slice(0,16);
+      cfg.economy={
+        ...cfg.economy,
+        dailyAmount:int(req.body.dailyAmount,cfg.economy.dailyAmount,0,maxFor(req,cfg,site,'maxDailyReward')),
+        dailyCooldownHours:int(req.body.dailyCooldownHours,cfg.economy.dailyCooldownHours,1,720),
+        messageEvery:int(req.body.messageEvery,cfg.economy.messageEvery,1,10000),
+        messageReward:int(req.body.messageReward,cfg.economy.messageReward,0,maxFor(req,cfg,site,'maxMessageReward')),
+        messageCooldownSeconds:int(req.body.messageCooldownSeconds,cfg.economy.messageCooldownSeconds,0,86400),
+        transferCooldownSeconds:int(req.body.transferCooldownSeconds,cfg.economy.transferCooldownSeconds,0,86400),
+        voiceEveryMinutes:int(req.body.voiceEveryMinutes,cfg.economy.voiceEveryMinutes,1,1440),
+        voiceReward:int(req.body.voiceReward,cfg.economy.voiceReward,0,maxFor(req,cfg,site,'maxVoiceReward')),
+        messageChannelIds:arr(req.body.messageChannelIds).slice(0,50)
+      };
+    }
+
+    // Channel selectors are physically moved between pages by dashboard.js.
+    // Update only selectors that were submitted so another page can never be erased.
+    const channelNames=['logs','levelUp','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel'];
+    for(const name of channelNames){if(has(name))cfg.channels[name]=String(req.body[name]||'');}
+
+    if(saves('city')){
+      cfg.bank={
+        ...cfg.bank,
+        depositEnabled:Boolean(req.body.bankDepositEnabled),
+        withdrawEnabled:Boolean(req.body.bankWithdrawEnabled),
+        maxTransaction:int(req.body.bankMaxTransaction,cfg.bank?.maxTransaction||1,1,maxFor(req,cfg,site,'maxBankTransaction')),
+        title:String(req.body.bankTitle||cfg.bank?.title||'').slice(0,256),
+        description:String(req.body.bankDescription||cfg.bank?.description||'').slice(0,2000),
+        goldValue:int(req.body.bankGoldValue,cfg.bank?.goldValue||100000,1,1000000000),
+        salaryCooldownHours:int(req.body.bankSalaryCooldownHours,cfg.bank?.salaryCooldownHours??4,0,720),
+        maxSalary:int(req.body.bankMaxSalary,cfg.bank?.maxSalary??1000,0,1000000000),
+        tradeProfitPercent:int(req.body.bankTradeProfitPercent,cfg.bank?.tradeProfitPercent??15,0,1000),
+        tradeSessionMinutes:int(req.body.bankTradeSessionMinutes,cfg.bank?.tradeSessionMinutes??5,1,1440),
+        maxLoan:int(req.body.bankMaxLoan,cfg.bank?.maxLoan??100000,0,1000000000),
+        loanInterestPercent:int(req.body.bankLoanInterestPercent,cfg.bank?.loanInterestPercent??10,0,1000),
+        companyEmployeeStartSalary:int(req.body.companyEmployeeStartSalary,cfg.bank?.companyEmployeeStartSalary??4000,0,1000000000),
+        companyEmployeeSalaryIncrease:int(req.body.companyEmployeeSalaryIncrease,cfg.bank?.companyEmployeeSalaryIncrease??500,0,1000000000),
+        companyLevelUpHours:int(req.body.companyLevelUpHours,cfg.bank?.companyLevelUpHours??24,1,8760),
+        companyOwnerStartSalary:int(req.body.companyOwnerStartSalary,cfg.bank?.companyOwnerStartSalary??100000,0,1000000000),
+        companyOwnerSalaryIncrease:int(req.body.companyOwnerSalaryIncrease,cfg.bank?.companyOwnerSalaryIncrease??5000,0,1000000000)
+      };
+      if(featureAllowed(site,cfg,'bank')){
+        await store.saveData(req.params.guildId,'bank-catalog.json',{
+          jobs:parseBankJobs(req.body.bankJobsText),
+          companies:parseBankCompanies(req.body.bankCompaniesText),
+          stocks:parseBankStocks(req.body.bankStocksText)
+        });
+      }
+    }
+
+    if(saves('heist')){
+      cfg.bank={
+        ...cfg.bank,
+        heistEnabled:Boolean(req.body.heistEnabled),
+        heistGameCooldownSeconds:int(req.body.heistGameCooldownSeconds,cfg.bank?.heistGameCooldownSeconds||7200,60,604800),
+        heistTimeSeconds:int(req.body.heistTimeSeconds,cfg.bank?.heistTimeSeconds||25,10,120),
+        heistJailHours:int(req.body.heistJailHours,cfg.bank?.heistJailHours||2,1,24),
+        heistBailPrice:int(req.body.heistBailPrice,cfg.bank?.heistBailPrice||50000,0,1000000000),
+        cashProtectionPrice:int(req.body.cashProtectionPrice,cfg.bank?.cashProtectionPrice||25000,0,1000000000),
+        cashProtectionMinutes:int(req.body.cashProtectionMinutes,cfg.bank?.cashProtectionMinutes||60,1,10080),
+        cashProtectionCooldownMinutes:int(req.body.cashProtectionCooldownMinutes,cfg.bank?.cashProtectionCooldownMinutes||240,1,43200)
+      };
+      cfg.bank.heistGamesEnabled={...(cfg.bank.heistGamesEnabled||{})};
+      for(const g of HEIST_GAME_DEFS){
+        if(heistGameAllowed(site,cfg,g.id))cfg.bank.heistGamesEnabled[g.id]=Boolean(req.body[`heist_game_${g.id}`]);
+      }
+    }
+
+    if(saves('members')){
+      cfg.levels={
+        ...cfg.levels,
+        xpPerMessage:int(req.body.xpPerMessage,cfg.levels.xpPerMessage,1,10000),
+        xpCooldownSeconds:int(req.body.xpCooldownSeconds,cfg.levels.xpCooldownSeconds,5,3600),
+        baseXp:int(req.body.baseXp,cfg.levels.baseXp,10,1000000),
+        growth:int(req.body.levelGrowth,cfg.levels.growth,0,1000000)
+      };
+      cfg.moderation={
+        ...cfg.moderation,
+        clearEnabled:Boolean(req.body.modClearEnabled),
+        kickEnabled:Boolean(req.body.modKickEnabled),
+        banEnabled:Boolean(req.body.modBanEnabled),
+        lockEnabled:Boolean(req.body.modLockEnabled),
+        logActions:Boolean(req.body.modLogActions)
+      };
+      cfg.warnings={
+        role1Id:String(req.body.warningRole1Id||''),
+        role2Id:String(req.body.warningRole2Id||''),
+        role3Id:String(req.body.warningRole3Id||'')
+      };
+    }
+
+    if(saves('gangs')){
+      cfg.gangs={
+        ...cfg.gangs,
+        maxMembers:int(req.body.gangMaxMembers,cfg.gangs.maxMembers,2,maxFor(req,cfg,site,'gangMembers')),
+        maxDeputies:int(req.body.gangMaxDeputies,cfg.gangs.maxDeputies||0,0,maxFor(req,cfg,site,'gangDeputies')),
+        createCost:int(req.body.gangCreateCost,cfg.gangs.createCost||0,0,1000000000),
+        bankEnabled:Boolean(req.body.gangBankEnabled),
+        missionsEnabled:Boolean(req.body.gangMissionsEnabled),
+        missionCooldownMinutes:int(req.body.gangMissionCooldownMinutes,cfg.gangs.missionCooldownMinutes||240,1,10080),
+        missionDurationMinutes:int(req.body.gangMissionDurationMinutes,cfg.gangs.missionDurationMinutes||30,5,180),
+        missionRewardMin:int(req.body.gangMissionRewardMin,cfg.gangs.missionRewardMin||0,0,1000000000),
+        missionRewardMax:int(req.body.gangMissionRewardMax,cfg.gangs.missionRewardMax||0,0,1000000000),
+        minMissionParticipants:int(req.body.gangMinMissionParticipants,cfg.gangs.minMissionParticipants||2,2,25),
+        maxMissionSteps:int(req.body.gangMaxMissionSteps,cfg.gangs.maxMissionSteps||5,1,10),
+        puzzleMaxAttempts:int(req.body.gangPuzzleMaxAttempts,cfg.gangs.puzzleMaxAttempts||2,1,20),
+        chatMaxAttempts:int(req.body.gangChatMaxAttempts,cfg.gangs.chatMaxAttempts||2,1,20),
+        relayMaxAttempts:int(req.body.gangRelayMaxAttempts,cfg.gangs.relayMaxAttempts||2,1,20),
+        missionVoiceSeconds:int(req.body.gangMissionVoiceSeconds,cfg.gangs.missionVoiceSeconds||60,10,3600),
+        roleColor:String(req.body.gangRoleColor||cfg.gangs.roleColor||'#2b2d31')
+      };
+      if(cfg.gangs.missionRewardMax<cfg.gangs.missionRewardMin)cfg.gangs.missionRewardMax=cfg.gangs.missionRewardMin;
+    }
+
+    if(saves('robbery')){
+      cfg.robbery={
+        ...cfg.robbery,
+        enabled:Boolean(req.body.robberyEnabled),
+        minParticipants:int(req.body.robberyMinParticipants,cfg.robbery?.minParticipants||5,2,maxFor(req,cfg,site,'robberyParticipants')),
+        lobbyMinutes:int(req.body.robberyLobbyMinutes,cfg.robbery?.lobbyMinutes||10,2,60),
+        missionMinutes:int(req.body.robberyMissionMinutes,cfg.robbery?.missionMinutes||25,5,180),
+        reward:int(req.body.robberyReward,cfg.robbery?.reward||50000,1,1000000000),
+        cooldownHours:int(req.body.robberyCooldownHours,cfg.robbery?.cooldownHours||12,0,720),
+        equipment:{
+          mask:int(req.body.robberyMask,cfg.robbery?.equipment?.mask||0,0,1000000000),
+          hacking:int(req.body.robberyHacking,cfg.robbery?.equipment?.hacking||0,0,1000000000),
+          drill:int(req.body.robberyDrill,cfg.robbery?.equipment?.drill||0,0,1000000000),
+          radio:int(req.body.robberyRadio,cfg.robbery?.equipment?.radio||0,0,1000000000),
+          car:int(req.body.robberyCar,cfg.robbery?.equipment?.car||0,0,1000000000)
+        }
+      };
+    }
+
+    if(saves('voice')){
+      cfg.voiceRooms={
+        ...cfg.voiceRooms,
+        enabled:Boolean(req.body.voiceRoomsEnabled),
+        roomName:String(req.body.voiceRoomName||cfg.voiceRooms?.roomName||'🎙️・{username}').slice(0,80),
+        userLimit:int(req.body.voiceUserLimit,cfg.voiceRooms?.userLimit||0,0,99),
+        bitrate:int(req.body.voiceBitrate,cfg.voiceRooms?.bitrate||64000,8000,384000)
+      };
+      cfg.economy={...cfg.economy,voiceChannelIds:arr(req.body.voiceChannelIds).slice(0,50)};
+    }
+
+    if(saves('name')){
+      cfg.nameChange={
+        ...cfg.nameChange,
+        enabled:Boolean(req.body.nameChangeEnabled),
+        title:String(req.body.nameChangeTitle||cfg.nameChange?.title||'').slice(0,160),
+        description:String(req.body.nameChangeDescription||cfg.nameChange?.description||'').slice(0,1200),
+        buttonLabel:String(req.body.nameChangeButtonLabel||cfg.nameChange?.buttonLabel||'تغيير اسمي').slice(0,80),
+        buttonEmoji:String(req.body.nameChangeButtonEmoji||cfg.nameChange?.buttonEmoji||'✏️').slice(0,32),
+        modalTitle:String(req.body.nameChangeModalTitle||cfg.nameChange?.modalTitle||'').slice(0,80),
+        inputLabel:String(req.body.nameChangeInputLabel||cfg.nameChange?.inputLabel||'').slice(0,80),
+        inputPlaceholder:String(req.body.nameChangeInputPlaceholder||cfg.nameChange?.inputPlaceholder||'').slice(0,120),
+        successMessage:String(req.body.nameChangeSuccessMessage||cfg.nameChange?.successMessage||'').slice(0,1200),
+        cooldownSeconds:int(req.body.nameChangeCooldownSeconds,cfg.nameChange?.cooldownSeconds||30,0,86400),
+        color:String(req.body.nameChangeColor||cfg.nameChange?.color||'#8B5CF6'),
+        bannerUrl:String(req.body.nameChangeBannerUrl||'').trim()
+      };
+    }
+
+    if(saves('tickets')){
+      cfg.tickets={
+        ...cfg.tickets,
+        title:String(req.body.ticketTitle||cfg.tickets.title).slice(0,256),
+        description:String(req.body.ticketDescription||cfg.tickets.description).slice(0,2000),
+        buttonLabel:String(req.body.ticketButtonLabel||cfg.tickets.buttonLabel).slice(0,80),
+        buttonEmoji:String(req.body.ticketButtonEmoji||cfg.tickets.buttonEmoji).slice(0,32),
+        supportRoleIds:arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles'))
+      };
+    }
+
+    if(saves('store')){
+      cfg.store={
+        ...cfg.store,
+        title:String(req.body.storeTitle||cfg.store.title).slice(0,256),
+        description:String(req.body.storeDescription||cfg.store.description).slice(0,2000),
+        footer:String(req.body.storeFooter||cfg.store.footer||'ZOMBI • ZOM Store').slice(0,160),
+        accentColor:String(req.body.storeAccentColor||cfg.store.accentColor||cfg.branding.color),
+        thumbnailUrl:String(req.body.storeThumbnailUrl||'').trim(),
+        bannerUrl:String(req.body.storeBannerUrl||'').trim(),
+        detailBannerUrl:String(req.body.storeDetailBannerUrl||'').trim()
+      };
+    }
+
+    if(saves('roles')){
+      cfg.rolePanel={
+        ...cfg.rolePanel,
+        title:String(req.body.rolePanelTitle||cfg.rolePanel.title).slice(0,256),
+        description:String(req.body.rolePanelDescription||cfg.rolePanel.description).slice(0,2000),
+        footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)
+      };
+    }
+
+    if(saves('games')){
+      const canRules=featureAllowed(site,cfg,'gameSettings');
+      for(const g of GAME_DEFS){
+        const allowed=gameAllowed(site,cfg,g.id);
+        cfg.games.enabled[g.id]=allowed&&Boolean(req.body[`game_enabled_${g.id}`]);
+        if(canRules&&allowed){
+          const old=cfg.games.quickGameSettings[g.id]||{};
+          cfg.games.quickGameSettings[g.id]={
+            rounds:int(req.body[`game_rounds_${g.id}`],old.rounds||5,1,maxFor(req,cfg,site,'maxRounds')),
+            roundTimeSeconds:int(req.body[`game_time_${g.id}`],old.roundTimeSeconds||25,5,maxFor(req,cfg,site,'maxRoundTimeSeconds')),
+            winnerReward:int(req.body[`game_reward_${g.id}`],old.winnerReward||300,0,maxFor(req,cfg,site,'maxWinnerReward'))
+          };
+        }
+      }
+      cfg.games.startRoleIds=arr(req.body.gameStartRoleIds).map(String).filter(id=>/^\d{15,25}$/.test(id)).slice(0,25);
+      cfg.games.wheelRewards=String(req.body.wheelRewards||'').split(/[\s,]+/).map(x=>Number(x)).filter(Number.isFinite).map(x=>Math.max(0,Math.round(x))).slice(0,30);
+      if(!cfg.games.wheelRewards.length)cfg.games.wheelRewards=[50,75,100,150,200,300];
+      cfg.games.rouletteEnabled=Boolean(req.body.rouletteEnabled);
+      cfg.games.rouletteTurnSeconds=int(req.body.rouletteTurnSeconds,cfg.games.rouletteTurnSeconds||25,10,120);
+      cfg.games.rouletteActionCosts={
+        revive:int(req.body.rouletteCostRevive,cfg.games.rouletteActionCosts?.revive||0,0,1000000000),
+        link:int(req.body.rouletteCostLink,cfg.games.rouletteActionCosts?.link||0,0,1000000000),
+        protect:int(req.body.rouletteCostProtect,cfg.games.rouletteActionCosts?.protect||0,0,1000000000),
+        freeze:int(req.body.rouletteCostFreeze,cfg.games.rouletteActionCosts?.freeze||0,0,1000000000),
+        double:int(req.body.rouletteCostDouble,cfg.games.rouletteActionCosts?.double||0,0,1000000000),
+        curse:int(req.body.rouletteCostCurse,cfg.games.rouletteActionCosts?.curse||0,0,1000000000),
+        unlink:int(req.body.rouletteCostUnlink,cfg.games.rouletteActionCosts?.unlink||0,0,1000000000),
+        add:int(req.body.rouletteCostAdd,cfg.games.rouletteActionCosts?.add||0,0,1000000000)
+      };
+      cfg.games.chairs={
+        ...cfg.games.chairs,
+        startCountdownSeconds:int(req.body.chairsStartCountdownSeconds,cfg.games.chairs?.startCountdownSeconds||5,1,60),
+        betweenRoundsMs:int(req.body.chairsBetweenRoundsMs,cfg.games.chairs?.betweenRoundsMs||2500,250,30000)
+      };
+      const playerMax=maxFor(req,cfg,site,'maxGamePlayers');
+      cfg.games.lobby=cfg.games.lobby||{};
+      for(const id of ['roulette','chairs']){
+        const min=int(req.body[`${id}MinPlayers`],cfg.games.lobby?.[id]?.minPlayers||2,2,playerMax);
+        const max=int(req.body[`${id}MaxPlayers`],cfg.games.lobby?.[id]?.maxPlayers||playerMax,min,playerMax);
+        cfg.games.lobby[id]={minPlayers:min,maxPlayers:max};
+      }
+      {
+        const min=int(req.body.mafiaMinPlayers,cfg.games.lobby?.mafia?.minPlayers||4,4,playerMax);
+        const max=int(req.body.mafiaMaxPlayers,cfg.games.lobby?.mafia?.maxPlayers||playerMax,min,playerMax);
+        cfg.games.lobby.mafia={minPlayers:min,maxPlayers:max};
+      }
+    }
+
     access.restoreLocked(beforeSettings,cfg,site);
-    cfg.setupComplete=true;const saved=await store.saveConfig(req.params.guildId,cfg);
-    if(isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')){
+    cfg.setupComplete=true;
+    const saved=await store.saveConfig(req.params.guildId,cfg);
+
+    if(saves('overview')&&isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')){
       const forceProfile=String(req.body.forceBotProfile||'')==='1';
       const nickChanged=forceProfile||oldBotProfile.botNickname!==String(saved.branding.botNickname||'');
-      if(nickChanged){try{await botFetch(`/guilds/${req.params.guildId}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding.botNickname||null})});}catch(e){{const d=discordFormDetails(e);throw new Error(`تم حفظ الإعدادات، لكن Discord رفض تغيير Nickname البوت: ${e.message}${d?` — ${d}`:''}`);}}}
+      if(nickChanged){
+        try{
+          await botFetch(`/guilds/${req.params.guildId}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding.botNickname||null})});
+        }catch(e){
+          const d=discordFormDetails(e);
+          throw new Error(`تم حفظ الإعدادات، لكن Discord رفض تغيير Nickname البوت: ${e.message}${d?` — ${d}`:''}`);
+        }
+      }
     }
+
     redirectDashboard(req,res);
   }catch(e){next(e);}});
 

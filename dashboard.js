@@ -213,11 +213,34 @@
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
+  // Convert all plan-dependent numeric caps into explicit subscription caps.
+  // Native HTML max validation can otherwise block a submit before our
+  // Premium dialog has a chance to explain what happened.
+  if (settingsForm) {
+    const planLimitedFields = {
+      dailyAmount: 'Daily Reward',
+      messageReward: 'مكافأة الرسائل',
+      voiceReward: 'Voice Reward',
+      bankMaxTransaction: 'أقصى عملية بالبنك',
+      gangMaxMembers: 'أقصى أعضاء العصابة',
+      gangMaxDeputies: 'أقصى نواب العصابة',
+      robberyMinParticipants: 'عدد المشاركين بسرقة البنك'
+    };
+    Object.entries(planLimitedFields).forEach(([name, label]) => {
+      const field = settingsForm.querySelector(`[name="${name}"]`);
+      if (!field) return;
+      const max = field.getAttribute('max');
+      if (max !== null && max !== '') field.dataset.planMax = max;
+      field.dataset.limitLabel = label;
+      field.removeAttribute('max');
+    });
+  }
+
   if(settingsForm){
     const heistGroup=ensureSettingsGroup('heist');
     heistGroup.innerHTML='<h3>🎯 النهب والحماية والكفالة</h3><div class="form-grid z-heist-fields"></div>';
     settingsForm.querySelectorAll('[name]').forEach(field=>{if(/^(heist|cashProtection)/.test(field.name)){const label=field.closest('label');if(label)heistGroup.querySelector('.z-heist-fields').appendChild(label);}});
-    const bar=document.createElement('div');bar.className='z-local-save-bar';bar.innerHTML='<button type="submit" class="btn primary">💾 حفظ النهب والحماية</button>';heistGroup.appendChild(bar);settingsForm.appendChild(heistGroup);
+    const bar=document.createElement('div');bar.className='z-local-save-bar';bar.innerHTML='<button type="submit" class="btn primary z-local-save" data-page="heist">💾 حفظ النهب والحماية</button>';heistGroup.appendChild(bar);settingsForm.appendChild(heistGroup);
   }
 
   // Mark major dashboard cards so only their section is visible.
@@ -350,6 +373,81 @@
     ensureSettingsGroup('premium').prepend(notice);
   }
 
+  // Save only the visible settings section.
+  // This is important because HTML constraint validation also checks hidden
+  // controls when they live inside the same <form>. Older builds therefore
+  // made every save button look broken when a value in another section was
+  // above its current plan limit.
+  if (settingsForm) {
+    let restoreTimer = null;
+    const originalDisabled = new WeakMap();
+
+    const sectionInput = document.createElement('input');
+    sectionInput.type = 'hidden';
+    sectionInput.name = '_settingsSection';
+    settingsForm.appendChild(sectionInput);
+
+    const restoreTemporarilyDisabled = () => {
+      clearTimeout(restoreTimer);
+      settingsForm.querySelectorAll('[data-z-save-temp-disabled="1"]').forEach(control => {
+        const wasDisabled = originalDisabled.get(control) === true;
+        control.disabled = wasDisabled;
+        control.removeAttribute('data-z-save-temp-disabled');
+        originalDisabled.delete(control);
+      });
+    };
+
+    const prepareSectionSave = (button, page) => {
+      restoreTemporarilyDisabled();
+      const group = settingsGroups.get(page);
+      if (!group) return true;
+      sectionInput.value = page;
+
+      const allowed = new Set(group.querySelectorAll('input,select,textarea,button'));
+      const csrfField = settingsForm.querySelector(':scope > input[name="_csrf"]');
+      if (csrfField) allowed.add(csrfField);
+      allowed.add(sectionInput);
+      allowed.add(button);
+
+      settingsForm.querySelectorAll('input,select,textarea,button').forEach(control => {
+        if (allowed.has(control)) return;
+        if (control.closest('.z-save-bar') && control.name === 'forceBotProfile' && page === 'overview') return;
+        originalDisabled.set(control, control.disabled === true);
+        if (!control.disabled) {
+          control.disabled = true;
+          control.dataset.zSaveTempDisabled = '1';
+        }
+      });
+
+      // Validate only the active page. Other pages are disabled above and
+      // therefore cannot silently cancel this submit.
+      if (!settingsForm.checkValidity()) {
+        settingsForm.reportValidity();
+        settingsForm.dispatchEvent(new Event('z-save-failed'));
+        restoreTemporarilyDisabled();
+        return false;
+      }
+
+      // upgrade.js serializes the form during the submit event. Keep the other
+      // pages disabled long enough for FormData to be built, then restore them
+      // in case the request is rejected without leaving the page.
+      restoreTimer = setTimeout(restoreTemporarilyDisabled, 1500);
+      return true;
+    };
+
+    settingsForm.addEventListener('click', event => {
+      const button = event.target.closest('button[type="submit"]');
+      if (!button || button.form !== settingsForm) return;
+      const page = button.name === 'forceBotProfile'
+        ? 'overview'
+        : (button.dataset.page || currentFromUrl());
+      button.dataset.page = page;
+      if (!prepareSectionSave(button, page)) event.preventDefault();
+    }, true);
+
+    settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
+  }
+
   const allPostForms = () => [...content.querySelectorAll('form[method="post" i]')];
   const setReturnSection = section => {
     allPostForms().forEach(form => {
@@ -382,7 +480,10 @@
       showNode(settingsForm, hasSettings);
       settingsGroups.forEach((group, key) => showNode(group, key === section));
       const saveBtn = settingsForm.querySelector('.z-save-bar button[type="submit"]:not([name="forceBotProfile"])');
-      if (saveBtn) saveBtn.textContent = section === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${def.label}`;
+      if (saveBtn) {
+        saveBtn.dataset.page = section;
+        saveBtn.textContent = section === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${def.label}`;
+      }
       settingsForm.querySelectorAll('.z-local-save').forEach(btn => {
         btn.textContent = btn.dataset.page === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${pageDefs[btn.dataset.page]?.label || 'القسم'}`;
       });

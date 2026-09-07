@@ -33,7 +33,7 @@
  document.querySelectorAll('form[method="post" i]').forEach(form=>{
   form.addEventListener('submit',async e=>{
    if(e.defaultPrevented)return;
-   const over=[...form.querySelectorAll('[data-plan-max]')].find(field=>field.value!==''&&Number(field.value)>Number(field.dataset.planMax));
+   const over=[...form.querySelectorAll('[data-plan-max]')].find(field=>!field.disabled&&field.value!==''&&Number(field.value)>Number(field.dataset.planMax));
    if(over){e.preventDefault();const max=Number(over.dataset.planMax),label=over.dataset.limitLabel||'هذا الإعداد',plans=data.current==='Free'||data.current==='free'?'premium,premium_plus':data.current==='Premium'||data.current==='premium'?'premium_plus':'premium,premium_plus';show(plans,`${label}: الحد الحالي في خطتك هو ${max.toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك أو تعديل الحد من Owner.`);over.focus();return;}
    if(!form.checkValidity())return;
    e.preventDefault();
@@ -43,7 +43,17 @@
     const res=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body});
     if(res.status===403&&res.headers.get('content-type')?.includes('application/json')){form.dispatchEvent(new Event('z-save-failed'));const denied=await res.json();show((denied.plans||[]).join(','),denied.message);return;}
     if(res.redirected){window.location.assign(res.url);return;}
-    if(!res.ok){form.dispatchEvent(new Event('z-save-failed'));const status=document.createElement('p');status.className='warn';status.setAttribute('role','alert');status.textContent='تعذر حفظ التغييرات. راجع المدخلات وصلاحياتك وحاول مجددًا.';form.querySelector('.z-save-error')?.remove();status.classList.add('z-save-error');form.appendChild(status);return;}
+    if(!res.ok){
+     form.dispatchEvent(new Event('z-save-failed'));
+     let detail='تعذر حفظ التغييرات. راجع المدخلات وصلاحياتك وحاول مجددًا.';
+     try{
+      const raw=await res.text();
+      const type=String(res.headers.get('content-type')||'');
+      if(type.includes('application/json')){const parsed=JSON.parse(raw||'{}');detail=parsed.message||parsed.error||detail;}
+      else if(raw){const doc=new DOMParser().parseFromString(raw,'text/html');detail=(doc.querySelector('.login p, .upgrade-required p, main p')?.textContent||doc.body?.textContent||detail).replace(/\s+/g,' ').trim().slice(0,500)||detail;}
+     }catch{}
+     const status=document.createElement('p');status.className='warn z-save-error';status.setAttribute('role','alert');status.textContent=detail;form.querySelector('.z-save-error')?.remove();form.appendChild(status);show('',detail);return;
+    }
     // Some legacy routes return an HTML success page.
     const html=await res.text();document.open();document.write(html);document.close();
    }catch{form.dispatchEvent(new Event('z-save-failed'));show('','تعذر الاتصال. تغييراتك ما زالت في الصفحة؛ حاول الحفظ مجددًا.');}
