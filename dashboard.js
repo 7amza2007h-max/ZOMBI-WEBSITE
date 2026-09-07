@@ -11,6 +11,7 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
+    warnings: {label:'التحذيرات',icon:'⚠️',desc:'Premium+ • روم التحذيرات، IDs الرتب وإضافة مستويات التحذير.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
@@ -33,7 +34,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['logs', 'roles', 'name', 'tickets', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -134,6 +135,7 @@
 
   const headingPage = text => {
     text = String(text || '');
+    if (text.includes('⚠️ التحذيرات')) return 'warnings';
     if (text.includes('سجل السيرفر Log')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
