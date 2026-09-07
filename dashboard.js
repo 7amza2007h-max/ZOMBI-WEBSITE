@@ -11,7 +11,7 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
-    warnings: {label:'التحذيرات',icon:'⚠️',desc:'Premium+ • روم التحذيرات، IDs الرتب وإضافة مستويات التحذير.'},
+    warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },

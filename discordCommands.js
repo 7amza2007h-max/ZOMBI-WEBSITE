@@ -8,7 +8,7 @@ const gamesChoices=[
   ['🔎 الكلمة','word'],['🎡 عجلة الحظ','wheel'],['🏆 اليومي','daily'],['🎭 مافيا','mafia'],['🎰 روليت','roulette'],['🪑 الكراسي','chairs'],['🔪 من القاتل','killer']
 ].map(([name,value])=>({name,value}));
 const commands=[
-  ...['warn','warnings','unwarn'].map(name=>({name,description:'نظام التحذيرات Premium+',default_member_permissions:'8192',options:[{type:6,name:'user',description:'العضو',required:true},...(name==='warn'?[{type:3,name:'reason',description:'سبب التحذير',required:true,max_length:500}]:name==='unwarn'?[{type:3,name:'id',description:'رقم التحذير أو اتركه لإزالة الأخير',required:false}]:[])]})),
+  ...['warn','warnings','unwarn'].map(name=>({name,description:'نظام التحذيرات',default_member_permissions:'8192',options:[{type:6,name:'user',description:'العضو',required:true},...(name==='warn'?[{type:3,name:'reason',description:'سبب التحذير',required:true,max_length:500}]:name==='unwarn'?[{type:3,name:'id',description:'رقم التحذير أو اتركه لإزالة الأخير',required:false}]:[])]})),
   {name:'داشبورد',description:'فتح لوحة تحكم ZOMBI الخاصة بهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'setup',description:'إعداد ZOMBI لهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'balance',description:'عرض رصيدك أو رصيد عضو',options:[{type:6,name:'user',description:'العضو',required:false}]},

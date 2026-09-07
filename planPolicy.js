@@ -1,6 +1,7 @@
 'use strict';
 
 const FEATURE_DEFS = [
+  ['warnings', 'نظام التحذيرات', '⚠️'],
   ['economy', 'Economy', '💰'],
   ['textChannelLock', 'قفل وفتح الشات بالأوامر ق / ف', '🔒'],
   ['economyAdmin', 'إدارة أرصدة الأعضاء من Dashboard', '🧾'],
@@ -108,7 +109,7 @@ const DEFAULT_PLAN_RULES = {
     }
   },
   premium: {
-    features: allFeatureDefaults(true),
+    features: {...allFeatureDefaults(true), warnings:false},
     games: allGameDefaults(true),
     heistGames: allHeistGameDefaults(true),
     limits: {

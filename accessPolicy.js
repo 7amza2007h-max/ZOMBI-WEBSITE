@@ -3,7 +3,7 @@ const policy=require('./planPolicy');
 function requirements(name){
  if(name.startsWith('_'))return [];
  if(name==='logs'||name==='modLogActions'||name==='loggingPresent'||name.startsWith('log_'))return [];
- if(name.startsWith('warning'))return ['warningsPlus'];
+ if(name.startsWith('warning'))return ['warnings'];
  if(name.startsWith('feature_'))return [name.slice(8)];
  if(name==='currencyName'||name==='currencyEmoji')return ['customCurrency'];
  if(['brandColor','customName','customFooter','storeAccentColor','storeFooter','rolePanelFooter'].includes(name))return ['customBranding'];
@@ -28,7 +28,7 @@ function requirements(name){
  if(name==='gamePanel'||name==='gameStartRoleIds')return ['games'];
  return [];
 }
-function allows(site,cfg,key){if(key==='warningsPlus')return policy.planNameForConfig(cfg)==='premium_plus';return key.startsWith('game:')?policy.gameAllowed(site,cfg,key.slice(5)):key.startsWith('heist:')?policy.heistGameAllowed(site,cfg,key.slice(6)):policy.featureAllowed(site,cfg,key);}
+function allows(site,cfg,key){return key.startsWith('game:')?policy.gameAllowed(site,cfg,key.slice(5)):key.startsWith('heist:')?policy.heistGameAllowed(site,cfg,key.slice(6)):policy.featureAllowed(site,cfg,key);}
 function missing(site,cfg,keys){return keys.filter(k=>!allows(site,cfg,k));}
 function availablePlans(site,keys){return ['premium','premium_plus'].filter(plan=>keys.every(k=>allows(site,{plan,premiumUntil:Date.now()+86400000},k)));}
 function routeRequirements(path){
@@ -46,7 +46,7 @@ function restoreLocked(before,after,site){
  const restore=(feature,section)=>{if(!policy.featureAllowed(site,before,feature))after[section]=structuredClone(before[section]);};
  for(const [f,s] of Object.entries({bank:'bank',economy:'economy',levels:'levels',gangs:'gangs',bankRobbery:'robbery',voiceRooms:'voiceRooms',moderation:'moderation',tickets:'tickets',store:'store',rolePanel:'rolePanel',games:'games'}))restore(f,s);
  after.moderation.logActions=loggingEnabled;
- restore('customCurrency','currency');if(policy.planNameForConfig(before)!=='premium_plus')after.warnings=structuredClone(before.warnings);
+ restore('customCurrency','currency');restore('warnings','warnings');
  const copy=(feature,obj,keys)=>{if(!policy.featureAllowed(site,before,feature))for(const k of keys)after[obj][k]=before[obj][k];};
  copy('customBranding','branding',['color','customName','customFooter']);
  copy('customBotProfile','branding',['botNickname','avatarUrl','bannerUrl','bio','panelLogoUrl','panelBannerUrl']);
