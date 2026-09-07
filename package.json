@@ -1,6 +1,6 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.7.0",
+  "version": "9.8.0",
   "description": "ZOMBI V9.7.0 — Zain Cash payment requests, owner approval and automatic Premium activation",
   "main": "server.js",
   "type": "commonjs",
