@@ -4,6 +4,7 @@ const express=require('express');
 const session=require('express-session');
 const crypto=require('crypto');
 const store=require('./sharedStore');
+const payments=require('./paymentStore');
 const access=require('./accessPolicy');
 const {pricing}=require('./pricingView');
 const {PLAN_IDS,PLAN_LABELS}=require('./planPolicy');
@@ -43,6 +44,28 @@ function sendUpgradeRequired(req,res,site,cfg,detail){const current=planNameForC
 function planBadge(cfg){return (planNameForConfig(cfg)==='free'?'🆓 ':'💎 ')+PLAN_LABELS[planNameForConfig(cfg)];}
 function homeGuildId(){return String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'').trim();}
 function isHomeGuild(gid){const home=homeGuildId();return Boolean(home&&String(gid)===home);}
+function paymentPlan(v){return String(v)==='premium_plus'?'premium_plus':'premium';}
+function resolvedZainCash(site={}){
+  const raw=site.zainCash||{},envWallet=String(process.env.ZAIN_CASH_WALLET||'').trim(),envName=String(process.env.ZAIN_CASH_NAME||'').trim();
+  const enabledEnv=String(process.env.ZAIN_CASH_ENABLED||'').trim().toLowerCase();
+  const enabled=enabledEnv?['1','true','yes','on'].includes(enabledEnv):Boolean(raw.enabled||envWallet);
+  const num=(envKey,fallback,min=0.1,max=10000)=>{const v=String(process.env[envKey]||'').trim();const n=v===''?Number(fallback):Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n*1000)/1000)):Number(fallback||0);};
+  const days=(envKey,fallback)=>{const v=String(process.env[envKey]||'').trim();const n=v===''?Number(fallback):Number(v);return Number.isFinite(n)?Math.max(1,Math.min(3650,Math.round(n))):30;};
+  const walletNumber=envWallet||String(raw.walletNumber||'').trim(),walletName=envName||String(raw.walletName||'').trim();
+  return{enabled:Boolean(enabled&&walletNumber),walletNumber,walletName,premiumAmount:num('ZAIN_CASH_PREMIUM_AMOUNT',raw.premiumAmount??4.99),premiumPlusAmount:num('ZAIN_CASH_PREMIUM_PLUS_AMOUNT',raw.premiumPlusAmount??7.99),premiumDays:days('ZAIN_CASH_PREMIUM_DAYS',raw.premiumDays??30),premiumPlusDays:days('ZAIN_CASH_PREMIUM_PLUS_DAYS',raw.premiumPlusDays??30),instructions:String(process.env.ZAIN_CASH_INSTRUCTIONS||raw.instructions||'حوّل المبلغ المطلوب إلى محفظة Zain Cash ثم ارفع صورة واضحة لإثبات التحويل.').trim().slice(0,1000)};
+}
+function publicSiteConfig(site){return{...site,zainCash:resolvedZainCash(site)};}
+function paymentAmount(zain,plan){return plan==='premium_plus'?Number(zain.premiumPlusAmount):Number(zain.premiumAmount);}
+function paymentDays(zain,plan){return plan==='premium_plus'?Number(zain.premiumPlusDays):Number(zain.premiumDays);}
+function normalizePayerPhone(v){const s=String(v||'').trim().replace(/[\s()-]/g,'');return /^\+?\d{8,20}$/.test(s)?s:'';}
+function parsePaymentProof(raw){
+  const value=String(raw||'');const m=value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);if(!m)throw new Error('ارفع صورة إثبات بصيغة PNG أو JPG أو WEBP.');
+  const buf=Buffer.from(m[2].replace(/\s+/g,''),'base64');if(!buf.length||buf.length>3*1024*1024)throw new Error('حجم صورة الإثبات يجب أن يكون أقل من 3MB.');
+  const detected=detectDiscordImageMime(buf);if(!['image/png','image/jpeg','image/webp'].includes(detected))throw new Error('ملف إثبات الدفع ليس صورة صالحة.');
+  return{proofData:`data:${detected};base64,${buf.toString('base64')}`,proofMime:detected,proofHash:crypto.createHash('sha256').update(buf).digest('hex')};
+}
+function paymentStatusLabel(status){return({pending:'⏳ بانتظار المراجعة',processing:'🔄 قيد المعالجة',approved:'✅ مقبول',rejected:'❌ مرفوض'})[status]||status;}
+function paymentDate(ts){try{return new Date(Number(ts)||Date.now()).toLocaleString('ar-JO',{timeZone:'Asia/Amman'});}catch{return'';}}
 async function appendHomeAdminOp(gid,name,op){if(!isHomeGuild(gid))return;const file=String(name||'').trim();if(!file)return;const list=await store.data(gid,file,[]);const next=(Array.isArray(list)?list:[]).filter(x=>!x?.appliedAt).slice(-99);next.push({id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`,...op,createdAt:Date.now(),appliedAt:0});await store.saveData(gid,file,next);}
 
 async function botFetch(route,options={}){
@@ -112,10 +135,10 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.6.3"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a>${isOwner(user)?'<a href="/owner">Owner</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.6.3"></script><script defer src="/site/upgrade.js?v=9.6.3"></script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.7.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.7.0"></script><script defer src="/site/upgrade.js?v=9.7.0"></script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
-async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=await store.getGlobalConfig();return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
+async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
 function iconUrl(g){return g?.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:'';}
 function textChannels(channels,value){const allowed=new Set([0,5]);return `<option value="">— غير محدد —</option>`+channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}># ${esc(c.name)}</option>`).join('');}
 function categories(channels,value){return `<option value="">— غير محدد —</option>`+channels.filter(c=>c.type===4).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}>📁 ${esc(c.name)}</option>`).join('');}
@@ -347,7 +370,7 @@ function planSummaryHtml(site,planName){const p=site.plans[planName];const feats
 
 async function start(){
   const required=['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','PUBLIC_BASE_URL','SESSION_SECRET','DATABASE_URL'];const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
-  await store.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(express.urlencoded({extended:true,limit:'2mb'}));app.use(express.json({limit:'2mb'}));for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','upgrade.js','zombi-logo.png','zombi-site-background.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.sendFile(require('path').join(__dirname,req.params.file));});
+  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(express.urlencoded({extended:true,limit:'8mb'}));app.use(express.json({limit:'8mb'}));for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','upgrade.js','zombi-logo.png','zombi-site-background.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.sendFile(require('path').join(__dirname,req.params.file));});
   let sessionStore;if(String(process.env.DATABASE_URL||'').trim()){const {Pool}=require('pg');const ssl=String(process.env.DATABASE_SSL||'').toLowerCase()==='false'?false:{rejectUnauthorized:false};const sessionPool=new Pool({connectionString:process.env.DATABASE_URL,ssl,max:5});class PgSessionStore extends session.Store{get(sid,cb){sessionPool.query('SELECT sess,expire_at FROM zombi_web_sessions WHERE sid=$1',[sid]).then(r=>{const row=r.rows[0];if(!row||Number(row.expire_at||0)<Date.now())return cb(null,null);cb(null,row.sess);}).catch(cb);}set(sid,sess,cb){const exp=sess?.cookie?.expires?new Date(sess.cookie.expires).getTime():Date.now()+7*86400000;sessionPool.query(`INSERT INTO zombi_web_sessions(sid,sess,expire_at) VALUES($1,$2,$3) ON CONFLICT(sid) DO UPDATE SET sess=EXCLUDED.sess,expire_at=EXCLUDED.expire_at`,[sid,sess,exp]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}destroy(sid,cb){sessionPool.query('DELETE FROM zombi_web_sessions WHERE sid=$1',[sid]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}}sessionStore=new PgSessionStore();}
   app.use(session({store:sessionStore,secret:process.env.SESSION_SECRET||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session.user||null;next();});
   // Secure bot <-> website fallback sync. Used only when a shared DATABASE_URL is not configured on both hosts.
@@ -366,6 +389,36 @@ async function start(){
     const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
   }catch(e){if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord حدّد تسجيل الدخول مؤقتًا</h1><p>انتظر تقريبًا ${seconds} ثانية ثم جرّب مرة ثانية.</p><a class="btn" href="/">رجوع</a></section>`,req.user));}next(e);}});
   app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>req.session.destroy(()=>res.redirect('/')));
+
+  app.get('/checkout',requireLogin,async(req,res,next)=>{try{
+    const plan=paymentPlan(req.query.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);
+    if(!zain.enabled)return res.status(503).send(layout('Zain Cash',`<section class="login"><h1>🟡 الدفع عبر Zain Cash غير مفعّل</h1><p>لم يتم إعداد رقم المحفظة بعد. تواصل مع مالك ZOMBI.</p><a class="btn" href="/premium">رجوع للاشتراكات</a></section>`,req.user));
+    const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed).map(x=>x.g);
+    const amount=paymentAmount(zain,plan),days=paymentDays(zain,plan),token=csrf(req),planLabel=PLAN_LABELS[plan];
+    const options=installed.map(g=>`<option value="${esc(g.id)}">${esc(g.name)} — ${esc(g.id)}</option>`).join('');
+    const body=`<section class="z-pay-wrap"><div class="z-pay-head"><span class="badge">ZAIN CASH PAYMENT</span><h1>🟡 اشترك في ${esc(planLabel)}</h1><p>الدفع يدوي وآمن: حوّل المبلغ ثم ارفع صورة التحويل. التفعيل يتم بعد موافقة Owner.</p></div>
+      <div class="z-pay-grid"><article class="panel z-wallet-card"><span class="z-wallet-mark">Z</span><h2>بيانات التحويل</h2><div class="z-wallet-amount">${amount.toFixed(3).replace(/\.000$/,'')} <small>JOD</small></div><dl><div><dt>المحفظة</dt><dd dir="ltr">${esc(zain.walletNumber)}</dd></div><div><dt>اسم صاحب المحفظة</dt><dd>${esc(zain.walletName||'—')}</dd></div><div><dt>مدة الاشتراك</dt><dd>${days} يوم</dd></div></dl><p class="hint">${esc(zain.instructions)}</p></article>
+      <form id="zainCheckoutForm" class="panel z-payment-form" method="post" action="/checkout"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="plan" value="${plan}"><input type="hidden" name="proofData" id="proofData"><h2>إرسال إثبات الدفع</h2>${installed.length?`<label>السيرفر<select name="guildId" required><option value="">اختر السيرفر</option>${options}</select></label>`:'<div class="warn">ما عندك سيرفر مثبت عليه ZOMBI وتملك فيه Manage Server. أضف البوت أولًا.</div>'}<label>رقم الهاتف الذي تم التحويل منه<input name="payerPhone" dir="ltr" inputmode="tel" placeholder="07XXXXXXXX أو +962..." required></label><label>رقم العملية <small>(اختياري إذا ظاهر بالإيصال)</small><input name="transactionRef" dir="ltr" maxlength="100" placeholder="Transaction ID"></label><label>صورة إثبات التحويل<input id="paymentProofFile" type="file" accept="image/png,image/jpeg,image/webp" required><small>PNG / JPG / WEBP — الحد الأقصى 3MB</small></label><button class="btn primary" ${installed.length?'':'disabled'}>📤 إرسال طلب الدفع</button><a class="btn" href="/payments">عرض دفعاتي</a></form></div></section>
+      <script>(function(){const f=document.getElementById('zainCheckoutForm'),file=document.getElementById('paymentProofFile'),hidden=document.getElementById('proofData');if(!f||!file||!hidden)return;let prepared=false;f.addEventListener('submit',function(e){if(prepared)return;e.preventDefault();const x=file.files&&file.files[0];if(!x){file.setCustomValidity('ارفع صورة إثبات الدفع');file.reportValidity();return;}file.setCustomValidity('');if(x.size>3*1024*1024){alert('حجم الصورة أكبر من 3MB.');return;}if(!['image/png','image/jpeg','image/webp'].includes(x.type)){alert('استخدم PNG أو JPG أو WEBP.');return;}const r=new FileReader();r.onload=function(){hidden.value=String(r.result||'');prepared=true;f.requestSubmit();};r.onerror=function(){alert('تعذر قراءة صورة الإثبات.');};r.readAsDataURL(x);});})();</script>`;
+    res.send(layout('الدفع عبر Zain Cash',body,req.user));
+  }catch(e){next(e);}});
+
+  app.post('/checkout',requireLogin,checkCsrf,async(req,res,next)=>{try{
+    const plan=paymentPlan(req.body.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);if(!zain.enabled)throw new Error('الدفع عبر Zain Cash غير مفعّل.');
+    const gid=String(req.body.guildId||'').trim(),g=userGuild(req,gid);if(!g||!canManage(g))return res.status(403).send(layout('Payment Error','<section class="login"><h1>❌ لا تملك صلاحية إدارة هذا السيرفر</h1><a class="btn" href="/checkout?plan='+plan+'">رجوع</a></section>',req.user));
+    if(!await getBotGuild(gid).catch(()=>null))throw new Error('بوت ZOMBI غير موجود في السيرفر المحدد.');
+    const currentPlan=planNameForConfig(await store.getConfig(gid));if(currentPlan==='premium_plus'&&plan==='premium')throw new Error('هذا السيرفر لديه Premium+ فعّال. اختر Premium+ للتجديد بدل Premium.');
+    const payerPhone=normalizePayerPhone(req.body.payerPhone);if(!payerPhone)throw new Error('رقم الهاتف غير صالح.');
+    const proof=parsePaymentProof(req.body.proofData),amount=paymentAmount(zain,plan),days=paymentDays(zain,plan);
+    const item=await payments.create({userId:req.user.id,username:req.user.displayName||req.user.username||'',guildId:gid,guildName:g.name||gid,plan,amount,days,payerPhone,transactionRef:String(req.body.transactionRef||'').trim(),...proof});
+    res.send(layout('تم إرسال طلب الدفع',`<section class="login z-payment-success"><div class="z-success-icon">✓</div><h1>تم إرسال طلب الدفع</h1><p>رقم الطلب: <code>${esc(item.id)}</code></p><p>الخطة: <b>${esc(PLAN_LABELS[item.plan])}</b> • ${item.amount.toFixed(3).replace(/\.000$/,'')} JOD • ${item.days} يوم</p><p>الحالة: <b>⏳ بانتظار مراجعة Owner</b></p><div class="actions"><a class="btn primary" href="/payments">متابعة حالة الدفع</a><a class="btn" href="/dashboard/${esc(gid)}">Dashboard</a></div></section>`,req.user));
+  }catch(e){next(e);}});
+
+  app.get('/payments',requireLogin,async(req,res,next)=>{try{
+    const items=await payments.list({userId:req.user.id,limit:100});
+    const rows=items.map(x=>`<tr><td><code>${esc(x.id)}</code><small>${esc(paymentDate(x.createdAt))}</small></td><td><b>${esc(x.guildName||x.guildId)}</b><small>${esc(x.guildId)}</small></td><td>${esc(PLAN_LABELS[x.plan]||x.plan)}<small>${Number(x.amount).toFixed(3).replace(/\.000$/,'')} JOD • ${x.days} يوم</small></td><td><span class="z-payment-status z-status-${esc(x.status)}">${paymentStatusLabel(x.status)}</span>${x.reviewNote?`<small>${esc(x.reviewNote)}</small>`:''}</td></tr>`).join('');
+    res.send(layout('دفعاتي',`<section class="dash-head"><div><h1>💳 دفعاتي</h1><p>تابع حالة طلبات Zain Cash الخاصة بك.</p></div><a class="btn primary" href="/premium">اشتراك جديد</a></section><section class="panel"><div class="table-wrap"><table><thead><tr><th>الطلب</th><th>السيرفر</th><th>الخطة</th><th>الحالة</th></tr></thead><tbody>${rows||'<tr><td colspan="4">لا توجد طلبات دفع بعد.</td></tr>'}</tbody></table></div></section>`,req.user));
+  }catch(e){next(e);}});
 
   app.get('/dashboard',requireLogin,async(req,res,next)=>{try{const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed),missing=statuses.filter(x=>!x.installed);const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${planBadge(cfg)}</span></div><em>إدارة ←</em></a>`;}))).join(''),add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section><div class="servers">${cards||'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>'}</div>${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));}catch(e){next(e);}});
   app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
@@ -771,10 +824,11 @@ async function start(){
 
   for(const which of ['bank','games','tickets','store','roles','name'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
 
-  app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(await store.getGlobalConfig()),req.user));}catch(e){next(e);}});
+  app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(publicSiteConfig(await store.getGlobalConfig())),req.user));}catch(e){next(e);}});
 
   app.get('/owner',requireLogin,requireOwner,async(req,res,next)=>{try{
-    const token=csrf(req),ids=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse();
+    const token=csrf(req),ids=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse(),paymentItems=await payments.list({limit:100});
+    const zain=resolvedZainCash(site),pendingPayments=paymentItems.filter(x=>x.status==='pending').length;
     const entries=await Promise.all(ids.slice(0,250).map(async id=>{
       const [g,cfg]=await Promise.all([getBotGuild(id).catch(()=>null),store.getConfig(id)]);
       return {id,g,cfg,plan:planNameForConfig(cfg)};
@@ -793,6 +847,7 @@ async function start(){
     const limitRows=LIMIT_DEFS.map(d=>`<tr><td><b>${esc(d.label)}</b><small>${d.min.toLocaleString()} – ${d.max.toLocaleString()}</small></td><td><input type="number" name="free_limit_${d.key}" value="${site.plans.free.limits[d.key]}" min="${d.min}" max="${d.max}"></td><td><input type="number" name="premium_limit_${d.key}" value="${site.plans.premium.limits[d.key]}" min="${d.min}" max="${d.max}"></td><td><input type="number" name="premium_plus_limit_${d.key}" value="${site.plans.premium_plus.limits[d.key]}" min="${d.min}" max="${d.max}"></td></tr>`).join('');
 
     const codeCards=codes.map(c=>`<div class="owner-code-card ${c.usedAt?'used':''}"><code>${esc(c.code)}</code><span>${PLAN_LABELS[c.plan||'premium']} • ${c.days} يوم</span><b>${c.usedAt?'مستخدم':'جاهز للتفعيل'}</b></div>`).join('')||'<p>لا يوجد أكواد.</p>';
+    const paymentRows=paymentItems.map(x=>`<tr><td><code>${esc(x.id)}</code><small>${esc(paymentDate(x.createdAt))}</small></td><td><b>${esc(x.username||x.userId)}</b><small>${esc(x.userId)}</small></td><td><b>${esc(x.guildName||x.guildId)}</b><small>${esc(x.guildId)}</small></td><td>${esc(PLAN_LABELS[x.plan]||x.plan)}<small>${Number(x.amount).toFixed(3).replace(/\.000$/,'')} JOD • ${x.days} يوم</small></td><td><span dir="ltr">${esc(x.payerPhone)}</span>${x.transactionRef?`<small>Ref: ${esc(x.transactionRef)}</small>`:'<small>بدون رقم عملية</small>'}</td><td><a class="mini-link" target="_blank" rel="noopener" href="/owner/payments/${encodeURIComponent(x.id)}/proof">🧾 الإثبات</a></td><td><span class="z-payment-status z-status-${esc(x.status)}">${paymentStatusLabel(x.status)}</span>${x.reviewNote?`<small>${esc(x.reviewNote)}</small>`:''}</td><td>${x.status==='pending'?`<div class="owner-payment-actions"><form method="post" action="/owner/payments/${encodeURIComponent(x.id)}/approve"><input type="hidden" name="_csrf" value="${token}"><button class="btn success">✅ قبول وتفعيل</button></form><form method="post" action="/owner/payments/${encodeURIComponent(x.id)}/reject"><input type="hidden" name="_csrf" value="${token}"><input name="note" maxlength="300" placeholder="سبب الرفض (اختياري)"><button class="btn danger">❌ رفض</button></form></div>`:'—'}</td></tr>`).join('');
 
     res.send(layout('Owner',`<div class="owner-console">
       <section class="owner-hero">
@@ -806,6 +861,7 @@ async function start(){
         <article><span>💎</span><div><small>Premium</small><strong>${premiumCount.toLocaleString()}</strong></div></article>
         <article><span>👑</span><div><small>Premium+</small><strong>${plusCount.toLocaleString()}</strong></div></article>
         <article><span>🎟️</span><div><small>أكواد متاحة</small><strong>${availableCodes.toLocaleString()}</strong></div></article>
+        <article><span>💳</span><div><small>دفعات بانتظارك</small><strong>${pendingPayments.toLocaleString()}</strong></div></article>
       </section>
 
       <section class="panel owner-section owner-site-settings">
@@ -813,6 +869,15 @@ async function start(){
         <form class="form-grid owner-form-grid" method="post" action="/owner/site"><input type="hidden" name="_csrf" value="${token}">
           <label>سعر Premium<input name="premiumPrice" value="${esc(site.premiumPrice)}" placeholder="مثال: 3 JD / شهر"></label>
           <label>سعر Premium+<input name="premiumPlusPrice" value="${esc(site.premiumPlusPrice)}" placeholder="مثال: 6 JD / شهر"></label>
+          <label class="owner-toggle"><input type="checkbox" name="zainCashEnabled" ${site.zainCash?.enabled?'checked':''}><span>تفعيل الدفع اليدوي عبر Zain Cash</span></label>
+          <label>رقم محفظة Zain Cash<input name="zainWalletNumber" dir="ltr" value="${esc(site.zainCash?.walletNumber||'')}" placeholder="07XXXXXXXX"></label>
+          <label>اسم صاحب المحفظة<input name="zainWalletName" value="${esc(site.zainCash?.walletName||'')}"></label>
+          <label>مبلغ Premium بالدينار<input type="number" step="0.001" min="0.1" name="zainPremiumAmount" value="${Number(site.zainCash?.premiumAmount??4.99)}"></label>
+          <label>مبلغ Premium+ بالدينار<input type="number" step="0.001" min="0.1" name="zainPremiumPlusAmount" value="${Number(site.zainCash?.premiumPlusAmount??7.99)}"></label>
+          <label>مدة Premium بالأيام<input type="number" min="1" max="3650" name="zainPremiumDays" value="${Number(site.zainCash?.premiumDays??30)}"></label>
+          <label>مدة Premium+ بالأيام<input type="number" min="1" max="3650" name="zainPremiumPlusDays" value="${Number(site.zainCash?.premiumPlusDays??30)}"></label>
+          <label class="wide">تعليمات التحويل<textarea name="zainInstructions">${esc(site.zainCash?.instructions||'')}</textarea></label>
+          <div class="wide hint">إذا وضعت ZAIN_CASH_WALLET أو ZAIN_CASH_NAME في Environment على Render فالقيمة هناك تتغلب على القيمة المحفوظة هنا.</div>
           <label>رابط شراء Premium<input type="url" name="purchaseUrl" value="${esc(site.purchaseUrl)}"></label>
           <label>رابط شراء Premium+<input type="url" name="premiumPlusPurchaseUrl" value="${esc(site.premiumPlusPurchaseUrl)}"></label>
           <label>رابط الدعم<input type="url" name="supportUrl" value="${esc(site.supportUrl||'')}"></label>
@@ -849,6 +914,11 @@ async function start(){
         </section>
       </div>
 
+      <section class="panel owner-section owner-payments">
+        <div class="owner-section-head"><div><span class="owner-section-icon">💳</span><div><h2>طلبات الدفع عبر Zain Cash</h2><p>راجع الإثبات ثم اقبل الطلب لتفعيل الاشتراك تلقائيًا، أو ارفضه مع ملاحظة.</p></div></div><span class="owner-section-pill">${pendingPayments} PENDING</span></div>
+        <div class="table-wrap"><table><thead><tr><th>الطلب</th><th>المستخدم</th><th>السيرفر</th><th>الخطة</th><th>المحوّل</th><th>الإثبات</th><th>الحالة</th><th>القرار</th></tr></thead><tbody>${paymentRows||'<tr><td colspan="8">لا توجد طلبات دفع بعد.</td></tr>'}</tbody></table></div>
+      </section>
+
       <section class="panel owner-section owner-servers">
         <div class="owner-section-head"><div><span class="owner-section-icon">🖥️</span><div><h2>السيرفرات والاشتراكات</h2><p>فعّل أو مدد أو ألغِ الاشتراك مباشرة لكل سيرفر.</p></div></div><span class="owner-section-pill">${entries.length} SERVER</span></div>
         <div class="table-wrap"><table><thead><tr><th>السيرفر</th><th>الأعضاء</th><th>الخطة</th><th>تحكم</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -856,10 +926,25 @@ async function start(){
     </div>`,req.user));
   }catch(e){next(e);}});
 
+  app.get('/owner/payments/:id/proof',requireLogin,requireOwner,async(req,res,next)=>{try{
+    const item=await payments.get(req.params.id,true);if(!item)return res.sendStatus(404);const m=String(item.proofData||'').match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);if(!m)return res.sendStatus(404);const buf=Buffer.from(m[2],'base64');res.set('Content-Type',m[1].toLowerCase());res.set('Cache-Control','private, no-store, max-age=0');res.set('X-Content-Type-Options','nosniff');res.send(buf);
+  }catch(e){next(e);}});
+
+  app.post('/owner/payments/:id/approve',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{let item=null;try{
+    item=await payments.claim(req.params.id,req.user.id);if(!item)throw new Error('هذا الطلب تمت مراجعته مسبقًا أو تتم معالجته الآن.');
+    const current=planNameForConfig(await store.getConfig(item.guildId));if(current==='premium_plus'&&item.plan==='premium')throw new Error('السيرفر أصبح Premium+ قبل مراجعة هذا الطلب. لا يمكن تنزيل الخطة تلقائيًا إلى Premium.');
+    await store.setPremium(item.guildId,item.days,item.plan);await payments.finalize(item.id,'approved',req.user.id,String(req.body.note||'تم التحقق من التحويل وتفعيل الاشتراك.'));
+    res.redirect('/owner');
+  }catch(e){if(item?.id)await payments.release(item.id).catch(()=>{});next(e);}});
+
+  app.post('/owner/payments/:id/reject',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{let item=null;try{
+    item=await payments.claim(req.params.id,req.user.id);if(!item)throw new Error('هذا الطلب تمت مراجعته مسبقًا أو تتم معالجته الآن.');await payments.finalize(item.id,'rejected',req.user.id,String(req.body.note||'تم رفض إثبات الدفع.').slice(0,1000));res.redirect('/owner');
+  }catch(e){if(item?.id)await payments.release(item.id).catch(()=>{});next(e);}});
+
   app.post('/owner/plans',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const plans=Object.fromEntries(PLAN_IDS.map(p=>[p,{features:{},games:{},heistGames:{},limits:{}}]));const current=await store.getGlobalConfig();for(const p of PLAN_IDS){for(const f of FEATURE_DEFS)plans[p].features[f.key]=(p==='free'&&f.key==='customBotProfile')?false:Boolean(req.body[`${p}_feature_${f.key}`]);for(const g of GAME_DEFS)plans[p].games[g.id]=g.publicSupported?Boolean(req.body[`${p}_game_${g.id}`]):Boolean(current.plans?.[p]?.games?.[g.id]);for(const g of HEIST_GAME_DEFS)plans[p].heistGames[g.id]=Boolean(req.body[`${p}_heist_${g.id}`]);for(const d of LIMIT_DEFS)plans[p].limits[d.key]=int(req.body[`${p}_limit_${d.key}`],d.min,d.min,d.max);}await store.saveGlobalConfig({plans:normalizePlans(plans)});res.redirect('/owner');});
   app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const days=Number(req.body.days||0);if(days>0)await store.setPremium(req.body.guildId,days,req.body.plan||'premium');else await store.removePremium(req.body.guildId);res.redirect('/owner');});
   app.post('/owner/codes',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.createCode(Number(req.body.days||30),req.body.plan||'premium');res.redirect('/owner');});
-  app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
+  app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,zainCash:{enabled:Boolean(req.body.zainCashEnabled),walletNumber:String(req.body.zainWalletNumber||'').trim(),walletName:String(req.body.zainWalletName||'').trim(),premiumAmount:Number(req.body.zainPremiumAmount||4.99),premiumPlusAmount:Number(req.body.zainPremiumPlusAmount||7.99),premiumDays:int(req.body.zainPremiumDays,30,1,3650),premiumPlusDays:int(req.body.zainPremiumPlusDays,30,1,3650),instructions:req.body.zainInstructions},premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
 
   app.get('/health',async(_req,res)=>res.json({ok:true,database:await store.health(),uptime:process.uptime()}));
   app.use((err,req,res,_next)=>{console.error(err);res.status(500).send(layout('Error',`<section class="login"><h1>❌ حدث خطأ</h1><p>${esc(err.message)}</p></section>`,req.user));});

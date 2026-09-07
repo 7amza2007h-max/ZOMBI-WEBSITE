@@ -31,3 +31,28 @@ ZOMBI WEBSITE V9.2 — RENDER — FULL REPLACEMENT
 
 مهم:
 Render وLunafy يجب أن يستخدموا نفس DATABASE_URL حتى تنعكس تغييرات Dashboard على البوت مباشرة.
+
+==========================================================
+V9.7 — إعداد دفع Zain Cash
+==========================================================
+بعد رفع النسخة وتشغيلها:
+1) ادخل الموقع بحساب Owner.
+2) افتح Owner Panel > إعدادات الموقع والاشتراك.
+3) فعّل "الدفع اليدوي عبر Zain Cash".
+4) ضع رقم المحفظة واسم صاحبها وسعر Premium وPremium+ والمدة.
+5) اضغط حفظ إعدادات الموقع.
+6) جرّب صفحة /premium ثم اختر الدفع عبر Zain Cash.
+7) أي طلب جديد سيظهر في Owner Panel > طلبات الدفع عبر Zain Cash.
+8) افتح الإثبات وتأكد بنفسك من وصول التحويل في تطبيق Zain Cash.
+9) اضغط "قبول وتفعيل" لتفعيل الاشتراك تلقائيًا، أو "رفض".
+
+بديل عبر Render Environment (اختياري):
+ZAIN_CASH_ENABLED=true
+ZAIN_CASH_WALLET=07XXXXXXXX
+ZAIN_CASH_NAME=اسم صاحب المحفظة
+ZAIN_CASH_PREMIUM_AMOUNT=5
+ZAIN_CASH_PREMIUM_PLUS_AMOUNT=8
+ZAIN_CASH_PREMIUM_DAYS=30
+ZAIN_CASH_PREMIUM_PLUS_DAYS=30
+
+مهم جدًا: أبقِ DATABASE_URL مفعّلًا على Render حتى لا تضيع طلبات الدفع عند إعادة تشغيل السيرفر.

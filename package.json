@@ -1,12 +1,12 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.6.3",
-  "description": "ZOMBI V9.6.3 — game stop controls, strict subscription locks and professional owner control center",
+  "version": "9.7.0",
+  "description": "ZOMBI V9.7.0 — Zain Cash payment requests, owner approval and automatic Premium activation",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js && node --check discordCommands.js"
+    "check": "node --check server.js && node --check paymentStore.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js && node --check discordCommands.js && node --check pricingView.js"
   },
   "engines": {
     "node": ">=20"
