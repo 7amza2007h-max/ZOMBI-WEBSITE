@@ -11,6 +11,7 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
+    logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'المستويات، أرصدة الأعضاء وأدوات الإدارة.' },
@@ -32,7 +33,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['roles', 'name', 'tickets', 'voice', 'premium']]
+    ['الأنظمة', ['logs', 'roles', 'name', 'tickets', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -109,6 +110,16 @@
     }
   });
 
+  const warningLevels=content.querySelector('#warning-levels');
+  const renumberWarnings=()=>warningLevels?.querySelectorAll('.warning-level-row').forEach((row,n)=>{row.querySelector('label').firstChild.textContent=`التحذير ${n+1} — ID الرتبة`;});
+  content.querySelector('#warning-add-level')?.addEventListener('click',()=>{
+    const row=document.createElement('div');row.className='form-grid warning-level-row';
+    const label=document.createElement('label');label.append(document.createTextNode(''));
+    const input=document.createElement('input');input.name='warningRoleIds';input.inputMode='numeric';input.pattern='[0-9]{15,25}';input.placeholder='ID الرتبة';label.append(input);
+    const remove=document.createElement('button');remove.type='button';remove.className='btn warning-remove-level';remove.textContent='حذف المستوى';row.append(label,remove);warningLevels.append(row);renumberWarnings();
+  });
+  warningLevels?.addEventListener('click',event=>{const button=event.target.closest('.warning-remove-level');if(!button||button.disabled)return;button.closest('.warning-level-row').remove();renumberWarnings();});
+
   const settingsForm = content.querySelector(`form[action="/dashboard/${guildId}/settings"]`);
   const settingsGroups = new Map();
   const ensureSettingsGroup = page => {
@@ -123,6 +134,7 @@
 
   const headingPage = text => {
     text = String(text || '');
+    if (text.includes('سجل السيرفر Log')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('Economy')) return 'economy';
@@ -194,6 +206,7 @@
     box.querySelector('.form-grid').appendChild(label);
   };
 
+  moveControl('logs', 'logs', 'روم سجل السيرفر');
   moveControl('gamePanel', 'games', 'قناة لوحة الألعاب');
   moveControl('ticketPanel', 'tickets', 'قنوات التذاكر');
   moveControl('ticketCategory', 'tickets', 'قنوات التذاكر');
