@@ -361,7 +361,9 @@ async function syncHomePublicGameSettings(force = false) {
             dashboardConfig.gangs.puzzleMaxAttempts = Number(sharedCfg.gangs.puzzleMaxAttempts || dashboardConfig.gangs.puzzleMaxAttempts || 2);
             dashboardConfig.gangs.chatMaxAttempts = Number(sharedCfg.gangs.chatMaxAttempts || dashboardConfig.gangs.chatMaxAttempts || 2);
             dashboardConfig.gangs.relayMaxAttempts = Number(sharedCfg.gangs.relayMaxAttempts || dashboardConfig.gangs.relayMaxAttempts || 2);
-            dashboardConfig.gangs.missionCooldownHours = Math.max(1, Number(sharedCfg.gangs.missionCooldownMinutes || 60) / 60);
+            dashboardConfig.gangs.missionCooldownMinutes = Math.max(1, Number(sharedCfg.gangs.missionCooldownMinutes || dashboardConfig.gangs.missionCooldownMinutes || 240));
+            // إبقاء الحقل القديم للتوافق مع النسخ القديمة، بدون إجبار المدة على ساعة كاملة.
+            dashboardConfig.gangs.missionCooldownHours = dashboardConfig.gangs.missionCooldownMinutes / 60;
             dashboardConfig.gangs.missionDurationMinutes = Number(sharedCfg.gangs.missionDurationMinutes || dashboardConfig.gangs.missionDurationMinutes);
             dashboardConfig.gangs.missionRewardMin = Number(sharedCfg.gangs.missionRewardMin ?? dashboardConfig.gangs.missionRewardMin);
             dashboardConfig.gangs.missionRewardMax = Number(sharedCfg.gangs.missionRewardMax ?? dashboardConfig.gangs.missionRewardMax);
