@@ -13,6 +13,10 @@ const FEATURE_DEFS = [
   ['levels', 'Levels', '🏆'],
   ['voiceRewards', 'Voice Rewards', '🎙️'],
   ['voiceRooms', 'الرومات الصوتية المؤقتة', '🔊'],
+  ['music', 'نظام الموسيقى في الفويس', '🎵'],
+  ['musicQueue', 'طابور الأغاني', '📜'],
+  ['musicLoop', 'تكرار الأغنية / الطابور', '🔁'],
+  ['musicSearch', 'البحث باسم الأغنية', '🔎'],
   ['moderation', 'Moderation', '🛡️'],
   ['gangs', 'Gangs', '🏴'],
   ['gangMissions', 'مهمات العصابات', '🎯'],
@@ -75,7 +79,10 @@ const LIMIT_DEFS = [
   { key:'maxClearMessages', label:'أقصى عدد رسائل للحذف', min:1, max:100 },
   { key:'maxDailyReward', label:'أقصى Daily Reward', min:0, max:1000000000 },
   { key:'maxMessageReward', label:'أقصى مكافأة رسائل', min:0, max:1000000000 },
-  { key:'maxVoiceReward', label:'أقصى Voice Reward', min:0, max:1000000000 }
+  { key:'maxVoiceReward', label:'أقصى Voice Reward', min:0, max:1000000000 },
+  { key:'musicQueueSize', label:'أقصى أغاني تنتظر في طابور الموسيقى', min:1, max:100 },
+  { key:'musicMaxVolume', label:'أقصى مستوى صوت للموسيقى (%)', min:10, max:100 },
+  { key:'musicMaxTrackMinutes', label:'أقصى مدة للأغنية (دقيقة)', min:1, max:240 }
 ];
 
 function allFeatureDefaults(value=false){ return Object.fromEntries(FEATURE_DEFS.map(x=>[x.key,Boolean(value)])); }
@@ -105,7 +112,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:3,selfRoles:3,ticketTypes:1,ticketSupportRoles:3,questionsPerGame:20,killerCases:10,
       maxRounds:5,maxRoundTimeSeconds:60,maxWinnerReward:5000,gangMembers:5,gangDeputies:1,gangMissionTemplates:5,
       maxGamePlayers:10,robberyParticipants:5,maxTransferAmount:10000,maxBankTransaction:25000,maxClearMessages:25,
-      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100
+      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100,musicQueueSize:5,musicMaxVolume:70,musicMaxTrackMinutes:30
     }
   },
   premium: {
@@ -116,7 +123,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:25,selfRoles:20,ticketTypes:10,ticketSupportRoles:20,questionsPerGame:500,killerCases:500,
       maxRounds:25,maxRoundTimeSeconds:180,maxWinnerReward:1000000000,gangMembers:25,gangDeputies:5,gangMissionTemplates:100,
       maxGamePlayers:25,robberyParticipants:25,maxTransferAmount:1000000000,maxBankTransaction:1000000000,maxClearMessages:100,
-      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000
+      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000,musicQueueSize:25,musicMaxVolume:100,musicMaxTrackMinutes:120
     }
   }
 };
@@ -145,9 +152,9 @@ function normalizePlan(planName,input={}){
 function normalizePlans(input={}){ return Object.fromEntries(PLAN_IDS.map(p=>[p,normalizePlan(p,input[p]||{})])); }
 function planNameForConfig(cfg){ return ['premium','premium_plus'].includes(cfg?.plan)&&Number(cfg?.premiumUntil||0)>Date.now()?cfg.plan:'free'; }
 function planForConfig(site,cfg){ return normalizePlans(site?.plans||{})[planNameForConfig(cfg)]; }
-function featureAllowed(site,cfg,key){ const plan=planNameForConfig(cfg); if(key==='customBotProfile'&&plan==='free')return false; return Boolean(planForConfig(site,cfg)?.features?.[key]); }
+function featureAllowed(site,cfg,key){ if(site?.emergency?.[key]?.disabled)return false; const plan=planNameForConfig(cfg); if(key==='customBotProfile'&&plan==='free')return false; return Boolean(planForConfig(site,cfg)?.features?.[key]); }
 function gameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'games')&&planForConfig(site,cfg)?.games?.[gameId]); }
-function heistGameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'bank')&&planForConfig(site,cfg)?.heistGames?.[gameId]); }
+function heistGameAllowed(site,cfg,gameId){ if(site?.emergency?.heist?.disabled)return false; return Boolean(featureAllowed(site,cfg,'bank')&&planForConfig(site,cfg)?.heistGames?.[gameId]); }
 function limitFor(site,cfg,key){ const p=planForConfig(site,cfg),def=LIMIT_DEFS.find(x=>x.key===key); if(!def)return 0; return integer(p?.limits?.[key],DEFAULT_PLAN_RULES[planNameForConfig(cfg)].limits[key],def.min,def.max); }
 function isPublicGame(gameId){ return PUBLIC_GAME_IDS.includes(String(gameId)); }
 function gameDef(gameId){ return GAME_DEFS.find(x=>x.id===String(gameId))||null; }
