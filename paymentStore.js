@@ -19,11 +19,13 @@ async function ensureDb(){
   if(!dbEnabled())return null;
   if(pool){if(readyPromise)await readyPromise;return pool;}
   const {Pool}=require('pg');
-  const rawUrl=String(process.env.DATABASE_URL).trim();
+  const rawUrl=String(process.env.DATABASE_URL||'').trim();
   const sslDisabled=String(process.env.DATABASE_SSL||'').toLowerCase()==='false';
-  const url=sslDisabled?rawUrl:rawUrl.replace(/([?&])sslmode=(?:prefer|require|verify-ca)(?=(&|$))/i,'$1sslmode=verify-full');
-  const options={connectionString:url,max:3};
-  if(sslDisabled)options.ssl=false;else if(!/[?&]sslmode=/i.test(url))options.ssl={rejectUnauthorized:true};
+  const dbUrl=new URL(rawUrl);
+  dbUrl.searchParams.delete('sslmode');
+  dbUrl.searchParams.delete('channel_binding');
+  const options={connectionString:dbUrl.toString(),max:3};
+  if(sslDisabled)options.ssl=false;else options.ssl={rejectUnauthorized:false};
   pool=new Pool(options);
   readyPromise=(async()=>{
     await pool.query(`CREATE TABLE IF NOT EXISTS zombi_payment_requests (
