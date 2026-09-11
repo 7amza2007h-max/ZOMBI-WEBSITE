@@ -6,7 +6,23 @@ let pool=null; let readyPromise=null;
 function dbEnabled(){return Boolean(String(process.env.DATABASE_URL||'').trim());}
 function clone(v){return JSON.parse(JSON.stringify(v));}
 async function ensureDb(){
-  if(!dbEnabled())return null;if(pool)return pool;const {Pool}=require('pg');const rawUrl=String(process.env.DATABASE_URL).trim();const sslDisabled=String(process.env.DATABASE_SSL||'').toLowerCase()==='false';const url=sslDisabled?rawUrl:rawUrl.replace(/([?&])sslmode=(?:prefer|require|verify-ca)(?=(&|$))/i,'$1sslmode=verify-full');const options={connectionString:url,max:8};if(sslDisabled)options.ssl=false;else if(!/[?&]sslmode=/i.test(url))options.ssl={rejectUnauthorized:true};pool=new Pool(options);
+  if(!dbEnabled())return null;if(pool)return pool;const {Pool}=require('pg');const rawUrl = String(process.env.DATABASE_URL || '').trim();
+
+const dbUrl = new URL(rawUrl);
+
+// نخلي إعداد SSL من الكود بدل الرابط
+dbUrl.searchParams.delete('sslmode');
+dbUrl.searchParams.delete('channel_binding');
+
+const options = {
+  connectionString: dbUrl.toString(),
+  max: 8,
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
+
+pool = new Pool(options);
   readyPromise=(async()=>{await pool.query(`CREATE TABLE IF NOT EXISTS zombi_guild_config (guild_id TEXT PRIMARY KEY, config JSONB NOT NULL, updated_at BIGINT NOT NULL)`);await pool.query(`CREATE TABLE IF NOT EXISTS zombi_guild_data (guild_id TEXT NOT NULL, name TEXT NOT NULL, data JSONB NOT NULL, updated_at BIGINT NOT NULL, PRIMARY KEY (guild_id, name))`);await pool.query(`CREATE TABLE IF NOT EXISTS zombi_global_config (id INTEGER PRIMARY KEY, data JSONB NOT NULL, updated_at BIGINT NOT NULL)`);await pool.query(`CREATE TABLE IF NOT EXISTS zombi_premium_codes (code TEXT PRIMARY KEY, days INTEGER NOT NULL, created_at BIGINT NOT NULL, used_at BIGINT NOT NULL DEFAULT 0, used_by_guild_id TEXT NOT NULL DEFAULT '')`);await pool.query(`ALTER TABLE zombi_premium_codes ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'premium'`);await pool.query(`CREATE TABLE IF NOT EXISTS zombi_web_sessions (sid TEXT PRIMARY KEY, sess JSONB NOT NULL, expire_at BIGINT NOT NULL)`);})();await readyPromise;return pool;
 }
 async function getConfig(guildId){if(!dbEnabled())return local.getConfig(guildId);const p=await ensureDb(),id=String(guildId),r=await p.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1',[id]),cfg=local.normalizeConfig(r.rows[0]?.config||local.defaults(id),id);await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,cfg,Date.now()]);return clone(cfg);}
