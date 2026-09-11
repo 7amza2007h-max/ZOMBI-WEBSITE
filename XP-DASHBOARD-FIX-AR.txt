@@ -1,0 +1,24 @@
+ZOMBI XP / PROFILE DASHBOARD FIX
+
+التعديل يجعل نظام XP ظاهرًا كقسم مستقل داخل Dashboard باسم:
+🏆 XP والبروفايل
+
+الموجود داخل القسم:
+- Chat XP لكل رسالة
+- Chat XP Cooldown
+- Voice XP لكل دقيقة
+- أقل عدد أعضاء حقيقيين في الفويس
+- تجاهل Deafened / Muted
+- Base XP / Growth
+- تفعيل موسم XP واسم الموسم
+- Level Roles
+- زر بدء موسم جديد
+- قناة إشعارات المستويات
+
+تم أيضًا تحديث نسخة ملفات الـCSS/JS في server.js لكسر Cache المتصفح بعد Deploy.
+
+لـ Render + GitHub:
+1) ارفع الملفات المعدلة إلى نفس Repository.
+2) اعمل Commit.
+3) انتظر Deploy live.
+4) افتح Dashboard ثم Ctrl+Shift+R مرة واحدة.

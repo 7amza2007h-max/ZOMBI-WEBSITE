@@ -15,7 +15,8 @@
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
-    members: { label: 'الأعضاء', icon: '♟', desc: 'المستويات، أرصدة الأعضاء وأدوات الإدارة.' },
+    members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء وأدوات الإدارة.' },
+    xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإعدادات #p و#top.' },
     store: { label: 'المتجر', icon: '◆', desc: 'متجر الرتب، الأسعار، المميزات وشكل لوحة المتجر.' },
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
     'game-content': { label: 'محتوى الألعاب', icon: '▤', desc: 'الأسئلة والكلمات والمحتوى الذي تستخدمه الألعاب.' },
@@ -33,7 +34,7 @@
   };
 
   const groups = [
-    ['التحكم', ['overview', 'economy', 'members', 'store']],
+    ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
     ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
@@ -142,7 +143,7 @@
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
-    if (text.includes('Levels')) return 'members';
+    if (text.includes('Levels')) return 'xp';
     if (text.includes('العصابات')) return 'gangs';
     if (text.includes('سرقة البنك')) return 'robbery';
     if (text.includes('نظام الموسيقى')) return 'music';
@@ -216,7 +217,7 @@
   moveControl('ticketCategory', 'tickets', 'قنوات التذاكر');
   moveControl('storePanel', 'store', 'قناة لوحة المتجر');
   moveControl('rolePanel', 'roles', 'القناة التي تُرسل فيها لوحة رتب الإشعارات');
-  moveControl('levelUp', 'members', 'قناة إشعارات المستويات');
+  moveControl('levelUp', 'xp', 'قناة إشعارات المستويات');
   moveControl('bankPanel', 'city', 'قنوات ZOMBI City');
   moveControl('centralBank', 'robbery', 'قنوات ZOMBI City');
   moveControl('gangCategory', 'gangs', 'قنوات ZOMBI City');
