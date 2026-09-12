@@ -28,6 +28,7 @@
     roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
+    event: { label: 'ايفنت', icon: '🎉', desc: 'نقاط الفعاليات، الرتب المسموحة، الترتيب، الترسيت وأوامر ZOM المخصصة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
   };
@@ -35,7 +36,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'event', 'roles', 'name', 'tickets', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -266,6 +267,7 @@
     if (title.includes('من القاتل')) return 'killer';
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
+    if (title.includes('Event / ايفنت') || title.includes('🎉 Event') || title.includes('🎉 ايفنت')) return 'event';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';

@@ -186,14 +186,39 @@ async function seedLegacyHome(){
   }catch(e){console.warn('⚠️ Legacy home preset restore:',e.message);}
 }
 
+
+function normalizeEventQuickCommands(raw){
+  const src=Array.isArray(raw)?raw:[],seen=new Set(),out=[];
+  for(const item of src){
+    const command=String(item?.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)continue;
+    const key=command.toLowerCase();if(seen.has(key))continue;seen.add(key);
+    let id=String(item?.id||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60);if(!id)id=`event_${Date.now().toString(36)}_${out.length}`;
+    out.push({id,command,label:String(item?.label||command).trim().slice(0,80)||command,points:int(item?.points,0,-1000000,1000000),zom:int(item?.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(item?.targetMode)?item.targetMode:'mention',response:String(item?.response||'').trim().slice(0,500),enabled:item?.enabled!==false});
+    if(out.length>=30)break;
+  }
+  return out;
+}
+function eventConfig(cfg){
+  const raw=cfg?.event||{};return {
+    enabled:raw.enabled===true,channelId:String(raw.channelId||''),staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
+    publicLeaderboard:raw.publicLeaderboard!==false,leaderboardLimit:int(raw.leaderboardLimit,20,3,25),pointLabel:String(raw.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
+    leaderboardCommand:String(raw.leaderboardCommand||'نقاط').trim().slice(0,40)||'نقاط',resetCommand:String(raw.resetCommand||'ترسيت').trim().slice(0,40)||'ترسيت',directPointsEnabled:raw.directPointsEnabled!==false,
+    quickCommands:normalizeEventQuickCommands(raw.quickCommands?.length?raw.quickCommands:[{id:'create',command:'-انشاء',label:'إنشاء',points:1,zom:0,targetMode:'mention',response:'',enabled:true}])
+  };
+}
+function eventState(raw){
+  const state=raw&&typeof raw==='object'?raw:{};return {season:int(state.season,1,1,1000000),users:state.users&&typeof state.users==='object'?state.users:{},history:Array.isArray(state.history)?state.history.slice(0,500):[]};
+}
+
 async function guildPage(req){
   const {guild,channels,roles}=req.bundle;
-  const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog]=await Promise.all([
+  const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog,eventData]=await Promise.all([
     store.getConfig(guild.id),store.getGlobalConfig(),store.getGameContent(guild.id),store.getEconomy(guild.id),
     store.data(guild.id,'gangs-public.json',{gangs:{},membership:{}}),
     store.data(guild.id,'killer-cases.json',DEFAULT_KILLER_CASES),
     store.data(guild.id,'gang-missions.json',[]),
-    store.data(guild.id,'bank-catalog.json',{jobs:{},companies:{},stocks:{}})
+    store.data(guild.id,'bank-catalog.json',{jobs:{},companies:{},stocks:{}}),
+    store.data(guild.id,'event-system.json',{season:1,users:{},history:[]})
   ]);
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
   const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
@@ -213,6 +238,12 @@ async function guildPage(req){
   const bankCompaniesText=Object.entries(bankCatalog?.companies||{}).map(([id,v])=>`${id} | ${v.name||''} | ${v.description||''} | ${Number(v.priceGold||0)}`).join('\n');
   const bankStocksText=Object.entries(bankCatalog?.stocks||{}).map(([symbol,v])=>`${symbol} | ${v.name||''} | ${Number(v.price||0)}`).join('\n');
   const missionRows=(Array.isArray(missionTemplates)?missionTemplates:[]).map(m=>`<form class="config-card mission-card" method="post" action="/dashboard/${guild.id}/gang-missions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="missionId" value="${esc(m.id)}"><div class="form-grid"><label>اسم المهمة<input name="name" value="${esc(m.name||'')}"></label><label>الصعوبة<select name="difficulty"><option value="hard" ${m.difficulty==='hard'?'selected':''}>صعبة</option><option value="elite" ${m.difficulty==='elite'?'selected':''}>نخبة</option><option value="legendary" ${m.difficulty==='legendary'?'selected':''}>أسطورية</option></select></label><label>أقل مشاركين<input type="number" name="minParticipants" value="${Number(m.minParticipants||2)}" min="2" max="25"></label><label><input type="checkbox" name="enabled" ${m.enabled!==false?'checked':''}> مفعلة</label><label class="wide">الوصف<textarea name="description">${esc(m.description||'')}</textarea></label><label class="wide">المراحل — سطر لكل مرحلة<textarea name="steps">${esc((m.steps||[]).join('\n'))}</textarea></label></div><div class="card-actions"><button class="btn">حفظ المهمة</button><button class="btn danger" formaction="/dashboard/${guild.id}/gang-missions/delete">حذف</button></div></form>`).join('')||'<p>لا توجد قوالب مهمات.</p>';
+
+  const evt=eventConfig(cfg),evtState=eventState(eventData);
+  const eventTop=Object.entries(evtState.users||{}).sort((a,b)=>Number(b[1]?.points||0)-Number(a[1]?.points||0)||Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,25);
+  const eventTopRows=eventTop.length?eventTop.map(([uid,u],i)=>`<tr><td>${i+1}</td><td><code>${esc(uid)}</code></td><td><b>${Number(u?.points||0).toLocaleString()}</b></td><td>${Number(u?.added||0).toLocaleString()}</td><td>${Number(u?.removed||0).toLocaleString()}</td><td>${Number(u?.zomAwarded||0).toLocaleString()}</td></tr>`).join(''):'<tr><td colspan="6">لا توجد نقاط مسجلة حتى الآن.</td></tr>';
+  const eventHistoryRows=(evtState.history||[]).slice(0,25).map(h=>`<tr><td>${h.at?esc(new Date(Number(h.at)).toLocaleString('ar-JO')):'-'}</td><td>${esc(h.type||'-')}</td><td><code>${esc(h.actorId||'-')}</code></td><td><code>${esc(h.targetId||'-')}</code></td><td>${Number(h.delta||0)>0?'+':''}${Number(h.delta||0)}</td><td>${Number(h.zom||0).toLocaleString()}</td><td>${esc(h.command||h.note||'')}</td></tr>`).join('')||'<tr><td colspan="7">لا يوجد سجل أيفنت بعد.</td></tr>';
+  const eventActionRows=evt.quickCommands.map(a=>`<form class="config-card event-action-card" method="post" action="/dashboard/${guild.id}/event/actions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input type="hidden" name="actionId" value="${esc(a.id)}"><div class="form-grid"><label>الأمر<input name="command" value="${esc(a.command)}" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="${esc(a.label)}" placeholder="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="${Number(a.points||0)}" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="${Number(a.zom||0)}" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention" ${a.targetMode==='mention'?'selected':''}>لازم منشن عضو</option><option value="self" ${a.targetMode==='self'?'selected':''}>صاحب الأمر نفسه</option><option value="either" ${a.targetMode==='either'?'selected':''}>المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" ${a.enabled!==false?'checked':''}> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="مثال: ✅ تم تسجيل {user} • نقاطه الآن {points}">${esc(a.response||'')}</textarea><small>المتغيرات: {user} {points} {amount} {zom} {command}</small></label></div><div class="card-actions"><button class="btn primary">💾 حفظ الأمر</button><button class="btn danger" formaction="/dashboard/${guild.id}/event/actions/delete" name="actionId" value="${esc(a.id)}" onclick="return confirm('حذف أمر الأيفنت؟')">حذف</button></div></form>`).join('')||'<p>لا توجد أوامر إضافية.</p>';
 
   const panelCards=[['bank','🏦','لوحة البنك'],['games','🎮','لوحة الألعاب'],['tickets','🎫','لوحة التذاكر'],['store','🛒','لوحة المتجر'],['roles','🔔','لوحة الرتب'],['name','✏️','لوحة تغيير الاسم']].map(([key,emoji,label])=>`<article class="config-card compact-card"><h3>${emoji} ${label}</h3><p>${canPanelDesign?'💎 تستطيع تخصيص العنوان والوصف واللون والـLogo والـBanner والـFooter والأزرار/القوائم لهذه اللوحة فقط.':'🔒 تخصيص تصميم هذه اللوحة متاح لـ Premium وPremium+.'}</p><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/send/${key}"><input type="hidden" name="_csrf" value="${token}"><button class="btn">📨 إرسال / تحديث</button></form>${canPanelDesign?`<a class="btn primary" href="/dashboard/${guild.id}/panels/${key}">💎 تخصيص اللوحة</a>`:`<a class="btn" href="/premium">🔒 Premium</a>`}</div></article>`).join('');
 
@@ -257,6 +288,7 @@ async function guildPage(req){
       <label>🔔 لوق Self Roles<select name="logRoles">${textChannels(channels,cfg.channels.logRoles)}</select></label>
       <label>🪪 لوق تغيير الاسم<select name="logNameChange">${textChannels(channels,cfg.channels.logNameChange)}</select></label>
       <label>💎 لوق Premium<select name="logPremium">${textChannels(channels,cfg.channels.logPremium)}</select></label>
+      <label>🎉 لوق الأيفنت<select name="logEvent">${textChannels(channels,cfg.channels.logEvent)}</select></label>
       <label>⚙️ لوق النظام / أخطاء<select name="logSystem">${textChannels(channels,cfg.channels.logSystem)}</select></label>
     </div>
     <p class="hint">البوت يحتاج في كل روم لوق: View Channel + Send Messages + Embed Links. لوق الإدارة الكامل يستفيد أيضًا من View Audit Log.</p>
@@ -285,6 +317,38 @@ async function guildPage(req){
   <section class="panel"><h2>🛒 متجر الرتب القديم المطوّر <small>${products.length}/${storeLimit}</small></h2><p>القسم + السعر + المميزات + الصورة + Banner + رتب خاصة/إدارة، مثل نظام متجرك القديم.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/store/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>Role<select name="roleId" required><option value="">اختر رتبة</option>${roleOptions(roles,guild.id)}</select></label><label>الاسم<input name="name"></label><label>السعر<input type="number" name="price" min="1" required></label><label>القسم<input name="category" value="رتب الأعضاء"></label><label>Emoji<input name="emoji" value="🏷️"></label><label>الترتيب<input type="number" name="sortOrder" value="10"></label><label>الوصول<select name="accessMode"><option value="everyone">للجميع</option><option value="admins">الإدارة فقط</option><option value="roles">رتب محددة</option></select></label><label>الرتب المسموحة<select multiple name="allowedRoleIds">${roleOptions(roles,guild.id)}</select></label><label class="wide">الوصف<textarea name="description"></textarea></label><label class="wide">المميزات — سطر لكل ميزة<textarea name="features"></textarea></label><label class="wide">رابط الصورة<input name="imageUrl"></label><label class="wide">رابط Banner<input name="bannerUrl"></label><label><input type="checkbox" name="enabled" checked> مفعلة</label></div><button class="btn primary">إضافة رتبة</button></form><div class="stack">${productRows}</div></section>
 
   <section class="panel"><h2>🔔 Self Roles <small>${items.length}/${roleLimit}</small></h2><form class="config-card" method="post" action="/dashboard/${guild.id}/roles/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>الرتبة<select name="roleId" required><option value="">اختر رتبة</option>${roleOptions(roles,guild.id)}</select></label><label>اسم الزر<input name="label"></label><label>Emoji<input name="emoji" value="🔔"></label><label>اللون<select name="style"><option>Primary</option><option>Secondary</option><option>Success</option><option>Danger</option></select></label></div><button class="btn">إضافة</button></form><div class="stack">${roleRows}</div></section>
+
+  <section class="panel event-system-panel"><h2>🎉 Event / ايفنت</h2><p>نظام نقاط فعاليات مخصص لروم واحد ورتب محددة. الترتيب يظهر من الأعلى للأقل، وتقدر تضيف أوامر مثل <code>-انشاء</code> وتحدد لكل أمر نقاط وZOM من الداشبورد.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/event/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid">
+      <label><input type="checkbox" name="enabled" ${evt.enabled?'checked':''}> تفعيل نظام الأيفنت</label>
+      <label>شات الأيفنت<select name="eventChannelId" required>${textChannels(channels,evt.channelId)}</select></label>
+      <label>لوق الأيفنت<select name="logEvent">${textChannels(channels,cfg.channels.logEvent||'')}</select></label>
+      <label>اسم النقطة<input name="pointLabel" value="${esc(evt.pointLabel)}" placeholder="نقطة"></label>
+      <label>أمر عرض الترتيب<input name="leaderboardCommand" value="${esc(evt.leaderboardCommand)}" placeholder="نقاط"></label>
+      <label>أمر الترسيت<input name="resetCommand" value="${esc(evt.resetCommand)}" placeholder="ترسيت"></label>
+      <label>عدد الأشخاص بالترتيب<input type="number" name="leaderboardLimit" value="${evt.leaderboardLimit}" min="3" max="25"></label>
+      <label><input type="checkbox" name="publicLeaderboard" ${evt.publicLeaderboard?'checked':''}> أي عضو يقدر يكتب «${esc(evt.leaderboardCommand)}»</label>
+      <label><input type="checkbox" name="directPointsEnabled" ${evt.directPointsEnabled?'checked':''}> تفعيل إضافة/خصم النقاط بصيغة 1+ و1-</label>
+      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
+    </div><button class="btn primary">💾 حفظ إعدادات الأيفنت</button></form>
+
+    <div class="event-help-grid">
+      <article class="config-card compact-card"><h3>➕ إضافة نقاط</h3><code>1+ @العضو نقاط</code><p>يضيف نقطة. تقدر تغيّر الرقم لأي كمية.</p></article>
+      <article class="config-card compact-card"><h3>➖ خصم نقاط</h3><code>1- @العضو نقاط</code><p>يخصم نقطة من الشخص.</p></article>
+      <article class="config-card compact-card"><h3>🏆 الترتيب</h3><code>${esc(evt.leaderboardCommand)}</code><p>يعرض النقاط من الأعلى إلى الأقل. ومع منشن يعرض نقاط عضو واحد.</p></article>
+      <article class="config-card compact-card"><h3>♻️ الترسيت</h3><code>${esc(evt.resetCommand)}</code><p>يصفّر الكل ويبدأ موسم جديد. ومع منشن يصفّر شخصًا واحدًا.</p></article>
+    </div>
+
+    <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شات الأيفنت وللرتب المحددة.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/event/actions/add"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid"><label>الأمر<input name="command" value="-انشاء" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="1" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="0" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention">لازم منشن عضو</option><option value="self">صاحب الأمر نفسه</option><option value="either">المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" checked> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="✅ تم تسجيل {user} • نقاطه الآن {points}"></textarea></label></div><button class="btn">➕ إضافة أمر</button></form>
+    <div class="stack">${eventActionRows}</div>
+
+    <h3>🧾 تعديل نقاط عضو من الداشبورد</h3><form class="inline-form event-member-form" method="post" action="/dashboard/${guild.id}/event/member"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input name="userId" placeholder="User ID" required><select name="action"><option value="add">إضافة</option><option value="remove">خصم</option><option value="set">تعيين</option><option value="reset">تصفير الشخص</option></select><input type="number" name="amount" value="1" min="0" max="1000000000"><button class="btn">تنفيذ</button></form>
+    <form method="post" action="/dashboard/${guild.id}/event/reset" onsubmit="return confirm('تصفير جميع نقاط الأيفنت وبدء موسم جديد؟')"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><button class="btn danger">♻️ ترسيت جميع النقاط</button></form>
+
+    <h3>🏆 الترتيب الحالي — الموسم ${evtState.season}</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>User ID</th><th>النقاط</th><th>المضاف</th><th>المخصوم</th><th>ZOM من الأيفنت</th></tr></thead><tbody>${eventTopRows}</tbody></table></div>
+    <h3>📜 آخر عمليات الأيفنت</h3><div class="table-wrap"><table><thead><tr><th>الوقت</th><th>النوع</th><th>المنفّذ</th><th>المستهدف</th><th>النقاط</th><th>ZOM</th><th>الأمر</th></tr></thead><tbody>${eventHistoryRows}</tbody></table></div>
+  </section>
 
   <section class="panel"><h2>🧾 إدارة أرصدة الأعضاء ${lockedNote(canEconomyAdmin)}</h2><form class="inline-form" method="post" action="/dashboard/${guild.id}/economy/user"><input type="hidden" name="_csrf" value="${token}"><input name="userId" placeholder="User ID" required ${disabled(canEconomyAdmin)}><select name="account" ${disabled(canEconomyAdmin)}><option value="wallet">المحفظة</option><option value="bank">البنك</option></select><select name="action" ${disabled(canEconomyAdmin)}><option value="set">تعيين</option><option value="add">إضافة</option><option value="remove">خصم</option></select><input type="number" name="amount" min="0" required ${disabled(canEconomyAdmin)}><button class="btn" ${disabled(canEconomyAdmin)}>تنفيذ</button></form><div class="table-wrap"><table><thead><tr><th>User ID</th><th>المحفظة</th><th>البنك</th><th>Level</th></tr></thead><tbody>${topUsers}</tbody></table></div></section>
 
@@ -577,7 +641,7 @@ async function start(){
       const selected=String(req.body.logs||'');
       if(selected&&!req.bundle.channels.some(c=>c.id===selected&&[0,5].includes(c.type)))return res.status(400).send('روم اللوج غير صالح لهذا السيرفر.');
     }
-    const channelNames=['logs','logBank','logEconomy','logGangs','logRobbery','logTickets','logStore','logWarnings','logGames','logLevels','logVoice','logMusic','logModeration','logMessages','logMembers','logCommands','logPanels','logRoles','logNameChange','logPremium','logSystem','levelUp','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel'];
+    const channelNames=['logs','logBank','logEconomy','logGangs','logRobbery','logTickets','logStore','logWarnings','logGames','logLevels','logVoice','logMusic','logModeration','logMessages','logMembers','logCommands','logPanels','logRoles','logNameChange','logPremium','logEvent','logSystem','levelUp','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel'];
     for(const name of channelNames){if(has(name))cfg.channels[name]=String(req.body[name]||'');}
 
     if(saves('city')){
@@ -834,6 +898,76 @@ async function start(){
   app.post('/dashboard/:guildId/gangs/bank',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),g=state.gangs?.[String(req.body.gangId||'')];if(!g)return res.status(404).send('العصابة غير موجودة.');g.bank=Math.max(0,Math.round(Number(req.body.amount)||0));await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'bank',gangId:g.id,amount:g.bank});redirectDashboard(req,res);}catch(e){next(e);}});
   app.post('/dashboard/:guildId/gangs/reset-mission',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),g=state.gangs?.[String(req.body.gangId||'')];if(!g)return res.status(404).send('العصابة غير موجودة.');g.lastMissionAt=0;await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'reset-mission',gangId:g.id});redirectDashboard(req,res);}catch(e){next(e);}});
   app.post('/dashboard/:guildId/gangs/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),id=String(req.body.gangId||''),g=state.gangs?.[id];if(!g)return res.status(404).send('العصابة غير موجودة.');if(g.channelId)await botFetch(`/channels/${g.channelId}`,{method:'DELETE'}).catch(()=>{});if(g.roleId)await botFetch(`/guilds/${req.params.guildId}/roles/${g.roleId}`,{method:'DELETE'}).catch(()=>{});for(const uid of g.members||g.memberIds||[])if(state.membership?.[uid]===id)delete state.membership[uid];delete state.gangs[id];await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'delete',gangId:id});redirectDashboard(req,res);}catch(e){next(e);}});
+
+  // ============================================================
+  // 🎉 EVENT SYSTEM — points / leaderboard / reset / custom commands
+  // ============================================================
+  app.post('/dashboard/:guildId/event/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),current=eventConfig(cfg);
+    const channelId=String(req.body.eventChannelId||'').trim();
+    const validText=req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(Number(c.type)));
+    if(Boolean(req.body.enabled)&&!validText)return res.status(400).send('حدد شات نصي صحيح لنظام الأيفنت.');
+    const roleIds=new Set(req.bundle.roles.map(r=>String(r.id)));
+    const staffRoleIds=arr(req.body.staffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
+    const logEvent=String(req.body.logEvent||'').trim();
+    if(logEvent&&!req.bundle.channels.some(c=>String(c.id)===logEvent&&[0,5].includes(Number(c.type))))return res.status(400).send('شات لوق الأيفنت غير صحيح.');
+    cfg.event={...current,
+      enabled:Boolean(req.body.enabled),
+      channelId:validText?channelId:'',
+      staffRoleIds,
+      publicLeaderboard:Boolean(req.body.publicLeaderboard),
+      leaderboardLimit:int(req.body.leaderboardLimit,current.leaderboardLimit,3,25),
+      pointLabel:String(req.body.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
+      leaderboardCommand:String(req.body.leaderboardCommand||'نقاط').trim().replace(/\s+/g,' ').slice(0,40)||'نقاط',
+      resetCommand:String(req.body.resetCommand||'ترسيت').trim().replace(/\s+/g,' ').slice(0,40)||'ترسيت',
+      directPointsEnabled:Boolean(req.body.directPointsEnabled),
+      quickCommands:normalizeEventQuickCommands(current.quickCommands)
+    };
+    cfg.channels=cfg.channels||{};cfg.channels.logEvent=logEvent;
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),list=normalizeEventQuickCommands(evt.quickCommands);
+    if(list.length>=30)return res.status(400).send('الحد الأقصى 30 أمر أيفنت.');
+    const command=String(req.body.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)return res.status(400).send('اكتب اسم الأمر.');
+    if(list.some(x=>x.command.toLowerCase()===command.toLowerCase()))return res.status(400).send('هذا الأمر موجود مسبقًا.');
+    const action={id:`event_${Date.now().toString(36)}_${Math.floor(Math.random()*9999)}`,command,label:String(req.body.label||command).trim().slice(0,80)||command,points:int(req.body.points,0,-1000000,1000000),zom:int(req.body.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(req.body.targetMode)?req.body.targetMode:'mention',response:String(req.body.response||'').trim().slice(0,500),enabled:Boolean(req.body.enabled)};
+    cfg.event={...evt,quickCommands:[...list,action]};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),list=normalizeEventQuickCommands(evt.quickCommands),action=list.find(x=>x.id===String(req.body.actionId||''));
+    if(!action)return res.status(404).send('أمر الأيفنت غير موجود.');
+    const command=String(req.body.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)return res.status(400).send('اكتب اسم الأمر.');
+    if(list.some(x=>x.id!==action.id&&x.command.toLowerCase()===command.toLowerCase()))return res.status(400).send('يوجد أمر آخر بنفس الاسم.');
+    Object.assign(action,{command,label:String(req.body.label||command).trim().slice(0,80)||command,points:int(req.body.points,0,-1000000,1000000),zom:int(req.body.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(req.body.targetMode)?req.body.targetMode:'mention',response:String(req.body.response||'').trim().slice(0,500),enabled:Boolean(req.body.enabled)});
+    cfg.event={...evt,quickCommands:list};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),actionId=String(req.body.actionId||'');
+    cfg.event={...evt,quickCommands:normalizeEventQuickCommands(evt.quickCommands).filter(x=>x.id!==actionId)};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/member',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const userId=String(req.body.userId||'').trim();if(!/^\d{15,25}$/.test(userId))return res.status(400).send('User ID غير صحيح.');
+    const action=['add','remove','set','reset'].includes(String(req.body.action||''))?String(req.body.action):'add';
+    const amount=Math.max(0,Math.min(1000000000,Math.round(Number(req.body.amount)||0)));
+    const state=eventState(await store.data(req.params.guildId,'event-system.json',{season:1,users:{},history:[]}));
+    const before=Number(state.users[userId]?.points||0);let after=before;
+    if(action==='add')after=before+amount;else if(action==='remove')after=before-amount;else if(action==='set')after=amount;else after=0;
+    const old=state.users[userId]||{points:0,added:0,removed:0,zomAwarded:0};
+    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard')};
+    state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:userId,type:`dashboard-${action}`,delta:after-before,zom:0,command:'Dashboard',note:`${action}: ${before} -> ${after}`});state.history=state.history.slice(0,500);
+    await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/reset',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const state=eventState(await store.data(req.params.guildId,'event-system.json',{season:1,users:{},history:[]})),count=Object.keys(state.users||{}).length;
+    state.season=Number(state.season||1)+1;state.users={};state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:'',type:'dashboard-reset-all',delta:0,zom:0,command:'Dashboard',note:`Reset ${count} members`});state.history=state.history.slice(0,500);
+    await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/bot-profile',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
