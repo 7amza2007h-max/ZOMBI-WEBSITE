@@ -83,7 +83,7 @@ const LIMIT_DEFS = [
   { key:'maxMessageReward', label:'أقصى مكافأة رسائل', min:0, max:1000000000 },
   { key:'maxVoiceReward', label:'أقصى Voice Reward', min:0, max:1000000000 },
   { key:'serverGuideButtons', label:'أزرار دليل السيرفر', min:1, max:25 },
-  { key:'cityDirectorTemplates', label:'قوالب City Director', min:1, max:25 },
+  { key:'cityDirectorTemplates', label:'قوالب City Director', min:1, max:100 },
   { key:'musicQueueSize', label:'أقصى أغاني تنتظر في طابور الموسيقى', min:1, max:100 },
   { key:'musicMaxVolume', label:'أقصى مستوى صوت للموسيقى (%)', min:10, max:100 },
   { key:'musicMaxTrackMinutes', label:'أقصى مدة للأغنية (دقيقة)', min:1, max:240 }
@@ -116,7 +116,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:3,selfRoles:3,ticketTypes:1,ticketSupportRoles:3,questionsPerGame:20,killerCases:10,
       maxRounds:5,maxRoundTimeSeconds:60,maxWinnerReward:5000,gangMembers:5,gangDeputies:1,gangMissionTemplates:5,
       maxGamePlayers:10,robberyParticipants:5,maxTransferAmount:10000,maxBankTransaction:25000,maxClearMessages:25,
-      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100,musicQueueSize:5,musicMaxVolume:70,musicMaxTrackMinutes:30,serverGuideButtons:8,cityDirectorTemplates:3
+      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100,musicQueueSize:5,musicMaxVolume:70,musicMaxTrackMinutes:30,serverGuideButtons:8,cityDirectorTemplates:5
     }
   },
   premium: {
@@ -127,7 +127,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:25,selfRoles:20,ticketTypes:10,ticketSupportRoles:20,questionsPerGame:500,killerCases:500,
       maxRounds:25,maxRoundTimeSeconds:180,maxWinnerReward:1000000000,gangMembers:25,gangDeputies:5,gangMissionTemplates:100,
       maxGamePlayers:25,robberyParticipants:25,maxTransferAmount:1000000000,maxBankTransaction:1000000000,maxClearMessages:100,
-      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000,musicQueueSize:25,musicMaxVolume:100,musicMaxTrackMinutes:120,serverGuideButtons:25,cityDirectorTemplates:12
+      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000,musicQueueSize:25,musicMaxVolume:100,musicMaxTrackMinutes:120,serverGuideButtons:25,cityDirectorTemplates:50
     }
   }
 };

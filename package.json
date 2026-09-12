@@ -1,12 +1,12 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.14.0",
-  "description": "ZOMBI V9.14 — City Director, interactive Server Guide, events, plans and dashboard controls",
+  "version": "9.15.0",
+  "description": "ZOMBI V9.15 — 100 City Director events, cross-channel missions, random penalties and dashboard control",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check paymentStore.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js && node --check discordCommands.js && node --check pricingView.js && node --check site/dashboard.js"
+    "check": "node --check server.js && node --check paymentStore.js && node --check sharedStore.js && node --check guildStore.js && node --check planPolicy.js && node --check gameDefaults.js && node --check discordCommands.js && node --check pricingView.js && node --check site/dashboard.js && node --check cityDirectorCatalog.js"
   },
   "engines": {
     "node": ">=20"
