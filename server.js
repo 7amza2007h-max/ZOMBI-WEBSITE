@@ -148,6 +148,7 @@ function inviteUrl(gid=''){const id=String(process.env.DISCORD_CLIENT_ID||'');re
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
 function iconUrl(g){return g?.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:'';}
 function textChannels(channels,value){const allowed=new Set([0,5]);return `<option value="">— غير محدد —</option>`+channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}># ${esc(c.name)}</option>`).join('');}
+function textChannelMultiOptions(channels,selected=[]){const allowed=new Set([0,5]),set=new Set((selected||[]).map(String));return channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${set.has(String(c.id))?'selected':''}># ${esc(c.name)}</option>`).join('');}
 function categories(channels,value){return `<option value="">— غير محدد —</option>`+channels.filter(c=>c.type===4).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}>📁 ${esc(c.name)}</option>`).join('');}
 function voiceChannels(channels,value){return `<option value="">— غير محدد —</option>`+channels.filter(c=>[2,13].includes(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}>🔊 ${esc(c.name)}</option>`).join('');}
 function multiChannelOptions(channels,selected=[],types=[0,5]){const set=new Set(selected||[]);return channels.filter(c=>types.includes(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${set.has(c.id)?'selected':''}>${types.includes(2)?'🔊':'#'} ${esc(c.name)}</option>`).join('');}
@@ -198,9 +199,13 @@ function normalizeEventQuickCommands(raw){
   }
   return out;
 }
+function eventChannelLimit(cfg){const plan=planNameForConfig(cfg);return plan==='premium_plus'?15:plan==='premium'?5:1;}
 function eventConfig(cfg){
-  const raw=cfg?.event||{};return {
-    enabled:raw.enabled===true,channelId:String(raw.channelId||''),staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
+  const raw=cfg?.event||{},legacy=String(raw.channelId||'').trim();
+  const channelIds=[...new Set((Array.isArray(raw.channelIds)?raw.channelIds:(legacy?[legacy]:[])).map(String).map(x=>x.trim()).filter(Boolean))];
+  if(legacy&&!channelIds.includes(legacy))channelIds.unshift(legacy);
+  return {
+    enabled:raw.enabled===true,channelIds,channelId:channelIds[0]||legacy,staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
     publicLeaderboard:raw.publicLeaderboard!==false,leaderboardLimit:int(raw.leaderboardLimit,20,3,25),pointLabel:String(raw.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
     leaderboardCommand:String(raw.leaderboardCommand||'نقاط').trim().slice(0,40)||'نقاط',resetCommand:String(raw.resetCommand||'ترسيت').trim().slice(0,40)||'ترسيت',directPointsEnabled:raw.directPointsEnabled!==false,
     quickCommands:normalizeEventQuickCommands(raw.quickCommands?.length?raw.quickCommands:[{id:'create',command:'-انشاء',label:'إنشاء',points:1,zom:0,targetMode:'mention',response:'',enabled:true}])
@@ -240,6 +245,7 @@ async function guildPage(req){
   const missionRows=(Array.isArray(missionTemplates)?missionTemplates:[]).map(m=>`<form class="config-card mission-card" method="post" action="/dashboard/${guild.id}/gang-missions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="missionId" value="${esc(m.id)}"><div class="form-grid"><label>اسم المهمة<input name="name" value="${esc(m.name||'')}"></label><label>الصعوبة<select name="difficulty"><option value="hard" ${m.difficulty==='hard'?'selected':''}>صعبة</option><option value="elite" ${m.difficulty==='elite'?'selected':''}>نخبة</option><option value="legendary" ${m.difficulty==='legendary'?'selected':''}>أسطورية</option></select></label><label>أقل مشاركين<input type="number" name="minParticipants" value="${Number(m.minParticipants||2)}" min="2" max="25"></label><label><input type="checkbox" name="enabled" ${m.enabled!==false?'checked':''}> مفعلة</label><label class="wide">الوصف<textarea name="description">${esc(m.description||'')}</textarea></label><label class="wide">المراحل — سطر لكل مرحلة<textarea name="steps">${esc((m.steps||[]).join('\n'))}</textarea></label></div><div class="card-actions"><button class="btn">حفظ المهمة</button><button class="btn danger" formaction="/dashboard/${guild.id}/gang-missions/delete">حذف</button></div></form>`).join('')||'<p>لا توجد قوالب مهمات.</p>';
 
   const evt=eventConfig(cfg),evtState=eventState(eventData);
+  const eventChannelsMax=eventChannelLimit(cfg),eventPlan=PLAN_LABELS[planNameForConfig(cfg)]||'Free';
   const eventTop=Object.entries(evtState.users||{}).sort((a,b)=>Number(b[1]?.points||0)-Number(a[1]?.points||0)||Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,25);
   const eventTopRows=eventTop.length?eventTop.map(([uid,u],i)=>`<tr><td>${i+1}</td><td><code>${esc(uid)}</code></td><td><b>${Number(u?.points||0).toLocaleString()}</b></td><td>${Number(u?.added||0).toLocaleString()}</td><td>${Number(u?.removed||0).toLocaleString()}</td><td>${Number(u?.zomAwarded||0).toLocaleString()}</td></tr>`).join(''):'<tr><td colspan="6">لا توجد نقاط مسجلة حتى الآن.</td></tr>';
   const eventHistoryRows=(evtState.history||[]).slice(0,25).map(h=>`<tr><td>${h.at?esc(new Date(Number(h.at)).toLocaleString('ar-JO')):'-'}</td><td>${esc(h.type||'-')}</td><td><code>${esc(h.actorId||'-')}</code></td><td><code>${esc(h.targetId||'-')}</code></td><td>${Number(h.delta||0)>0?'+':''}${Number(h.delta||0)}</td><td>${Number(h.zom||0).toLocaleString()}</td><td>${esc(h.command||h.note||'')}</td></tr>`).join('')||'<tr><td colspan="7">لا يوجد سجل أيفنت بعد.</td></tr>';
@@ -318,10 +324,10 @@ async function guildPage(req){
 
   <section class="panel"><h2>🔔 Self Roles <small>${items.length}/${roleLimit}</small></h2><form class="config-card" method="post" action="/dashboard/${guild.id}/roles/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>الرتبة<select name="roleId" required><option value="">اختر رتبة</option>${roleOptions(roles,guild.id)}</select></label><label>اسم الزر<input name="label"></label><label>Emoji<input name="emoji" value="🔔"></label><label>اللون<select name="style"><option>Primary</option><option>Secondary</option><option>Success</option><option>Danger</option></select></label></div><button class="btn">إضافة</button></form><div class="stack">${roleRows}</div></section>
 
-  <section class="panel event-system-panel"><h2>🎉 Event / ايفنت</h2><p>نظام نقاط فعاليات مخصص لروم واحد ورتب محددة. الترتيب يظهر من الأعلى للأقل، وتقدر تضيف أوامر مثل <code>-انشاء</code> وتحدد لكل أمر نقاط وZOM من الداشبورد.</p>
+  <section class="panel event-system-panel"><h2>🎉 Event / ايفنت</h2><p>نظام نقاط فعاليات يدعم أكثر من شات حسب الخطة، مع رتب محددة. الترتيب يظهر من الأعلى للأقل، وتقدر تضيف أوامر مثل <code>-انشاء</code> وتحدد لكل أمر نقاط وZOM من الداشبورد.</p>
     <form class="config-card" method="post" action="/dashboard/${guild.id}/event/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid">
       <label><input type="checkbox" name="enabled" ${evt.enabled?'checked':''}> تفعيل نظام الأيفنت</label>
-      <label>شات الأيفنت<select name="eventChannelId" required>${textChannels(channels,evt.channelId)}</select></label>
+      <label class="wide event-channels-field">شاتات الأيفنت <span class="event-plan-limit">${esc(eventPlan)} • الحد ${eventChannelsMax}</span><select multiple size="7" name="eventChannelIds" data-event-channel-select data-max="${eventChannelsMax}">${textChannelMultiOptions(channels,evt.channelIds)}</select><small>اختار أكثر من شات باستخدام Ctrl/⌘. الأوامر لن تعمل خارج الشاتات المحددة. <b data-event-channel-count>${Math.min(evt.channelIds.length,eventChannelsMax)}</b>/${eventChannelsMax} محدد.</small></label>
       <label>لوق الأيفنت<select name="logEvent">${textChannels(channels,cfg.channels.logEvent||'')}</select></label>
       <label>اسم النقطة<input name="pointLabel" value="${esc(evt.pointLabel)}" placeholder="نقطة"></label>
       <label>أمر عرض الترتيب<input name="leaderboardCommand" value="${esc(evt.leaderboardCommand)}" placeholder="نقاط"></label>
@@ -339,7 +345,7 @@ async function guildPage(req){
       <article class="config-card compact-card"><h3>♻️ الترسيت</h3><code>${esc(evt.resetCommand)}</code><p>يصفّر الكل ويبدأ موسم جديد. ومع منشن يصفّر شخصًا واحدًا.</p></article>
     </div>
 
-    <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شات الأيفنت وللرتب المحددة.</p>
+    <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شاتات الأيفنت المحددة وللرتب المحددة.</p>
     <form class="config-card" method="post" action="/dashboard/${guild.id}/event/actions/add"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid"><label>الأمر<input name="command" value="-انشاء" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="1" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="0" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention">لازم منشن عضو</option><option value="self">صاحب الأمر نفسه</option><option value="either">المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" checked> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="✅ تم تسجيل {user} • نقاطه الآن {points}"></textarea></label></div><button class="btn">➕ إضافة أمر</button></form>
     <div class="stack">${eventActionRows}</div>
 
@@ -904,16 +910,20 @@ async function start(){
   // ============================================================
   app.post('/dashboard/:guildId/event/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const cfg=await store.getConfig(req.params.guildId),current=eventConfig(cfg);
-    const channelId=String(req.body.eventChannelId||'').trim();
-    const validText=req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(Number(c.type)));
-    if(Boolean(req.body.enabled)&&!validText)return res.status(400).send('حدد شات نصي صحيح لنظام الأيفنت.');
+    const validChannelIds=new Set(req.bundle.channels.filter(c=>[0,5].includes(Number(c.type))).map(c=>String(c.id)));
+    const submittedChannels=req.body.eventChannelIds!==undefined?arr(req.body.eventChannelIds):arr(req.body.eventChannelId);
+    const requestedChannels=[...new Set(submittedChannels.map(String).map(x=>x.trim()).filter(x=>validChannelIds.has(x)))];
+    const channelLimit=eventChannelLimit(cfg);
+    if(requestedChannels.length>channelLimit)return res.status(400).send(`خطتك تسمح بحد أقصى ${channelLimit} شات للأيفنت.`);
+    if(Boolean(req.body.enabled)&&!requestedChannels.length)return res.status(400).send('حدد شات نصي واحد على الأقل لنظام الأيفنت.');
     const roleIds=new Set(req.bundle.roles.map(r=>String(r.id)));
     const staffRoleIds=arr(req.body.staffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
     const logEvent=String(req.body.logEvent||'').trim();
     if(logEvent&&!req.bundle.channels.some(c=>String(c.id)===logEvent&&[0,5].includes(Number(c.type))))return res.status(400).send('شات لوق الأيفنت غير صحيح.');
     cfg.event={...current,
       enabled:Boolean(req.body.enabled),
-      channelId:validText?channelId:'',
+      channelIds:requestedChannels,
+      channelId:requestedChannels[0]||'',
       staffRoleIds,
       publicLeaderboard:Boolean(req.body.publicLeaderboard),
       leaderboardLimit:int(req.body.leaderboardLimit,current.leaderboardLimit,3,25),

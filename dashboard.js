@@ -544,3 +544,24 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
+
+
+// ZOMBI V9.16.1 — Event multi-channel selector
+(function(){
+  function initEventChannelSelect(){
+    const select=document.querySelector('[data-event-channel-select]');
+    if(!select)return;
+    const max=Math.max(1,Number(select.dataset.max||1));
+    const count=document.querySelector('[data-event-channel-count]');
+    const sync=()=>{
+      const chosen=[...select.options].filter(o=>o.selected);
+      if(chosen.length>max){
+        const overflow=chosen.slice(max);overflow.forEach(o=>o.selected=false);
+        alert(`خطتك تسمح بحد أقصى ${max} شات للأيفنت.`);
+      }
+      const n=[...select.options].filter(o=>o.selected).length;if(count)count.textContent=String(n);
+    };
+    select.addEventListener('change',sync);sync();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initEventChannelSelect);else initEventChannelSelect();
+})();

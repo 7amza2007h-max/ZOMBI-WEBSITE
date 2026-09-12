@@ -223,3 +223,10 @@ body.owner-page main{max-width:1500px;width:calc(100% - 36px);margin:34px auto 8
 .event-help-grid h3{margin:0 0 10px}.event-help-grid code{display:inline-block;padding:8px 10px;border-radius:9px;background:rgba(0,0,0,.34);direction:ltr;color:#d8c7ff}.event-help-grid p{margin:10px 0 0;color:var(--muted,#aaa)}
 .event-action-card{border-inline-start:3px solid #8b5cf6}.event-member-form{margin-bottom:12px}.event-system-panel select[multiple]{min-height:150px}
 @media(max-width:720px){.event-help-grid{grid-template-columns:1fr}.event-system-panel .inline-form{display:grid;grid-template-columns:1fr}}
+
+
+/* ZOMBI V9.16.1 — Event multi-channel selector */
+.event-channels-field select[multiple]{min-height:190px;padding:8px;background:rgba(8,12,22,.72);border:1px solid rgba(139,92,246,.38);border-radius:12px}
+.event-channels-field select[multiple] option{padding:8px 10px;border-radius:7px;margin:2px 0}
+.event-channels-field select[multiple] option:checked{font-weight:800}
+.event-plan-limit{display:inline-flex;margin-inline-start:8px;padding:3px 8px;border-radius:999px;background:rgba(139,92,246,.16);font-size:.78rem;font-weight:800}
