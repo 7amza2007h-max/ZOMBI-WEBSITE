@@ -230,3 +230,18 @@ body.owner-page main{max-width:1500px;width:calc(100% - 36px);margin:34px auto 8
 .event-channels-field select[multiple] option{padding:8px 10px;border-radius:7px;margin:2px 0}
 .event-channels-field select[multiple] option:checked{font-weight:800}
 .event-plan-limit{display:inline-flex;margin-inline-start:8px;padding:3px 8px;border-radius:999px;background:rgba(139,92,246,.16);font-size:.78rem;font-weight:800}
+
+
+/* ZOMBI V9.14 — Server Guide + City Director */
+.server-guide-panel,.city-director-panel{position:relative;overflow:hidden}
+.server-guide-panel:before,.city-director-panel:before{content:'';position:absolute;width:240px;height:240px;border-radius:50%;filter:blur(60px);pointer-events:none;opacity:.18;inset-inline-end:-90px;top:-120px}
+.server-guide-panel:before{background:#38bdf8}.city-director-panel:before{background:#a855f7}
+.server-guide-panel>*,.city-director-panel>*{position:relative;z-index:1}
+.guide-item-card{border-inline-start:3px solid rgba(56,189,248,.75)!important}.director-template-card{border-inline-start:3px solid rgba(168,85,247,.78)!important}
+.director-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 18px;padding:12px;border:1px solid rgba(168,85,247,.24);border-radius:13px;background:rgba(75,33,111,.10)}
+.director-actions form{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:0}.director-actions select{min-width:220px}
+.director-live{border-color:rgba(74,222,128,.30)!important;background:rgba(34,197,94,.08)!important}
+.z-settings-page[data-settings-page="guide"]{border-color:rgba(56,189,248,.22)!important}.z-settings-page[data-settings-page="director"]{border-color:rgba(168,85,247,.24)!important}
+.z-side-nav a[data-section="guide"].active{box-shadow:inset -3px 0 #38bdf8,0 8px 28px rgba(14,116,144,.12)!important}
+.z-side-nav a[data-section="director"].active{box-shadow:inset -3px 0 #a855f7,0 8px 28px rgba(126,34,206,.14)!important}
+@media(max-width:720px){.director-actions,.director-actions form{display:grid;grid-template-columns:1fr;width:100%}.director-actions select,.director-actions .btn{width:100%}}

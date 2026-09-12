@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.9.0",
-  "description": "ZOMBI V9.9.0 — music plan controls and guild music settings",
+  "version": "9.14.0",
+  "description": "ZOMBI V9.14 — City Director, interactive Server Guide, events, plans and dashboard controls",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

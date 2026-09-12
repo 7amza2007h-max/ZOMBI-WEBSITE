@@ -29,8 +29,8 @@
     roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
+    event: { label: 'ايفنت', icon: '🎉', desc: 'نقاط الفعاليات، الرتب المسموحة، الترتيب، الترسيت وأوامر ZOM المخصصة.' },
     guide: { label: 'دليل السيرفر', icon: '🧭', desc: 'لوحة اختصارات تنقل الأعضاء مباشرة إلى الرومات التي تختارها.' },
-    music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
   };
@@ -38,7 +38,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director']],
-    ['الأنظمة', ['warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'event', 'guide', 'roles', 'name', 'tickets', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -150,7 +150,6 @@
     if (text.includes('Levels')) return 'xp';
     if (text.includes('العصابات')) return 'gangs';
     if (text.includes('سرقة البنك')) return 'robbery';
-    if (text.includes('نظام الموسيقى')) return 'music';
     if (text.includes('الرومات الصوتية')) return 'voice';
     if (text.includes('Moderation')) return 'members';
     if (text.includes('عجلة الحظ')) return 'games';
@@ -248,8 +247,7 @@
       bankMaxTransaction: 'أقصى عملية بالبنك',
       gangMaxMembers: 'أقصى أعضاء العصابة',
       gangMaxDeputies: 'أقصى نواب العصابة',
-      robberyMinParticipants: 'عدد المشاركين بسرقة البنك',
-      musicDefaultVolume: 'مستوى صوت الموسيقى'
+      robberyMinParticipants: 'عدد المشاركين بسرقة البنك'
     };
     Object.entries(planLimitedFields).forEach(([name, label]) => {
       const field = settingsForm.querySelector(`[name="${name}"]`);
@@ -275,6 +273,7 @@
     if (title.includes('من القاتل')) return 'killer';
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
+    if (title.includes('Event / ايفنت') || title.includes('🎉 Event') || title.includes('🎉 ايفنت')) return 'event';
     if (title.includes('أزرار دليل السيرفر')) return 'guide';
     if (title.includes('قوالب City Director')) return 'director';
     if (title.includes('متجر الرتب')) return 'store';
@@ -554,3 +553,24 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
+
+
+// ZOMBI V9.16.1 — Event multi-channel selector
+(function(){
+  function initEventChannelSelect(){
+    const select=document.querySelector('[data-event-channel-select]');
+    if(!select)return;
+    const max=Math.max(1,Number(select.dataset.max||1));
+    const count=document.querySelector('[data-event-channel-count]');
+    const sync=()=>{
+      const chosen=[...select.options].filter(o=>o.selected);
+      if(chosen.length>max){
+        const overflow=chosen.slice(max);overflow.forEach(o=>o.selected=false);
+        alert(`خطتك تسمح بحد أقصى ${max} شات للأيفنت.`);
+      }
+      const n=[...select.options].filter(o=>o.selected).length;if(count)count.textContent=String(n);
+    };
+    select.addEventListener('change',sync);sync();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initEventChannelSelect);else initEventChannelSelect();
+})();

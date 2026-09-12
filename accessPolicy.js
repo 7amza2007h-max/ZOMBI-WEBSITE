@@ -4,6 +4,8 @@ function requirements(name){
  if(name.startsWith('_'))return [];
  if(name==='logs'||name==='modLogActions'||name==='loggingPresent'||name.startsWith('log_'))return [];
  if(name.startsWith('warning'))return ['warningsPlus'];
+ if(name.startsWith('serverGuide')||name.startsWith('guide')||name==='serverGuidePanel')return ['serverGuide'];
+ if(name.startsWith('cityDirector')||name==='cityDirector')return ['cityDirector'];
  if(name.startsWith('feature_'))return [name.slice(8)];
  if(name==='currencyName'||name==='currencyEmoji')return ['customCurrency'];
  if(['brandColor','customName','customFooter','storeAccentColor','storeFooter','rolePanelFooter'].includes(name))return ['customBranding'];
@@ -38,13 +40,15 @@ function routeRequirements(path){
  if(path.includes('/gangs/'))return ['gangs'];
  if(path.endsWith('/bot-profile'))return ['customBotProfile'];
  if(path.endsWith('/economy/user'))return ['economyAdmin'];
- const send=path.match(/\/send\/(bank|games|tickets|store|roles)$/);if(send)return [send[1]==='roles'?'rolePanel':send[1]];
+ if(path.includes('/guide/'))return ['serverGuide'];
+ if(path.includes('/city-director/'))return ['cityDirector'];
+ const send=path.match(/\/send\/(bank|games|tickets|store|roles|guide)$/);if(send)return [send[1]==='roles'?'rolePanel':send[1]==='guide'?'serverGuide':send[1]];
  return [];
 }
 function restoreLocked(before,after,site){
  const loggingEnabled=after.moderation?.logActions;
  const restore=(feature,section)=>{if(!policy.featureAllowed(site,before,feature))after[section]=structuredClone(before[section]);};
- for(const [f,s] of Object.entries({bank:'bank',economy:'economy',levels:'levels',gangs:'gangs',bankRobbery:'robbery',voiceRooms:'voiceRooms',moderation:'moderation',tickets:'tickets',store:'store',rolePanel:'rolePanel',games:'games'}))restore(f,s);
+ for(const [f,s] of Object.entries({bank:'bank',economy:'economy',levels:'levels',gangs:'gangs',bankRobbery:'robbery',voiceRooms:'voiceRooms',moderation:'moderation',tickets:'tickets',store:'store',rolePanel:'rolePanel',games:'games',serverGuide:'serverGuide',cityDirector:'cityDirector'}))restore(f,s);
  after.moderation.logActions=loggingEnabled;
  restore('customCurrency','currency');if(policy.planNameForConfig(before)!=='premium_plus')after.warnings=structuredClone(before.warnings);
  const copy=(feature,obj,keys)=>{if(!policy.featureAllowed(site,before,feature))for(const k of keys)after[obj][k]=before[obj][k];};
