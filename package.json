@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.15.0",
-  "description": "ZOMBI V9.15 — 100 City Director events, cross-channel missions, random penalties and dashboard control",
+  "version": "9.15.4",
+  "description": "ZOMBI V9.15.4 — Auto Role dashboard + JSON balance fixes + City Director systems",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

@@ -341,6 +341,7 @@ async function guildPage(req){
     <h3>🎫 شكل التذاكر</h3><div class="form-grid"><label>العنوان<input name="ticketTitle" value="${esc(cfg.tickets.title)}"></label><label>اسم زر الفتح<input name="ticketButtonLabel" value="${esc(cfg.tickets.buttonLabel)}"></label><label>Emoji<input name="ticketButtonEmoji" value="${esc(cfg.tickets.buttonEmoji)}"></label><label class="wide">الوصف<textarea name="ticketDescription">${esc(cfg.tickets.description)}</textarea></label><label class="wide">رتب الدعم العامة<select multiple name="supportRoleIds">${roleOptions(roles,guild.id,cfg.tickets.supportRoleIds)}</select></label></div>
     <h3>🛒 شكل متجر الرتب — مثل النظام القديم</h3><div class="form-grid"><label>العنوان<input name="storeTitle" value="${esc(cfg.store.title)}"></label><label>Footer<input name="storeFooter" value="${esc(cfg.store.footer||'ZOMBI • ZOM Store')}"></label><label>لون Embed<input name="storeAccentColor" value="${esc(cfg.store.accentColor||cfg.branding.color)}"></label><label class="wide">الوصف<textarea name="storeDescription">${esc(cfg.store.description)}</textarea></label><label class="wide">Logo / Thumbnail<input name="storeThumbnailUrl" value="${esc(cfg.store.thumbnailUrl||'')}"></label><label class="wide">Banner اللوحة<input name="storeBannerUrl" value="${esc(cfg.store.bannerUrl||'')}"></label><label class="wide">Banner تفاصيل الرتبة الافتراضي<input name="storeDetailBannerUrl" value="${esc(cfg.store.detailBannerUrl||'')}"></label></div>
     <h3>🔔 Self Roles</h3><div class="form-grid"><label>العنوان<input name="rolePanelTitle" value="${esc(cfg.rolePanel.title)}"></label><label>Footer<input name="rolePanelFooter" value="${esc(cfg.rolePanel.footer||'ZOMBI • ROLE CENTER')}"></label><label class="wide">الوصف<textarea name="rolePanelDescription">${esc(cfg.rolePanel.description)}</textarea></label></div>
+    <h3>⚡ الرتبة التلقائية</h3><div class="form-grid"><label><input type="checkbox" name="autoRoleEnabled" ${cfg.autoRole?.enabled?'checked':''}> تفعيل إعطاء رتبة تلقائيًا عند دخول عضو جديد</label><label>الرتبة التلقائية<select name="autoRoleRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,cfg.autoRole?.roleId?[cfg.autoRole.roleId]:[])}</select></label><label><input type="checkbox" name="autoRoleIncludeBots" ${cfg.autoRole?.includeBots?'checked':''}> إعطاء الرتبة للبوتات أيضًا</label><div class="wide hint">يجب أن تكون رتبة ZOMBI BOT أعلى من الرتبة المختارة وأن يملك البوت صلاحية Manage Roles.</div></div>
     <div class="card-actions"><button class="btn primary" type="submit">💾 حفظ جميع إعدادات البوت</button><button class="btn" type="submit" name="forceBotProfile" value="1" ${canBotProfile?'':'disabled'}>🔄 حفظ وإعادة تطبيق بروفايل البوت${canBotProfile?'':' 🔒 Premium'}</button></div>
   </form>
 
@@ -919,6 +920,15 @@ async function start(){
         title:String(req.body.rolePanelTitle||cfg.rolePanel.title).slice(0,256),
         description:String(req.body.rolePanelDescription||cfg.rolePanel.description).slice(0,2000),
         footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)
+      };
+      const autoRoleId=String(req.body.autoRoleRoleId||'').trim();
+      if(autoRoleId&&!req.bundle.roles.some(r=>r.id===autoRoleId&&r.id!==guild.id&&!r.managed)){
+        return res.status(400).send('الرتبة التلقائية غير صالحة لهذا السيرفر.');
+      }
+      cfg.autoRole={
+        enabled:Boolean(req.body.autoRoleEnabled)&&Boolean(autoRoleId),
+        roleId:autoRoleId,
+        includeBots:Boolean(req.body.autoRoleIncludeBots)
       };
     }
 
