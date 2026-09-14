@@ -40,7 +40,8 @@
    const body=new URLSearchParams(new FormData(form));if(e.submitter?.name)body.set(e.submitter.name,e.submitter.value);
    const buttons=[...form.querySelectorAll('button')],previous=buttons.map(b=>b.disabled);buttons.forEach(b=>b.disabled=true);
    try{
-    const res=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body});
+    const actionUrl=form.getAttribute('action')||location.href;
+    const res=await fetch(actionUrl,{method:'POST',headers:{Accept:'application/json'},body});
     if(res.status===403&&res.headers.get('content-type')?.includes('application/json')){form.dispatchEvent(new Event('z-save-failed'));const denied=await res.json();show((denied.plans||[]).join(','),denied.message);return;}
     if(res.redirected){window.location.assign(res.url);return;}
     if(!res.ok){
