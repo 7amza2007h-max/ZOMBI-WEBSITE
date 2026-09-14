@@ -1,0 +1,1302 @@
+'use strict';
+require('dotenv').config();
+const express=require('express');
+const session=require('express-session');
+const crypto=require('crypto');
+const store=require('./sharedStore');
+const payments=require('./paymentStore');
+const operations=require('./operations');
+const access=require('./accessPolicy');
+const {pricing}=require('./pricingView');
+const {PLAN_IDS,PLAN_LABELS}=require('./planPolicy');
+const {
+  FEATURE_DEFS,GAME_DEFS,HEIST_GAME_DEFS,QUICK_RULE_GAME_IDS,LIMIT_DEFS,
+  normalizePlans,featureAllowed,gameAllowed,heistGameAllowed,limitFor,planNameForConfig
+}=require('./planPolicy');
+const {normalizeGameContent}=require('./gameDefaults');
+const {publicCommandPayload}=require('./discordCommands');
+const legacyPreset=require('./legacy-home-preset.json');
+const {builtInEvents}=require('./cityDirectorCatalog');
+
+const API='https://discord.com/api/v10';
+const OAUTH_TOKEN_URL='https://discord.com/api/oauth2/token';
+const MANAGE_GUILD=0x20n,ADMINISTRATOR=0x8n;
+const CORE_FEATURES=['economy','bank','games','tickets','store','rolePanel','levels','voiceRewards','voiceRooms','moderation','gangs','gangMissions','bankRobbery','serverGuide','cityDirector'];
+
+function esc(v=''){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function baseUrl(){return String(process.env.PUBLIC_BASE_URL||'http://localhost:3000').replace(/\/$/,'');}
+function ownerIds(){return new Set(String(process.env.OWNER_IDS||'').split(',').map(x=>x.trim()).filter(x=>/^\d{15,25}$/.test(x)));}
+function isOwner(user){return Boolean(user?.id&&ownerIds().has(String(user.id)));}
+function botSyncKey(){const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();return token?crypto.createHash('sha256').update(`ZOMBI_SYNC:${token}`).digest('hex'):'';}
+function requireBotSync(req,res,next){const expected=botSyncKey(),auth=String(req.get('authorization')||''),got=auth.startsWith('Bearer ')?auth.slice(7).trim():'';if(!expected||!got)return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});const a=Buffer.from(expected),b=Buffer.from(got);if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});next();}
+function canManage(g){try{const p=BigInt(String(g?.permissions||'0'));return Boolean(g?.owner)||(p&MANAGE_GUILD)===MANAGE_GUILD||(p&ADMINISTRATOR)===ADMINISTRATOR;}catch{return false;}}
+function csrf(req){if(!req.session.csrf)req.session.csrf=crypto.randomBytes(24).toString('hex');return req.session.csrf;}
+function checkCsrf(req,res,next){if(!req.session?.csrf)return res.status(403).send('CSRF validation failed');if(String(req.body?._csrf||req.get('x-csrf-token')||'')!==String(req.session?.csrf||''))return res.status(403).send('CSRF validation failed');next();}
+function requireLogin(req,res,next){if(req.user)return next();req.session.returnTo=req.originalUrl;res.redirect('/auth/discord');}
+function requireOwner(req,res,next){if(req.user&&isOwner(req.user))return next();res.status(403).send('Owner only');}
+function userGuild(req,gid){return (req.user?.guilds||[]).find(g=>String(g.id)===String(gid));}
+function color(cfg){const n=parseInt(String(cfg?.branding?.color||'#7c3aed').replace('#',''),16);return Number.isFinite(n)?n:0x7c3aed;}
+function arr(v){return Array.isArray(v)?v:(v?[v]:[]);}
+function int(v,fallback,min,max){const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n))):fallback;}
+function capFor(req,cfg,site,key){return featureAllowed(site,cfg,key);}
+function maxFor(req,cfg,site,key){return limitFor(site,cfg,key);}
+function isGuildOwner(req){return Boolean(String(req.user?.id||'')===String(req.bundle?.guild?.owner_id||''));}
+function upgradeRequiredPage(req,site,cfg,detail){const plan=PLAN_LABELS[planNameForConfig(cfg)]||'Free';const price=planNameForConfig(cfg)==='premium'?site.premiumPlusPrice:site.premiumPrice;return layout('ترقية الاشتراك',`<section class="login upgrade-required"><span class="badge">💎 UPGRADE REQUIRED</span><h1>هذا الإعداد أعلى من حد خطتك</h1><p>${esc(detail)}</p><p>الخطة الحالية: <b>${esc(plan)}</b>${price?` • الترقية: <b>${esc(price)}</b>`:''}</p><div class="actions"><a class="btn primary" href="/premium">💎 عرض الاشتراكات</a><a class="btn" href="/dashboard/${req.params.guildId}?section=games">رجوع للألعاب</a></div></section>`,req.user);}
+function sendUpgradeRequired(req,res,site,cfg,detail){const current=planNameForConfig(cfg),plans=current==='free'?['premium','premium_plus']:current==='premium'?['premium_plus']:[];if(String(req.get('accept')||'').includes('application/json'))return res.status(403).json({ok:false,code:'SUBSCRIPTION_LIMIT',message:detail,plans});return res.status(403).send(upgradeRequiredPage(req,site,cfg,detail));}
+function planBadge(cfg){return (planNameForConfig(cfg)==='free'?'🆓 ':'💎 ')+PLAN_LABELS[planNameForConfig(cfg)];}
+function homeGuildId(){return String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'').trim();}
+function isHomeGuild(gid){const home=homeGuildId();return Boolean(home&&String(gid)===home);}
+function paymentPlan(v){return String(v)==='premium_plus'?'premium_plus':'premium';}
+function resolvedZainCash(site={}){
+  const raw=site.zainCash||{},envWallet=String(process.env.ZAIN_CASH_WALLET||'').trim(),envName=String(process.env.ZAIN_CASH_NAME||'').trim();
+  const enabledEnv=String(process.env.ZAIN_CASH_ENABLED||'').trim().toLowerCase();
+  const enabled=enabledEnv?['1','true','yes','on'].includes(enabledEnv):Boolean(raw.enabled||envWallet);
+  const num=(envKey,fallback,min=0.1,max=10000)=>{const v=String(process.env[envKey]||'').trim();const n=v===''?Number(fallback):Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n*1000)/1000)):Number(fallback||0);};
+  const days=(envKey,fallback)=>{const v=String(process.env[envKey]||'').trim();const n=v===''?Number(fallback):Number(v);return Number.isFinite(n)?Math.max(1,Math.min(3650,Math.round(n))):30;};
+  const walletNumber=envWallet||String(raw.walletNumber||'').trim(),walletName=envName||String(raw.walletName||'').trim();
+  return{enabled:Boolean(enabled&&walletNumber),walletNumber,walletName,premiumAmount:num('ZAIN_CASH_PREMIUM_AMOUNT',raw.premiumAmount??4.99),premiumPlusAmount:num('ZAIN_CASH_PREMIUM_PLUS_AMOUNT',raw.premiumPlusAmount??7.99),premiumDays:days('ZAIN_CASH_PREMIUM_DAYS',raw.premiumDays??30),premiumPlusDays:days('ZAIN_CASH_PREMIUM_PLUS_DAYS',raw.premiumPlusDays??30),instructions:String(process.env.ZAIN_CASH_INSTRUCTIONS||raw.instructions||'حوّل المبلغ المطلوب إلى محفظة Zain Cash ثم ارفع صورة واضحة لإثبات التحويل.').trim().slice(0,1000)};
+}
+function publicSiteConfig(site){return{...site,zainCash:resolvedZainCash(site)};}
+function paymentAmount(zain,plan){return plan==='premium_plus'?Number(zain.premiumPlusAmount):Number(zain.premiumAmount);}
+function paymentDays(zain,plan){return plan==='premium_plus'?Number(zain.premiumPlusDays):Number(zain.premiumDays);}
+function normalizePayerPhone(v){const s=String(v||'').trim().replace(/[\s()-]/g,'');return /^\+?\d{8,20}$/.test(s)?s:'';}
+function parsePaymentProof(raw){
+  const value=String(raw||'');const m=value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);if(!m)throw new Error('ارفع صورة إثبات بصيغة PNG أو JPG أو WEBP.');
+  const buf=Buffer.from(m[2].replace(/\s+/g,''),'base64');if(!buf.length||buf.length>3*1024*1024)throw new Error('حجم صورة الإثبات يجب أن يكون أقل من 3MB.');
+  const detected=detectDiscordImageMime(buf);if(!['image/png','image/jpeg','image/webp'].includes(detected))throw new Error('ملف إثبات الدفع ليس صورة صالحة.');
+  return{proofData:`data:${detected};base64,${buf.toString('base64')}`,proofMime:detected,proofHash:crypto.createHash('sha256').update(buf).digest('hex')};
+}
+function paymentStatusLabel(status){return({pending:'⏳ بانتظار المراجعة',processing:'🔄 قيد المعالجة',approved:'✅ مقبول',rejected:'❌ مرفوض'})[status]||status;}
+function paymentDate(ts){try{return new Date(Number(ts)||Date.now()).toLocaleString('ar-JO',{timeZone:'Asia/Amman'});}catch{return'';}}
+async function appendHomeAdminOp(gid,name,op){if(!isHomeGuild(gid))return;const file=String(name||'').trim();if(!file)return;const list=await store.data(gid,file,[]);const next=(Array.isArray(list)?list:[]).filter(x=>!x?.appliedAt).slice(-99);next.push({id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`,...op,createdAt:Date.now(),appliedAt:0});await store.saveData(gid,file,next);}
+
+async function botFetch(route,options={}){
+  // Bot API requests must use the current BOT_TOKEN from Render directly.
+  // OAUTH_PROXY_URL remains available only for Discord OAuth login below.
+  const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();
+  if(!token)throw new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');
+  const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',...(options.headers||{})}});
+  if(res.status===204)return null;
+  const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text;}
+  if(!res.ok){const e=new Error(data?.message||`Discord API ${res.status}`);e.status=res.status;e.discord=data;throw e;}
+  return data;
+}
+function detectDiscordImageMime(buf){
+  if(!Buffer.isBuffer(buf)||buf.length<4)return '';
+  if(buf.length>=8&&buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47&&buf[4]===0x0D&&buf[5]===0x0A&&buf[6]===0x1A&&buf[7]===0x0A)return 'image/png';
+  if(buf[0]===0xFF&&buf[1]===0xD8&&buf[2]===0xFF)return 'image/jpeg';
+  if(buf.length>=6&&(buf.subarray(0,6).toString('ascii')==='GIF87a'||buf.subarray(0,6).toString('ascii')==='GIF89a'))return 'image/gif';
+  if(buf.length>=12&&buf.subarray(0,4).toString('ascii')==='RIFF'&&buf.subarray(8,12).toString('ascii')==='WEBP')return 'image/webp';
+  return '';
+}
+function discordFormDetails(err){
+  const root=err?.discord?.errors||err?.discord?.data?.errors;
+  if(!root||typeof root!=='object')return '';
+  const found=[];
+  const walk=(node,path=[])=>{
+    if(!node||typeof node!=='object'||found.length>=6)return;
+    if(Array.isArray(node._errors))for(const item of node._errors){if(found.length>=6)break;const msg=String(item?.message||item?.code||'قيمة غير مقبولة');found.push(`${path.join('.')||'body'}: ${msg}`);}
+    for(const [key,val] of Object.entries(node)){if(key==='_errors')continue;walk(val,[...path,key]);}
+  };
+  walk(root,[]);return found.join(' | ');
+}
+async function profileImageData(urlValue,label='الصورة'){
+  const raw=String(urlValue||'').trim();
+  if(!raw)return null;
+  let u;try{u=new URL(raw);}catch{throw new Error(`${label}: الرابط غير صالح.`);}
+  if(u.protocol!=='https:')throw new Error(`${label}: استخدم رابط HTTPS مباشر للصورة.`);
+  if(['localhost','127.0.0.1','0.0.0.0','::1'].includes(u.hostname.toLowerCase()))throw new Error(`${label}: رابط محلي غير مسموح.`);
+  const response=await fetch(u,{redirect:'follow',headers:{'User-Agent':'ZOMBI-Dashboard/9.6.3','Accept':'image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.2'}});
+  if(!response.ok)throw new Error(`${label}: تعذر تحميل الصورة (HTTP ${response.status}).`);
+  const headerType=String(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+  if(!headerType.startsWith('image/'))throw new Error(`${label}: الرابط يجب أن يرجع ملف صورة مباشر.`);
+  const declared=Number(response.headers.get('content-length')||0),max=8*1024*1024;
+  if(declared>max)throw new Error(`${label}: حجم الصورة أكبر من 8MB.`);
+  const buf=Buffer.from(await response.arrayBuffer());
+  if(!buf.length)throw new Error(`${label}: ملف الصورة فارغ.`);
+  if(buf.length>max)throw new Error(`${label}: حجم الصورة أكبر من 8MB.`);
+  const type=detectDiscordImageMime(buf);
+  if(type==='image/webp')throw new Error(`${label}: Discord لا يقبل WebP في هذا الحقل. استخدم رابط PNG أو JPG أو GIF مباشر.`);
+  if(!['image/png','image/jpeg','image/gif'].includes(type))throw new Error(`${label}: نوع الصورة غير مدعوم. استخدم PNG أو JPG أو GIF فقط.`);
+  return `data:${type};base64,${buf.toString('base64')}`;
+}
+async function getBotGuild(id){try{return await botFetch(`/guilds/${id}?with_counts=true`);}catch(e){if(e.status===404)return null;throw e;}}
+async function getGuildBundle(id){const [guild,channels,roles]=await Promise.all([getBotGuild(id),botFetch(`/guilds/${id}/channels`).catch(()=>[]),botFetch(`/guilds/${id}/roles`).catch(()=>[])]);if(!guild)return null;return{guild,channels,roles};}
+async function requireGuildAccess(req,res,next){try{const ug=userGuild(req,req.params.guildId);if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');const bundle=await getGuildBundle(req.params.guildId);if(!bundle)return res.status(404).send(layout('Bot missing','<section class="login"><h1>🤖 البوت غير موجود في هذا السيرفر</h1><p>أضف ZOMBI أولًا ثم ارجع للـDashboard.</p></section>',req.user));req.discordGuild=ug||null;req.bundle=bundle;if(req.method==='POST'){const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);}next();}catch(e){next(e);}}
+
+function upgradeResponse(req,res,site,keys){
+ const plans=access.availablePlans(site,keys),labels=plans.map(p=>PLAN_LABELS[p]);
+ const message=labels.length?'اشترك في '+labels.join(' أو ')+' لحفظ هذه الميزة.':'هذه الميزة غير متاحة حاليًا في الخطط المدفوعة. تواصل مع مالك البوت.';
+ if(req.get('accept')?.includes('application/json'))return res.status(403).json({error:'PLAN_REQUIRED',message,plans});
+ return res.status(403).send(layout('ترقية الاشتراك',`<section class="login"><h1>🔒 الميزة غير متاحة في خطتك</h1><p>${esc(message)}</p><a class="btn primary" href="/premium">مقارنة الخطط</a><a class="btn" href="/dashboard/${esc(req.params.guildId)}">رجوع</a></section>`,req.user));
+}
+function decorateDashboard(html,site,cfg,owner){
+ const planData={current:PLAN_LABELS[planNameForConfig(cfg)],prices:{premium:site.premiumPrice,premium_plus:site.premiumPlusPrice}};
+ html=html.replace(/<(input|select|textarea|button)\b[^>]*>/g,tag=>{
+  const name=tag.match(/\bname="([^"]+)"/)?.[1];if(!name)return tag;
+  const keys=access.requirements(name);if(!access.missing(site,cfg,keys).length)return tag;
+  const plans=access.availablePlans(site,keys);
+  return tag.replace(/\sdisabled(?:="[^"]*")?/g,'').replace(/>$/,` disabled data-plan-locked="true" data-plan-options="${plans.join(',')}">`);
+ });
+ html=html.replace(/<form\b[^>]*action="([^"]+)"[^>]*>/g,(tag,path)=>{const keys=access.routeRequirements(path);return access.missing(site,cfg,keys).length?tag.replace(/>$/,` data-plan-locked-form="${access.availablePlans(site,keys).join(',')}">`):tag;});
+ return html+`<script type="application/json" id="z-plan-context">${JSON.stringify(planData).replace(/</g,'\\u003c')}</script>`;
+}
+function layout(title,body,user=null){
+  const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.14.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.14.0"></script><script defer src="/site/upgrade.js?v=9.15.2"></script><script defer src="/site/operations-ui.js?v=9.14.0"></script></body></html>`;
+}
+function inviteUrl(gid=''){const id=String(process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
+async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
+function iconUrl(g){return g?.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:'';}
+function textChannels(channels,value){const allowed=new Set([0,5]);return `<option value="">— غير محدد —</option>`+channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}># ${esc(c.name)}</option>`).join('');}
+function textChannelMultiOptions(channels,selected=[]){const allowed=new Set([0,5]),set=new Set((selected||[]).map(String));return channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${set.has(String(c.id))?'selected':''}># ${esc(c.name)}</option>`).join('');}
+function categories(channels,value){return `<option value="">— غير محدد —</option>`+channels.filter(c=>c.type===4).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}>📁 ${esc(c.name)}</option>`).join('');}
+function voiceChannels(channels,value){return `<option value="">— غير محدد —</option>`+channels.filter(c=>[2,13].includes(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}>🔊 ${esc(c.name)}</option>`).join('');}
+function multiChannelOptions(channels,selected=[],types=[0,5]){const set=new Set(selected||[]);return channels.filter(c=>types.includes(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${set.has(c.id)?'selected':''}>${types.includes(2)?'🔊':'#'} ${esc(c.name)}</option>`).join('');}
+function checkbox(name,checked,label,disabledAttr=''){return `<label><input type="checkbox" name="${name}" ${checked?'checked':''} ${disabledAttr}> ${label}</label>`;}
+function roleOptions(roles,guildId,selected=[]){const set=new Set(selected||[]);return roles.filter(r=>r.id!==guildId&&!r.managed).sort((a,b)=>(b.position||0)-(a.position||0)).map(r=>`<option value="${r.id}" ${set.has(r.id)?'selected':''}>${esc(r.name)}</option>`).join('');}
+function lockedNote(ok,text='هذه الخاصية غير متاحة في خطتك الحالية.'){return ok?'':`<span class="lock-note">🔒 ${esc(text)}</span>`;}
+function qaText(items){return (items||[]).map(x=>`${x.question} | ${x.answer}`).join('\n');}
+function wordsText(items){return (items||[]).map(x=>`${x.scrambled} | ${x.answer}`).join('\n');}
+function disabled(ok){return ok?'':'disabled';}
+function redirectDashboard(req,res,fallback='overview'){const raw=String(req.body?._returnSection||req.query?.section||fallback);const section=raw.replace(/[^a-z0-9_-]/gi,'').slice(0,40)||fallback;return res.redirect(`/dashboard/${req.params.guildId}?section=${encodeURIComponent(section)}`);}
+const GAME_BUTTON_STYLES={quiz:1,guess:1,rps:1,speed:1,scramble:1,truefalse:2,math:2,closest:2,word:2,wheel:3,daily:3,mafia:4,roulette:4,chairs:2,killer:4};
+const GAME_PANEL_ORDER=[['quiz','guess','rps','speed','scramble'],['truefalse','math','closest','word','wheel'],['daily','mafia','roulette','chairs','killer']];
+function rawGamesPanelPayload(cfg){
+  const byId=new Map(GAME_DEFS.map(g=>[g.id,g]));
+  const components=GAME_PANEL_ORDER.map(ids=>({type:1,components:ids.map(id=>{const g=byId.get(id);return{type:2,style:GAME_BUTTON_STYLES[id]||2,custom_id:`pub:game:${id}`,label:String(g?.label||id).slice(0,80),emoji:{name:g?.emoji||'🎮'}};})}));
+  components.push({type:1,components:[{type:2,style:4,custom_id:'pub:game:stop',label:'إيقاف اللعبة',emoji:{name:'🛑'}}]});
+  return{embeds:[{color:color(cfg),title:'🎮 ألعاب ZOM',description:'اختر اللعبة التي تريد تشغيلها.\n\n🎯 وقت الجولة وعدد الجولات والجائزة النهائية يتم تحديدها من **Dashboard** لكل لعبة.\n⭐ فوز الجولة = **نقطة**، والجائزة تُصرف للفائز النهائي فقط.\n🎭 المافيا والروليت والكراسي ومن القاتل تعمل حسب الخطة التي حددها Owner.\n⌨️ تشغيل مباشر من الشات: **# + اسم اللعبة** مثل `#اسئلة`، `#روليت`، `#كراسي`، `#من-القاتل`.\n\n🛑 لإيقاف اللعبة: اضغط زر **إيقاف اللعبة** أو استخدم `#ايقاف` أو `/ايقاف`. المضيف، الرتب المسموحة، والإدارة يستطيعون الإيقاف.',footer:{text:'ZOM Games System'}}],components};
+}
+const DEFAULT_KILLER_CASES=[
+  {story:'وُجدت خزنة مفتوحة في المكتب. كاميرا الممر أظهرت سامر يدخل المكتب رغم إنكاره.',suspects:['أحمد','سامر','وليد'],answer:1,explanation:'الكاميرا أثبتت وجود سامر في المكتب.'},
+  {story:'اختفت مفاتيح السيارة ووُجدت بصمة نور على درج المفاتيح رغم قولها إنها لم تدخل الغرفة.',suspects:['نور','ليان','مازن'],answer:0,explanation:'بصمة نور تناقض كلامها.'}
+];
+function normalizeKillerCases(raw){const src=Array.isArray(raw)&&raw.length?raw:DEFAULT_KILLER_CASES;return src.map(x=>({story:String(x.story||'').slice(0,1500),suspects:(Array.isArray(x.suspects)?x.suspects:[]).map(y=>String(y).slice(0,80)).slice(0,5),answer:Math.max(0,Number(x.answer)||0),explanation:String(x.explanation||'').slice(0,500)})).filter(x=>x.story&&x.suspects.length>=2&&x.answer<x.suspects.length).slice(0,100);}
+function killerText(items){return normalizeKillerCases(items).map(x=>`${x.story} | ${x.suspects.join(' ; ')} | ${x.answer+1} | ${x.explanation||''}`).join('\n');}
+function parseKillerCases(text,max){const out=[];for(const raw of String(text||'').split(/\r?\n/)){const parts=raw.split('|').map(x=>x.trim());if(parts.length<3)continue;const suspects=parts[1].split(';').map(x=>x.trim()).filter(Boolean).slice(0,5),answer=Math.max(0,Math.min(suspects.length-1,(Number(parts[2])||1)-1));if(parts[0]&&suspects.length>=2)out.push({story:parts[0].slice(0,1500),suspects,answer,explanation:String(parts[3]||'').slice(0,500)});if(out.length>=max)break;}return out;}
+
+async function seedLegacyHome(){
+  try{
+    const gid=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'').trim();if(!gid||!legacyPreset?.config)return;
+    const current=await store.getConfig(gid);if(current?.legacyPresetImportedAt||String(current?.legacyPresetVersion||'').startsWith('v8'))return;
+    const keep={plan:current.plan,premiumUntil:current.premiumUntil,createdAt:current.createdAt};
+    const cfg={...legacyPreset.config,...keep,legacyPresetVersion:'v8.8',legacyPresetImportedAt:Date.now()};
+    await store.saveConfig(gid,cfg);
+    for(const [name,value] of Object.entries(legacyPreset.data||{}))await store.saveData(gid,name,value);
+    console.log(`✅ Legacy home preset V8.7 restored for guild ${gid}`);
+  }catch(e){console.warn('⚠️ Legacy home preset restore:',e.message);}
+}
+
+
+function normalizeEventQuickCommands(raw){
+  const src=Array.isArray(raw)?raw:[],seen=new Set(),out=[];
+  for(const item of src){
+    const command=String(item?.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)continue;
+    const key=command.toLowerCase();if(seen.has(key))continue;seen.add(key);
+    let id=String(item?.id||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60);if(!id)id=`event_${Date.now().toString(36)}_${out.length}`;
+    out.push({id,command,label:String(item?.label||command).trim().slice(0,80)||command,points:int(item?.points,0,-1000000,1000000),zom:int(item?.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(item?.targetMode)?item.targetMode:'mention',response:String(item?.response||'').trim().slice(0,500),enabled:item?.enabled!==false});
+    if(out.length>=30)break;
+  }
+  return out;
+}
+function eventChannelLimit(cfg){const plan=planNameForConfig(cfg);return plan==='premium_plus'?15:plan==='premium'?5:1;}
+function eventConfig(cfg){
+  const raw=cfg?.event||{},legacy=String(raw.channelId||'').trim();
+  const channelIds=[...new Set((Array.isArray(raw.channelIds)?raw.channelIds:(legacy?[legacy]:[])).map(String).map(x=>x.trim()).filter(Boolean))];
+  if(legacy&&!channelIds.includes(legacy))channelIds.unshift(legacy);
+  return {
+    enabled:raw.enabled===true,channelIds,channelId:channelIds[0]||legacy,staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
+    publicLeaderboard:raw.publicLeaderboard!==false,leaderboardLimit:int(raw.leaderboardLimit,20,3,25),pointLabel:String(raw.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
+    leaderboardCommand:String(raw.leaderboardCommand||'نقاط').trim().slice(0,40)||'نقاط',resetCommand:String(raw.resetCommand||'ترسيت').trim().slice(0,40)||'ترسيت',directPointsEnabled:raw.directPointsEnabled!==false,
+    quickCommands:normalizeEventQuickCommands(raw.quickCommands?.length?raw.quickCommands:[{id:'create',command:'-انشاء',label:'إنشاء',points:1,zom:0,targetMode:'mention',response:'',enabled:true}])
+  };
+}
+function eventState(raw){
+  const state=raw&&typeof raw==='object'?raw:{};return {season:int(state.season,1,1,1000000),users:state.users&&typeof state.users==='object'?state.users:{},history:Array.isArray(state.history)?state.history.slice(0,500):[]};
+}
+
+async function guildPage(req){
+  const {guild,channels,roles}=req.bundle;
+  const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog,eventData,directorState]=await Promise.all([
+    store.getConfig(guild.id),store.getGlobalConfig(),store.getGameContent(guild.id),store.getEconomy(guild.id),
+    store.data(guild.id,'gangs-public.json',{gangs:{},membership:{}}),
+    store.data(guild.id,'killer-cases.json',DEFAULT_KILLER_CASES),
+    store.data(guild.id,'gang-missions.json',[]),
+    store.data(guild.id,'bank-catalog.json',{jobs:{},companies:{},stocks:{}}),
+    store.data(guild.id,'event-system.json',{season:1,users:{},history:[]}),
+    store.data(guild.id,'city-director-state.json',{active:null,lastEventAt:0,history:[]})
+  ]);
+  const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
+  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
+  const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates');
+  const products=cfg.store.products||[],items=cfg.rolePanel.items||[],ticketTypes=cfg.tickets.types||[],guideItems=cfg.serverGuide?.items||[],directorTemplates=cfg.cityDirector?.templates||[];
+  const featureChecks=CORE_FEATURES.map(k=>{const def=FEATURE_DEFS.find(x=>x.key===k),allowed=featureAllowed(site,cfg,k);return `<label class="${allowed?'':'locked'}"><input type="checkbox" name="feature_${k}" ${cfg.features[k]&&allowed?'checked':''} ${allowed?'':'disabled'}> ${def?.emoji||''} ${esc(def?.label||k)}${allowed?'':' 🔒'}</label>`;}).join('');
+  const gameRows=GAME_DEFS.map(g=>{const allowed=gameAllowed(site,cfg,g.id),r=cfg.games.quickGameSettings?.[g.id]||{rounds:5,roundTimeSeconds:25,winnerReward:300},roundMax=maxFor(req,cfg,site,'maxRounds'),timeMax=maxFor(req,cfg,site,'maxRoundTimeSeconds'),rewardMax=maxFor(req,cfg,site,'maxWinnerReward');return `<tr><td>${g.emoji} ${esc(g.label)}</td><td><input type="checkbox" name="game_enabled_${g.id}" ${cfg.games.enabled?.[g.id]!==false&&allowed?'checked':''} ${allowed?'':'disabled'}></td><td><input type="number" name="game_rounds_${g.id}" value="${r.rounds}" min="1" max="${roundMax}" data-plan-max="${roundMax}" data-limit-label="عدد الجولات" ${canGameSettings&&allowed?'':'disabled'}></td><td><input type="number" name="game_time_${g.id}" value="${r.roundTimeSeconds}" min="5" max="${timeMax}" data-plan-max="${timeMax}" data-limit-label="وقت الجولة" ${canGameSettings&&allowed?'':'disabled'}></td><td><input type="number" name="game_reward_${g.id}" value="${r.winnerReward}" min="0" max="${rewardMax}" data-plan-max="${rewardMax}" data-limit-label="جائزة الفائز" ${canGameSettings&&allowed?'':'disabled'}></td></tr>`;}).join('');
+  const heistGuildRows=HEIST_GAME_DEFS.map(g=>{const allowed=heistGameAllowed(site,cfg,g.id);return `<label class="${allowed?'':'locked'}"><input type="checkbox" name="heist_game_${g.id}" ${cfg.bank?.heistGamesEnabled?.[g.id]!==false&&allowed?'checked':''} ${allowed?'':'disabled'}> ${g.emoji} ${esc(g.label)}${allowed?'':' 🔒 حسب الخطة'}</label>`;}).join('');
+  const topUsers=Object.entries(economyData||{}).sort((a,b)=>Number(b[1]?.balance||0)-Number(a[1]?.balance||0)).slice(0,15).map(([id,u])=>`<tr><td><code>${id}</code></td><td>${Number(u?.balance||0).toLocaleString()}</td><td>${Number(u?.bankBalance||0).toLocaleString()}</td><td>${Number(u?.level||0)}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد بيانات أعضاء حتى الآن.</td></tr>';
+  const gangs=Object.values(gangData?.gangs||{});const gangRows=gangs.length?gangs.map(g=>`<tr><td>${esc(g.name)}</td><td><code>${esc(g.leaderId||g.bossId||'')}</code></td><td>${Number((g.members||g.memberIds||[]).length)}</td><td>${Number((g.deputies||g.deputyIds||[]).length)}</td><td>${Number(g.bank??g.vault??0).toLocaleString()}</td><td>${Number(g.missionsCompleted??g.stats?.missionsWon??0)}</td><td><form class="mini" method="post" action="/dashboard/${guild.id}/gangs/bank"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="gangId" value="${esc(g.id)}"><input type="number" name="amount" value="${Number(g.bank??g.vault??0)}" min="0"><button>الخزنة</button></form><form class="mini" method="post" action="/dashboard/${guild.id}/gangs/reset-mission"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="gangId" value="${esc(g.id)}"><button>تصفير المهمة</button></form><form class="mini" method="post" action="/dashboard/${guild.id}/gangs/delete" onsubmit="return confirm('حذف العصابة ورومها ورتبتها؟')"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="gangId" value="${esc(g.id)}"><button class="danger">حذف</button></form></td></tr>`).join(''):'<tr><td colspan="7">لا توجد عصابات بعد.</td></tr>';
+  const ticketRows=ticketTypes.map(t=>`<form class="config-card" method="post" action="/dashboard/${guild.id}/tickets/type/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="typeId" value="${esc(t.id)}"><div class="form-grid"><label>الاسم<input name="label" value="${esc(t.label)}"></label><label>Emoji<input name="emoji" value="${esc(t.emoji||'🎫')}"></label><label>Category<select name="categoryId">${categories(channels,t.categoryId||cfg.channels.ticketCategory)}</select></label><label>أقصى تذاكر للعضو<input type="number" name="maxOpenPerUser" value="${Number(t.maxOpenPerUser||1)}" min="1" max="10"></label><label class="wide">الوصف<textarea name="description">${esc(t.description||'')}</textarea></label><label class="wide">رسالة الترحيب<textarea name="welcomeMessage">${esc(t.welcomeMessage||'')}</textarea></label><label>رتب تستطيع الفتح<select multiple name="openRoleIds">${roleOptions(roles,guild.id,t.openRoleIds)}</select></label><label>رتب الدعم/المشاهدة<select multiple name="supportRoleIds">${roleOptions(roles,guild.id,t.supportRoleIds)}</select></label><label><input type="checkbox" name="enabled" ${t.enabled!==false?'checked':''}> مفعلة</label></div><div class="card-actions"><button class="btn">حفظ النوع</button><button class="btn danger" formaction="/dashboard/${guild.id}/tickets/type/delete" name="typeId" value="${esc(t.id)}">حذف</button></div></form>`).join('')||'<p>لا يوجد أنواع تذاكر.</p>';
+  const productRows=products.map(p=>`<form class="config-card product-card" method="post" action="/dashboard/${guild.id}/store/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="productId" value="${esc(p.id)}"><div class="form-grid"><label>Role<select name="roleId">${roleOptions(roles,guild.id,[p.roleId])}</select></label><label>اسم الرتبة<input name="name" value="${esc(p.name)}"></label><label>السعر<input type="number" name="price" value="${Number(p.price||1)}" min="1"></label><label>القسم<input name="category" value="${esc(p.category||'رتب الأعضاء')}"></label><label>Emoji<input name="emoji" value="${esc(p.emoji||'🏷️')}"></label><label>الترتيب<input type="number" name="sortOrder" value="${Number(p.sortOrder||0)}" min="0"></label><label>الوصول<select name="accessMode"><option value="everyone" ${p.accessMode==='everyone'?'selected':''}>للجميع</option><option value="admins" ${p.accessMode==='admins'?'selected':''}>الإدارة فقط</option><option value="roles" ${p.accessMode==='roles'?'selected':''}>رتب محددة</option></select></label><label>الرتب المسموحة<select multiple name="allowedRoleIds">${roleOptions(roles,guild.id,p.allowedRoleIds)}</select></label><label class="wide">الوصف<textarea name="description">${esc(p.description||'')}</textarea></label><label class="wide">المميزات — سطر لكل ميزة<textarea name="features">${esc((p.features||[]).join('\n'))}</textarea></label><label class="wide">رابط الصورة<input name="imageUrl" value="${esc(p.imageUrl||'')}"></label><label class="wide">رابط Banner<input name="bannerUrl" value="${esc(p.bannerUrl||'')}"></label><label><input type="checkbox" name="enabled" ${p.enabled!==false?'checked':''}> مفعلة</label></div><div class="card-actions"><button class="btn primary">حفظ الرتبة</button><button class="btn danger" formaction="/dashboard/${guild.id}/store/delete" name="productId" value="${esc(p.id)}">حذف</button></div></form>`).join('')||'<p>لا توجد منتجات.</p>';
+  const roleRows=items.map(p=>`<form class="config-card compact-card" method="post" action="/dashboard/${guild.id}/roles/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="roleId" value="${p.roleId}"><div class="form-grid"><label>الرتبة<select name="newRoleId">${roleOptions(roles,guild.id,[p.roleId])}</select></label><label>اسم الزر<input name="label" value="${esc(p.label||'')}"></label><label>Emoji<input name="emoji" value="${esc(p.emoji||'🔔')}"></label><label>اللون<select name="style"><option ${p.style==='Primary'?'selected':''}>Primary</option><option ${p.style==='Secondary'?'selected':''}>Secondary</option><option ${p.style==='Success'?'selected':''}>Success</option><option ${p.style==='Danger'?'selected':''}>Danger</option></select></label></div><div class="card-actions"><button class="btn">حفظ</button><button class="btn danger" formaction="/dashboard/${guild.id}/roles/delete">حذف</button></div></form>`).join('')||'<p>لا توجد رتب.</p>';
+  const richKillers=(Array.isArray(killerCases)?killerCases:[]).map((c,index)=>({id:c.id||`case_${index+1}`,enabled:c.enabled!==false,title:c.title||`قضية ${index+1}`,story:c.story||'',suspects:Array.isArray(c.suspects)?c.suspects:[],clues:Array.isArray(c.clues)?c.clues:[],hints:Array.isArray(c.hints)?c.hints:[],killer:c.killer||c.suspects?.[Number(c.answer)||0]||'',answer:typeof c.answer==='string'?c.answer:(c.explanation||'')}));
+  const killerRows=richKillers.map(c=>`<form class="config-card killer-card" method="post" action="/dashboard/${guild.id}/killer/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="caseId" value="${esc(c.id)}"><div class="form-grid"><label>عنوان القضية<input name="title" value="${esc(c.title)}"></label><label>القاتل<input name="killer" value="${esc(c.killer)}"></label><label class="wide">القصة<textarea name="story">${esc(c.story)}</textarea></label><label class="wide">المشتبه بهم — سطر لكل اسم<textarea name="suspects">${esc(c.suspects.join('\n'))}</textarea></label><label class="wide">الأدلة — سطر لكل دليل<textarea name="clues">${esc(c.clues.join('\n'))}</textarea></label><label class="wide">3 تلميحات — سطر لكل تلميح<textarea name="hints">${esc(c.hints.join('\n'))}</textarea></label><label class="wide">شرح الحل<textarea name="answer">${esc(c.answer)}</textarea></label><label><input type="checkbox" name="enabled" ${c.enabled?'checked':''}> مفعلة</label></div><div class="card-actions"><button class="btn">حفظ القضية</button><button class="btn danger" formaction="/dashboard/${guild.id}/killer/delete">حذف</button></div></form>`).join('')||'<p>لا توجد قضايا.</p>';
+  const bankJobsText=Object.entries(bankCatalog?.jobs||{}).map(([id,v])=>`${id} | ${v.name||''} | ${Number(v.salary||0)}`).join('\n');
+  const bankCompaniesText=Object.entries(bankCatalog?.companies||{}).map(([id,v])=>`${id} | ${v.name||''} | ${v.description||''} | ${Number(v.priceGold||0)}`).join('\n');
+  const bankStocksText=Object.entries(bankCatalog?.stocks||{}).map(([symbol,v])=>`${symbol} | ${v.name||''} | ${Number(v.price||0)}`).join('\n');
+  const missionRows=(Array.isArray(missionTemplates)?missionTemplates:[]).map(m=>`<form class="config-card mission-card" method="post" action="/dashboard/${guild.id}/gang-missions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="missionId" value="${esc(m.id)}"><div class="form-grid"><label>اسم المهمة<input name="name" value="${esc(m.name||'')}"></label><label>الصعوبة<select name="difficulty"><option value="hard" ${m.difficulty==='hard'?'selected':''}>صعبة</option><option value="elite" ${m.difficulty==='elite'?'selected':''}>نخبة</option><option value="legendary" ${m.difficulty==='legendary'?'selected':''}>أسطورية</option></select></label><label>أقل مشاركين<input type="number" name="minParticipants" value="${Number(m.minParticipants||2)}" min="2" max="25"></label><label><input type="checkbox" name="enabled" ${m.enabled!==false?'checked':''}> مفعلة</label><label class="wide">الوصف<textarea name="description">${esc(m.description||'')}</textarea></label><label class="wide">المراحل — سطر لكل مرحلة<textarea name="steps">${esc((m.steps||[]).join('\n'))}</textarea></label></div><div class="card-actions"><button class="btn">حفظ المهمة</button><button class="btn danger" formaction="/dashboard/${guild.id}/gang-missions/delete">حذف</button></div></form>`).join('')||'<p>لا توجد قوالب مهمات.</p>';
+
+  const guideRows=guideItems.map(item=>`<form class="config-card compact-card guide-item-card" method="post" action="/dashboard/${guild.id}/guide/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="guide"><input type="hidden" name="itemId" value="${esc(item.id)}"><div class="form-grid"><label>اسم الزر<input name="label" value="${esc(item.label||'')}"></label><label>Emoji<input name="emoji" value="${esc(item.emoji||'➡️')}"></label><label>الروم<select name="channelId">${textChannels(channels,item.channelId)}</select></label><label>الترتيب<input type="number" name="sortOrder" value="${Number(item.sortOrder||0)}" min="0" max="9999"></label><label><input type="checkbox" name="enabled" ${item.enabled!==false?'checked':''}> مفعّل</label></div><div class="card-actions"><button class="btn primary">💾 حفظ الزر</button><button class="btn danger" formaction="/dashboard/${guild.id}/guide/delete">حذف</button></div></form>`).join('')||'<p>لا توجد اختصارات بعد. أضف أول زر من النموذج أعلاه.</p>';
+  const directorRows=directorTemplates.map(item=>`<form class="config-card compact-card director-template-card" method="post" action="/dashboard/${guild.id}/city-director/template/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="director"><input type="hidden" name="templateId" value="${esc(item.id)}"><div class="form-grid"><label>اسم الحدث<input name="name" value="${esc(item.name||'')}"></label><label>Emoji<input name="emoji" value="${esc(item.emoji||'🌆')}"></label><label>الصعوبة<select name="difficulty"><option value="normal" ${item.difficulty==='normal'?'selected':''}>عادي</option><option value="hard" ${item.difficulty==='hard'?'selected':''}>صعب</option><option value="elite" ${item.difficulty==='elite'?'selected':''}>نخبة</option><option value="legendary" ${item.difficulty==='legendary'?'selected':''}>أسطوري</option></select></label><label>مضاعف الهدف<input type="number" step="0.05" min="0.25" max="5" name="goalMultiplier" value="${Number(item.goalMultiplier||1)}"></label><label><input type="checkbox" name="enabled" ${item.enabled!==false?'checked':''}> مفعّل</label><label class="wide">وصف الحدث<textarea name="description">${esc(item.description||'')}</textarea></label></div><div class="card-actions"><button class="btn primary">💾 حفظ الحدث</button><button class="btn danger" formaction="/dashboard/${guild.id}/city-director/template/delete">حذف</button></div></form>`).join('')||'<p>لا توجد قوالب أحداث.</p>';
+  const activeDirector=directorState?.active||cfg.cityDirector?.runtimeState||null;
+  const activeDirectorParticipants=Number(activeDirector?.participantCount??Object.keys(activeDirector?.participants||{}).length);
+  const activeDirectorText=activeDirector?`<div class="warn director-live"><b>🟢 حدث يعمل الآن:</b> ${esc(activeDirector.name||'حدث المدينة')} • التقدم ${Number(activeDirector.progress||0).toLocaleString()}/${Number(activeDirector.goal||0).toLocaleString()} • المشاركون ${activeDirectorParticipants}</div>`:'<div class="tabs-note">⚪ لا يوجد حدث City Director يعمل الآن.</div>';
+  const builtinDirectorEvents=cfg.cityDirector?.useBuiltinEvents===false?[]:builtInEvents();
+  const directorTemplateOptions=[...builtinDirectorEvents,...directorTemplates.filter(x=>x.enabled!==false)].map(x=>`<option value="${esc(x.id)}">${esc((x.emoji||'🌆')+' '+(x.name||x.id)+(x.builtin?' • مدمج':''))}</option>`).join('');
+
+  const evt=eventConfig(cfg),evtState=eventState(eventData);
+  const eventChannelsMax=eventChannelLimit(cfg),eventPlan=PLAN_LABELS[planNameForConfig(cfg)]||'Free';
+  const eventTop=Object.entries(evtState.users||{}).sort((a,b)=>Number(b[1]?.points||0)-Number(a[1]?.points||0)||Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,25);
+  const eventTopRows=eventTop.length?eventTop.map(([uid,u],i)=>`<tr><td>${i+1}</td><td><code>${esc(uid)}</code></td><td><b>${Number(u?.points||0).toLocaleString()}</b></td><td>${Number(u?.added||0).toLocaleString()}</td><td>${Number(u?.removed||0).toLocaleString()}</td><td>${Number(u?.zomAwarded||0).toLocaleString()}</td></tr>`).join(''):'<tr><td colspan="6">لا توجد نقاط مسجلة حتى الآن.</td></tr>';
+  const eventHistoryRows=(evtState.history||[]).slice(0,25).map(h=>`<tr><td>${h.at?esc(new Date(Number(h.at)).toLocaleString('ar-JO')):'-'}</td><td>${esc(h.type||'-')}</td><td><code>${esc(h.actorId||'-')}</code></td><td><code>${esc(h.targetId||'-')}</code></td><td>${Number(h.delta||0)>0?'+':''}${Number(h.delta||0)}</td><td>${Number(h.zom||0).toLocaleString()}</td><td>${esc(h.command||h.note||'')}</td></tr>`).join('')||'<tr><td colspan="7">لا يوجد سجل أيفنت بعد.</td></tr>';
+  const eventActionRows=evt.quickCommands.map(a=>`<form class="config-card event-action-card" method="post" action="/dashboard/${guild.id}/event/actions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input type="hidden" name="actionId" value="${esc(a.id)}"><div class="form-grid"><label>الأمر<input name="command" value="${esc(a.command)}" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="${esc(a.label)}" placeholder="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="${Number(a.points||0)}" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="${Number(a.zom||0)}" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention" ${a.targetMode==='mention'?'selected':''}>لازم منشن عضو</option><option value="self" ${a.targetMode==='self'?'selected':''}>صاحب الأمر نفسه</option><option value="either" ${a.targetMode==='either'?'selected':''}>المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" ${a.enabled!==false?'checked':''}> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="مثال: ✅ تم تسجيل {user} • نقاطه الآن {points}">${esc(a.response||'')}</textarea><small>المتغيرات: {user} {points} {amount} {zom} {command}</small></label></div><div class="card-actions"><button class="btn primary">💾 حفظ الأمر</button><button class="btn danger" formaction="/dashboard/${guild.id}/event/actions/delete" name="actionId" value="${esc(a.id)}" onclick="return confirm('حذف أمر الأيفنت؟')">حذف</button></div></form>`).join('')||'<p>لا توجد أوامر إضافية.</p>';
+
+  const panelCards=[['bank','🏦','لوحة البنك'],['games','🎮','لوحة الألعاب'],['tickets','🎫','لوحة التذاكر'],['store','🛒','لوحة المتجر'],['roles','🔔','لوحة الرتب'],['name','✏️','لوحة تغيير الاسم'],['guide','🧭','دليل السيرفر']].map(([key,emoji,label])=>`<article class="config-card compact-card"><h3>${emoji} ${label}</h3><p>${key==='guide'?'🧭 العنوان والوصف واللون والبنر والأزرار تُدار من قسم دليل السيرفر.':canPanelDesign?'💎 تستطيع تخصيص العنوان والوصف واللون والـLogo والـBanner والـFooter والأزرار/القوائم لهذه اللوحة فقط.':'🔒 تخصيص تصميم هذه اللوحة متاح لـ Premium وPremium+.'}</p><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/send/${key}"><input type="hidden" name="_csrf" value="${token}"><button class="btn">📨 إرسال / تحديث</button></form>${key==='guide'?`<a class="btn primary" href="/dashboard/${guild.id}?section=guide">🧭 إعداد الدليل</a>`:canPanelDesign?`<a class="btn primary" href="/dashboard/${guild.id}/panels/${key}">💎 تخصيص اللوحة</a>`:`<a class="btn" href="/premium">🔒 Premium</a>`}</div></article>`).join('');
+
+  return decorateDashboard(`<section class="dash-head"><div><a href="/dashboard">← السيرفرات</a><h1>${esc(guild.name)}</h1><p><code>${guild.id}</code> • ${planBadge(cfg)} ${owner?'• 👑 Owner':''}</p></div>${iconUrl(guild)?`<img class="guild-icon" src="${iconUrl(guild)}">`:''}</section>
+  <div class="tabs-note">✅ كل إعداد هنا يخص هذا السيرفر فقط. الـOwner يحدد من لوحة Owner ما هو مجاني وما هو Premium.</div>${site.announcement?`<div class="warn">📢 ${esc(site.announcement)}</div>`:''}
+  ${owner&&guild.id===homeId?`<section class="panel legacy-panel"><h2>🧰 إعدادات سيرفر ZOMBI الأصلي</h2><p>هذه الصفحة مرتبطة بنسخة السيرفر القديم. إذا أردت إعادة كل إعدادات النسخة الاحتياطية كما كانت اضغط الزر التالي.</p><form method="post" action="/dashboard/${guild.id}/restore-legacy" onsubmit="return confirm('إرجاع إعدادات النسخة الاحتياطية لسيرفرك فقط؟')"><input type="hidden" name="_csrf" value="${token}"><button class="btn danger">♻️ استرجاع إعدادات سيرفري القديمة</button></form></section>`:''}
+
+  <form class="panel" method="post" action="/dashboard/${guild.id}/settings"><input type="hidden" name="_csrf" value="${token}">
+    <h2>⚙️ الإعدادات العامة والهوية</h2>
+    <div class="form-grid"><label>حالة البوت<input name="presenceText" value="${esc(cfg.system?.presenceText||'ZOM Economy | /help')}"></label><label>Presence<select name="presenceStatus"><option value="online" ${cfg.system?.presenceStatus==='online'?'selected':''}>Online</option><option value="idle" ${cfg.system?.presenceStatus==='idle'?'selected':''}>Idle</option><option value="dnd" ${cfg.system?.presenceStatus==='dnd'?'selected':''}>DND</option><option value="invisible" ${cfg.system?.presenceStatus==='invisible'?'selected':''}>Invisible</option></select></label><label>اسم العملة ${lockedNote(canCurrency)}<input name="currencyName" value="${esc(cfg.currency.name)}" ${disabled(canCurrency)}></label><label>Emoji العملة<input name="currencyEmoji" value="${esc(cfg.currency.emoji)}"></label><label>لون Embed ${lockedNote(canBrand)}<input name="brandColor" value="${esc(cfg.branding.color)}" ${disabled(canBrand)}></label><label>اسم ZOMBI في اللوحات ${lockedNote(canBrand)}<input name="customName" value="${esc(cfg.branding.customName)}" ${disabled(canBrand)}></label><label>Footer مخصص ${lockedNote(canBrand)}<input name="customFooter" value="${esc(cfg.branding.customFooter)}" ${disabled(canBrand)}></label><label>Nickname البوت داخل السيرفر ${lockedNote(canBotProfile,profileLockText)}<input name="botNickname" value="${esc(cfg.branding.botNickname||'')}" ${disabled(canBotProfile)}></label><label class="wide">Logo البوت في لوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">Banner لوحات البوت داخل هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio مخصص للوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<textarea name="botBio" maxlength="190" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label><label class="wide">Logo اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelLogoUrl" value="${esc(cfg.branding.panelLogoUrl||'')}" ${disabled(canBotProfile)}></label><label class="wide">Banner اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelBannerUrl" value="${esc(cfg.branding.panelBannerUrl||'')}" ${disabled(canBotProfile)}></label></div>
+    <div class="warn small">✅ Premium يستطيع تغيير Nickname وصورة البوت وBanner وBio بشكل مختلف داخل كل سيرفر. استخدم رابط HTTPS مباشر للصورة؛ مسح الرابط يعيد البوت للصورة/البنر العام في هذا السيرفر.</div>
+    <h3>📍 تحديد كل الرومات من Dashboard</h3><div class="form-grid"><label>Game Panel<select name="gamePanel">${textChannels(channels,cfg.channels.gamePanel)}</select></label><label>Ticket Panel<select name="ticketPanel">${textChannels(channels,cfg.channels.ticketPanel)}</select></label><label>Ticket Category<select name="ticketCategory">${categories(channels,cfg.channels.ticketCategory)}</select></label><label>Store Panel<select name="storePanel">${textChannels(channels,cfg.channels.storePanel)}</select></label><label>Self Roles Panel<select name="rolePanel">${textChannels(channels,cfg.channels.rolePanel)}</select></label><label>Level Up<select name="levelUp">${textChannels(channels,cfg.channels.levelUp)}</select></label><label>Bank Panel<select name="bankPanel">${textChannels(channels,cfg.channels.bankPanel)}</select></label><label>البنك المركزي / السرقة<select name="centralBank">${textChannels(channels,cfg.channels.centralBank)}</select></label><label>Category العصابات<select name="gangCategory">${categories(channels,cfg.channels.gangCategory)}</select></label><label>Logs العصابات<select name="gangLogs">${textChannels(channels,cfg.channels.gangLogs)}</select></label><label>روم إنشاء Voice<select name="voiceCreate">${voiceChannels(channels,cfg.channels.voiceCreate)}</select></label><label>شات تحكم Voice<select name="voiceControl">${textChannels(channels,cfg.channels.voiceControl)}</select></label><label>Category Voice<select name="voiceCategory">${categories(channels,cfg.channels.voiceCategory)}</select></label><label>لوحة تغيير الاسم<select name="nameChangePanel">${textChannels(channels,cfg.channels.nameChangePanel)}</select></label><label>لوحة دليل السيرفر<select name="serverGuidePanel">${textChannels(channels,cfg.channels.serverGuidePanel)}</select></label><label>روم City Director<select name="cityDirector">${textChannels(channels,cfg.channels.cityDirector)}</select></label><label class="wide">رومات مكافأة الرسائل<select multiple name="messageChannelIds">${multiChannelOptions(channels,cfg.economy.messageChannelIds,[0,5])}</select></label><label class="wide">رومات مكافأة الفويس<select multiple name="voiceChannelIds">${multiChannelOptions(channels,cfg.economy.voiceChannelIds,[2,13])}</select></label></div>
+    <h3>🧩 تشغيل وإيقاف الأنظمة</h3><div class="checks">${featureChecks}</div>
+    <h3>🧭 دليل السيرفر التفاعلي</h3><div class="form-grid"><label><input type="checkbox" name="serverGuideEnabled" ${cfg.serverGuide?.enabled!==false?'checked':''}> تفعيل دليل السيرفر</label><label>لون اللوحة<input name="serverGuideColor" value="${esc(cfg.serverGuide?.color||'#7c3aed')}" placeholder="#7c3aed"></label><label class="wide">العنوان<input name="serverGuideTitle" value="${esc(cfg.serverGuide?.title||'🧭 دليل السيرفر')}"></label><label class="wide">الوصف<textarea name="serverGuideDescription">${esc(cfg.serverGuide?.description||'')}</textarea></label><label>Footer<input name="serverGuideFooter" value="${esc(cfg.serverGuide?.footer||'ZOMBI • SERVER GUIDE')}"></label><label class="wide">Banner URL<input type="url" name="serverGuideBannerUrl" value="${esc(cfg.serverGuide?.bannerUrl||'')}" placeholder="https://..."></label></div>
+    <h3>🌆 ZOMBI City Director — 100 حدث حي</h3>
+    <div class="warn small">🔥 يحتوي النظام على <b>100 حدث مدمج</b> + قوالبك الخاصة. المهمات تنتقل بين الشاتات المفتوحة، والحل يكتب مباشرة داخل الشات بدون أوامر. النجاح يحتاج لاعبين اثنين على الأقل افتراضيًا.</div>
+    <div class="form-grid">
+      <label><input type="checkbox" name="cityDirectorEnabled" ${cfg.cityDirector?.enabled?'checked':''}> تشغيل النظام</label>
+      <label><input type="checkbox" name="cityDirectorAutoEnabled" ${cfg.cityDirector?.autoEnabled?'checked':''}> أحداث تلقائية</label>
+      <label><input type="checkbox" name="cityDirectorUseBuiltinEvents" ${cfg.cityDirector?.useBuiltinEvents!==false?'checked':''}> استخدام الـ100 حدث المدمجة</label>
+      <label><input type="checkbox" name="cityDirectorSpreadAllOpenChannels" ${cfg.cityDirector?.spreadAllOpenChannels!==false?'checked':''}> وزّع المراحل على كل الشاتات المفتوحة</label>
+      <label>بين كل حدث وحدث (دقيقة)<input type="number" name="cityDirectorIntervalMinutes" value="${Number(cfg.cityDirector?.intervalMinutes||120)}" min="5" max="10080"></label>
+      <label>مدة الحدث الدنيا (دقيقة)<input type="number" name="cityDirectorDurationMinutes" value="${Number(cfg.cityDirector?.durationMinutes||10)}" min="1" max="180"></label>
+      <label>أقل عدد مشاركين<input type="number" name="cityDirectorMinParticipants" value="${Number(cfg.cityDirector?.minParticipants||2)}" min="2" max="500"></label>
+      <label>أقصى مشاركين<input type="number" name="cityDirectorMaxParticipants" value="${Number(cfg.cityDirector?.maxParticipants||30)}" min="2" max="500"></label>
+      <label>عدد المراحل إذا لم تستخدم كل الشاتات<input type="number" name="cityDirectorMissionStages" value="${Number(cfg.cityDirector?.missionStages||8)}" min="2" max="100"></label>
+      <label>وقت كل مهمة (ثانية)<input type="number" name="cityDirectorTaskSeconds" value="${Number(cfg.cityDirector?.taskSeconds||45)}" min="15" max="300"></label>
+      <label>نسبة النجاح المطلوبة %<input type="number" name="cityDirectorSuccessPercent" value="${Number(cfg.cityDirector?.successPercent||70)}" min="50" max="100"></label>
+      <label>أقل جائزة<input type="number" name="cityDirectorRewardMin" value="${Number(cfg.cityDirector?.rewardMin||500)}" min="0"></label>
+      <label>أعلى جائزة<input type="number" name="cityDirectorRewardMax" value="${Number(cfg.cityDirector?.rewardMax||1500)}" min="0"></label>
+      <label><input type="checkbox" name="cityDirectorMentionEveryone" ${cfg.cityDirector?.mentionEveryone?'checked':''}> منشن @everyone عند بداية الحدث</label>
+      <label><input type="checkbox" name="cityDirectorPenaltiesEnabled" ${cfg.cityDirector?.penaltiesEnabled!==false?'checked':''}> 23 عقوبة عشوائية عند فشل الحدث</label>
+      <label>خصم ZOM الأساسي<input type="number" name="cityDirectorCashPenaltyAmount" value="${Number(cfg.cityDirector?.cashPenaltyAmount||1000)}" min="0"></label>
+      <label>خصم البنك الأساسي<input type="number" name="cityDirectorBankPenaltyAmount" value="${Number(cfg.cityDirector?.bankPenaltyAmount||1500)}" min="0"></label>
+      <label>مدة منع الكتابة (دقيقة)<input type="number" name="cityDirectorMutePenaltyMinutes" value="${Number(cfg.cityDirector?.mutePenaltyMinutes||120)}" min="5" max="10080"></label>
+      <label>روم منع الكتابة عند وقوع العقوبة<select name="cityDirectorPunishmentChannelId">${textChannels(channels,cfg.cityDirector?.punishmentChannelId||'')}</select></label>
+      <label class="wide">رومات مستثناة من مهمات المدينة<select multiple name="cityDirectorExcludedChannelIds">${multiChannelOptions(channels,cfg.cityDirector?.excludedChannelIds||[],[0,5])}</select><small>اتركها فارغة لاستخدام جميع الشاتات العامة المفتوحة التي يستطيع الأعضاء والبوت الكتابة فيها.</small></label>
+    </div>
+    <div class="tabs-note">🎲 العقوبات العشوائية تشمل: خصم ZOM، خصم البنك، منع كتابة مؤقت، نسب من الرصيد، غرامات مزدوجة، منع من الأحداث، حرمان أو تخفيض الجائزة القادمة، وتأخير/إضعاف المساهمة القادمة.</div>
+    <h3>💰 Economy</h3><div class="form-grid"><label>Daily Reward<input type="number" name="dailyAmount" value="${cfg.economy.dailyAmount}" min="0" max="${maxFor(req,cfg,site,'maxDailyReward')}"></label><label>Daily Cooldown Hours<input type="number" name="dailyCooldownHours" value="${cfg.economy.dailyCooldownHours}" min="1"></label><label>كل كم رسالة<input type="number" name="messageEvery" value="${cfg.economy.messageEvery}" min="1"></label><label>مكافأة الرسائل<input type="number" name="messageReward" value="${cfg.economy.messageReward}" min="0" max="${maxFor(req,cfg,site,'maxMessageReward')}"></label><label>Cooldown الرسائل ثانية<input type="number" name="messageCooldownSeconds" value="${cfg.economy.messageCooldownSeconds}" min="0"></label><label>Cooldown التحويل ثانية<input type="number" name="transferCooldownSeconds" value="${cfg.economy.transferCooldownSeconds}" min="0"></label><label>كل كم دقيقة Voice<input type="number" name="voiceEveryMinutes" value="${cfg.economy.voiceEveryMinutes}" min="1"></label><label>Voice Reward<input type="number" name="voiceReward" value="${cfg.economy.voiceReward}" min="0" max="${maxFor(req,cfg,site,'maxVoiceReward')}"></label></div>
+    <h3>🏦 Bank</h3><div class="form-grid"><div class="wide bank-guide"><strong>البنك الكامل • 7 ألعاب نهب • حماية • كفالة</strong><p>للنهب اكتب <code>نهب @العضو</code>. النجاح ينقل 15% من الكاش، والفشل يسجن اللاعب. من لوحة البنك يستطيع العضو شراء حماية للكاش أو دفع الكفالة.</p></div><label><input type="checkbox" name="heistEnabled" ${cfg.bank?.heistEnabled!==false?'checked':''}> تفعيل ألعاب النهب</label><label>كولداون كل لعبة (ثوانٍ)<input type="number" name="heistGameCooldownSeconds" min="60" max="604800" value="${cfg.bank?.heistGameCooldownSeconds??7200}"></label><label>مدة التحدي (ثوانٍ)<input type="number" name="heistTimeSeconds" min="10" max="120" value="${cfg.bank?.heistTimeSeconds??25}"></label><label>مدة السجن (ساعات)<input type="number" name="heistJailHours" min="1" max="24" value="${cfg.bank?.heistJailHours??2}"></label><label>سعر الكفالة<input type="number" name="heistBailPrice" min="0" value="${cfg.bank?.heistBailPrice??50000}"></label><label>سعر حماية الكاش<input type="number" name="cashProtectionPrice" min="0" value="${cfg.bank?.cashProtectionPrice??25000}"></label><label>مدة الحماية (دقائق)<input type="number" name="cashProtectionMinutes" min="1" value="${cfg.bank?.cashProtectionMinutes??60}"></label><label>كولداون شراء الحماية (دقائق)<input type="number" name="cashProtectionCooldownMinutes" min="1" value="${cfg.bank?.cashProtectionCooldownMinutes??240}"></label><div class="wide"><strong>ألعاب النهب المفعلة لهذا السيرفر</strong><div class="checks heist-checks">${heistGuildRows}</div><p class="hint">Owner يحدد من لوحة Owner الألعاب المتاحة أصلًا لخطة Free وPremium؛ مدير السيرفر يستطيع فقط إيقاف لعبة متاحة له.</p></div><label><input type="checkbox" name="bankDepositEnabled" ${cfg.bank?.depositEnabled!==false?'checked':''}> إيداع</label><label><input type="checkbox" name="bankWithdrawEnabled" ${cfg.bank?.withdrawEnabled!==false?'checked':''}> سحب</label><label>أقصى عملية<input type="number" name="bankMaxTransaction" value="${cfg.bank?.maxTransaction||1}" min="1" max="${maxFor(req,cfg,site,'maxBankTransaction')}"></label><label>عنوان البنك<input name="bankTitle" value="${esc(cfg.bank?.title||'')}"></label><label class="wide">وصف البنك<textarea name="bankDescription">${esc(cfg.bank?.description||'')}</textarea></label><label>قيمة الذهب<input type="number" name="bankGoldValue" value="${cfg.bank?.goldValue||100000}" min="1"></label><label>Cooldown الراتب ساعات<input type="number" name="bankSalaryCooldownHours" value="${cfg.bank?.salaryCooldownHours??4}" min="0"></label><label>أقصى راتب<input type="number" name="bankMaxSalary" value="${cfg.bank?.maxSalary??1000}" min="0"></label><label>ربح التداول %<input type="number" name="bankTradeProfitPercent" value="${cfg.bank?.tradeProfitPercent??15}" min="0"></label><label>جلسة التداول دقائق<input type="number" name="bankTradeSessionMinutes" value="${cfg.bank?.tradeSessionMinutes??5}" min="1"></label><label>أقصى قرض<input type="number" name="bankMaxLoan" value="${cfg.bank?.maxLoan??100000}" min="0"></label><label>فائدة القرض %<input type="number" name="bankLoanInterestPercent" value="${cfg.bank?.loanInterestPercent??10}" min="0"></label><label>راتب موظف شركة بداية<input type="number" name="companyEmployeeStartSalary" value="${cfg.bank?.companyEmployeeStartSalary??4000}" min="0"></label><label>زيادة راتب الموظف<input type="number" name="companyEmployeeSalaryIncrease" value="${cfg.bank?.companyEmployeeSalaryIncrease??500}" min="0"></label><label>ترقية الشركة ساعات<input type="number" name="companyLevelUpHours" value="${cfg.bank?.companyLevelUpHours??24}" min="1"></label><label>راتب المالك بداية<input type="number" name="companyOwnerStartSalary" value="${cfg.bank?.companyOwnerStartSalary??100000}" min="0"></label><label>زيادة راتب المالك<input type="number" name="companyOwnerSalaryIncrease" value="${cfg.bank?.companyOwnerSalaryIncrease??5000}" min="0"></label></div><div class="form-grid"><label class="wide">الوظائف — id | الاسم | الراتب<textarea name="bankJobsText">${esc(bankJobsText)}</textarea></label><label class="wide">الشركات — id | الاسم | الوصف | سعر الذهب<textarea name="bankCompaniesText">${esc(bankCompaniesText)}</textarea></label><label class="wide">الأسهم — SYMBOL | الاسم | السعر<textarea name="bankStocksText">${esc(bankStocksText)}</textarea></label></div>
+    <h3>🏆 Levels</h3><div class="form-grid"><label>XP لكل رسالة<input type="number" name="xpPerMessage" value="${cfg.levels.xpPerMessage}" min="1"></label><label>XP Cooldown<input type="number" name="xpCooldownSeconds" value="${cfg.levels.xpCooldownSeconds}" min="5"></label><label>Base XP<input type="number" name="baseXp" value="${cfg.levels.baseXp}" min="10"></label><label>Growth<input type="number" name="levelGrowth" value="${cfg.levels.growth}" min="0"></label></div>
+    <h3>🏴 العصابات ومهماتها</h3><div class="form-grid"><label>أقصى أعضاء<input type="number" name="gangMaxMembers" value="${cfg.gangs.maxMembers}" min="2" max="${maxFor(req,cfg,site,'gangMembers')}"></label><label>أقصى نواب<input type="number" name="gangMaxDeputies" value="${cfg.gangs.maxDeputies||0}" min="0" max="${maxFor(req,cfg,site,'gangDeputies')}"></label><label>تكلفة إنشاء العصابة<input type="number" name="gangCreateCost" value="${cfg.gangs.createCost||0}" min="0"></label><label>لون رتبة العصابة<input name="gangRoleColor" value="${esc(cfg.gangs.roleColor||'#2b2d31')}"></label><label><input type="checkbox" name="gangBankEnabled" ${cfg.gangs.bankEnabled!==false?'checked':''}> خزنة العصابة</label><label><input type="checkbox" name="gangMissionsEnabled" ${cfg.gangs.missionsEnabled!==false?'checked':''}> المهمات</label><label>أقل مشاركين للمهمة<input type="number" name="gangMinMissionParticipants" value="${cfg.gangs.minMissionParticipants||2}" min="2" max="25"></label><label>أقصى مراحل للمهمة<input type="number" name="gangMaxMissionSteps" value="${cfg.gangs.maxMissionSteps||5}" min="1" max="10"></label><label>محاولات اللغز<input type="number" name="gangPuzzleMaxAttempts" value="${cfg.gangs.puzzleMaxAttempts||2}" min="1"></label><label>محاولات الشات<input type="number" name="gangChatMaxAttempts" value="${cfg.gangs.chatMaxAttempts||2}" min="1"></label><label>محاولات Relay<input type="number" name="gangRelayMaxAttempts" value="${cfg.gangs.relayMaxAttempts||2}" min="1"></label><label>Cooldown المهمة بالدقائق<input type="number" name="gangMissionCooldownMinutes" value="${cfg.gangs.missionCooldownMinutes||240}" min="1"></label><label>مدة المهمة بالدقائق<input type="number" name="gangMissionDurationMinutes" value="${cfg.gangs.missionDurationMinutes||30}" min="5"></label><label>أقل مكافأة<input type="number" name="gangMissionRewardMin" value="${cfg.gangs.missionRewardMin||0}" min="0"></label><label>أعلى مكافأة<input type="number" name="gangMissionRewardMax" value="${cfg.gangs.missionRewardMax||0}" min="0"></label><label>مدة مرحلة Voice بالثواني<input type="number" name="gangMissionVoiceSeconds" value="${cfg.gangs.missionVoiceSeconds||60}" min="10"></label></div>
+    <h3>🚨 سرقة البنك المركزي</h3><div class="form-grid"><label><input type="checkbox" name="robberyEnabled" ${cfg.robbery?.enabled===true?'checked':''}> السرقة متاحة الآن</label><label>عدد المشاركين المطلوب<input type="number" name="robberyMinParticipants" value="${cfg.robbery?.minParticipants||5}" min="2" max="${maxFor(req,cfg,site,'robberyParticipants')}"></label><label>مدة التجمع دقيقة<input type="number" name="robberyLobbyMinutes" value="${cfg.robbery?.lobbyMinutes||10}" min="2"></label><label>مدة المهمات دقيقة<input type="number" name="robberyMissionMinutes" value="${cfg.robbery?.missionMinutes||25}" min="5"></label><label>المكافأة لخزنة العصابة<input type="number" name="robberyReward" value="${cfg.robbery?.reward||50000}" min="1"></label><label>Cooldown ساعات<input type="number" name="robberyCooldownHours" value="${cfg.robbery?.cooldownHours||12}" min="0"></label><label>قناع<input type="number" name="robberyMask" value="${cfg.robbery?.equipment?.mask||0}" min="0"></label><label>جهاز اختراق<input type="number" name="robberyHacking" value="${cfg.robbery?.equipment?.hacking||0}" min="0"></label><label>مثقاب<input type="number" name="robberyDrill" value="${cfg.robbery?.equipment?.drill||0}" min="0"></label><label>جهاز اتصال<input type="number" name="robberyRadio" value="${cfg.robbery?.equipment?.radio||0}" min="0"></label><label>سيارة هروب<input type="number" name="robberyCar" value="${cfg.robbery?.equipment?.car||0}" min="0"></label></div>
+    <h3>🔊 الرومات الصوتية المؤقتة</h3><div class="form-grid"><label><input type="checkbox" name="voiceRoomsEnabled" ${cfg.voiceRooms?.enabled===true?'checked':''}> تشغيل النظام</label><label>اسم الروم<input name="voiceRoomName" value="${esc(cfg.voiceRooms?.roomName||'🎙️・{username}')}"></label><label>User Limit<input type="number" name="voiceUserLimit" value="${cfg.voiceRooms?.userLimit||0}" min="0" max="99"></label><label>Bitrate<input type="number" name="voiceBitrate" value="${cfg.voiceRooms?.bitrate||64000}" min="8000" max="384000"></label></div>
+    <h3>📋 مركز لوقات ZOMBI — روم منفصل لكل نظام</h3>
+    <input type="hidden" name="loggingPresent" value="1">
+    <div class="checks"><label><input type="checkbox" name="modLogActions" ${cfg.moderation?.logActions!==false?'checked':''}> ✅ تفعيل نظام اللوقات</label>${Object.entries({audit:'إجراءات الإدارة والرومات والرتب',messages:'حذف وتعديل الرسائل',members:'دخول وخروج وتغييرات الأعضاء',voice:'الفويس والكتم والكاميرا',games:'الألعاب',commands:'أوامر السلاش',actions:'إجراءات عامة للبوت'}).map(([k,label])=>`<label><input type="checkbox" name="log_${k}" ${cfg.logging?.[k]!==false?'checked':''}> ${label}</label>`).join('')}</div>
+    <div class="warn small">💡 تقدر تختار <b>شات مختلف لكل نظام</b>. إذا تركت أي خانة فارغة، اللوق يرجع تلقائيًا إلى <b>Logs العام</b>. وإذا تركت Logs العام فارغًا والنظام له روم مخصص، يظل اللوق المخصص يعمل.</div>
+    <div class="form-grid log-channel-grid">
+      <label>📚 Logs العام / احتياطي<select name="logs">${textChannels(channels,cfg.channels.logs)}</select></label>
+      <label>🏦 لوق البنك<select name="logBank">${textChannels(channels,cfg.channels.logBank)}</select></label>
+      <label>💰 لوق ZOM / Economy<select name="logEconomy">${textChannels(channels,cfg.channels.logEconomy)}</select></label>
+      <label>🏴 لوق العصابات<select name="logGangs">${textChannels(channels,cfg.channels.logGangs||cfg.channels.gangLogs)}</select></label>
+      <label>🚨 لوق سرقة البنك / النهب<select name="logRobbery">${textChannels(channels,cfg.channels.logRobbery)}</select></label>
+      <label>🎫 لوق التذاكر<select name="logTickets">${textChannels(channels,cfg.channels.logTickets)}</select></label>
+      <label>🛒 لوق المتجر<select name="logStore">${textChannels(channels,cfg.channels.logStore)}</select></label>
+      <label>⚠️ لوق التحذيرات<select name="logWarnings">${textChannels(channels,cfg.channels.logWarnings)}</select></label>
+      <label>🎮 لوق الألعاب<select name="logGames">${textChannels(channels,cfg.channels.logGames)}</select></label>
+      <label>🏆 لوق Levels / XP<select name="logLevels">${textChannels(channels,cfg.channels.logLevels)}</select></label>
+      <label>🔊 لوق Voice<select name="logVoice">${textChannels(channels,cfg.channels.logVoice)}</select></label>
+      <label>🎵 لوق الموسيقى<select name="logMusic">${textChannels(channels,cfg.channels.logMusic)}</select></label>
+      <label>🛡️ لوق الإدارة / Moderation<select name="logModeration">${textChannels(channels,cfg.channels.logModeration)}</select></label>
+      <label>🗑️ لوق الرسائل<select name="logMessages">${textChannels(channels,cfg.channels.logMessages)}</select></label>
+      <label>👥 لوق الأعضاء<select name="logMembers">${textChannels(channels,cfg.channels.logMembers)}</select></label>
+      <label>⌨️ لوق الأوامر<select name="logCommands">${textChannels(channels,cfg.channels.logCommands)}</select></label>
+      <label>🖼️ لوق إرسال/تحديث اللوحات<select name="logPanels">${textChannels(channels,cfg.channels.logPanels)}</select></label>
+      <label>🔔 لوق Self Roles<select name="logRoles">${textChannels(channels,cfg.channels.logRoles)}</select></label>
+      <label>🪪 لوق تغيير الاسم<select name="logNameChange">${textChannels(channels,cfg.channels.logNameChange)}</select></label>
+      <label>💎 لوق Premium<select name="logPremium">${textChannels(channels,cfg.channels.logPremium)}</select></label>
+      <label>🎉 لوق الأيفنت<select name="logEvent">${textChannels(channels,cfg.channels.logEvent)}</select></label>
+      <label>⚙️ لوق النظام / أخطاء<select name="logSystem">${textChannels(channels,cfg.channels.logSystem)}</select></label>
+    </div>
+    <p class="hint">البوت يحتاج في كل روم لوق: View Channel + Send Messages + Embed Links. لوق الإدارة الكامل يستفيد أيضًا من View Audit Log.</p>
+    <h3>🛡️ Moderation</h3><div class="checks"><label><input type="checkbox" name="modClearEnabled" ${cfg.moderation?.clearEnabled!==false?'checked':''}> Clear</label><label><input type="checkbox" name="modKickEnabled" ${cfg.moderation?.kickEnabled!==false?'checked':''}> Kick</label><label><input type="checkbox" name="modBanEnabled" ${cfg.moderation?.banEnabled!==false?'checked':''}> Ban</label><label><input type="checkbox" name="modLockEnabled" ${cfg.moderation?.lockEnabled!==false?'checked':''}> Lock</label></div><h3>⚠️ التحذيرات</h3><p class="hint">التحذيرات داخل الروم المحدد فقط، وإتاحتها حسب إعدادات الأونر: <code>/warn</code>، <code>/warnings</code>، <code>/unwarn</code> أو <code>تحذير @العضو السبب</code>. أضف مستويات التحذير واكتب ID رتبة كل مستوى لتطبيقها تلقائيًا.</p><div class="form-grid"><label>روم التحذيرات<select name="warningChannelId" ${disabled(featureAllowed(site,cfg,'warnings'))}>${textChannels(channels,cfg.warnings?.channelId)}</select><small>كل أوامر التحذيرات تعمل في هذا الروم فقط. إتاحة النظام يحددها الأونر لكل خطة.</small></label><label class="wide">مستويات التحذيرات — ID الرتبة لكل مستوى</label><div class="wide" id="warning-levels">${(Array.isArray(cfg.warnings?.roleIds)?cfg.warnings.roleIds:[cfg.warnings?.role1Id||'',cfg.warnings?.role2Id||'',cfg.warnings?.role3Id||'']).map((id,n)=>`<div class="form-grid warning-level-row"><label>التحذير ${n+1} — ID الرتبة<input name="warningRoleIds" value="${esc(id||'')}" inputmode="numeric" pattern="[0-9]{15,25}" placeholder="ID الرتبة" ${disabled(featureAllowed(site,cfg,'warnings'))}></label><button type="button" class="btn warning-remove-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>حذف المستوى</button></div>`).join('')}</div><button type="button" class="btn" id="warning-add-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>＋ إضافة مستوى تحذير</button><p class="hint">الترتيب يحدد التحذير الأول والثاني وما بعدهما. لا يوجد حد ثابت لعدد المستويات. حقل فارغ يعني عدم تعيين رتبة لهذا المستوى؛ بعد آخر مستوى تُستخدم رتبته. لنسخ ID فعّل Developer Mode في ديسكورد ثم اضغط على الرتبة بالزر الأيمن واختر Copy Role ID.</p></div>
+    <h3>🎡 عجلة الحظ / الروليت / الكراسي</h3><div class="form-grid"><label class="wide">جوائز عجلة الحظ — افصل بفاصلة<input name="wheelRewards" value="${esc((cfg.games.wheelRewards||[]).join(', '))}"></label><label><input type="checkbox" name="rouletteEnabled" ${cfg.games.rouletteEnabled!==false?'checked':''}> تشغيل الروليت</label><label>وقت دور الروليت ثانية<input type="number" name="rouletteTurnSeconds" value="${cfg.games.rouletteTurnSeconds||25}" min="10" max="120"></label><label>Revive<input type="number" name="rouletteCostRevive" value="${cfg.games.rouletteActionCosts?.revive||0}" min="0"></label><label>Link<input type="number" name="rouletteCostLink" value="${cfg.games.rouletteActionCosts?.link||0}" min="0"></label><label>Protect<input type="number" name="rouletteCostProtect" value="${cfg.games.rouletteActionCosts?.protect||0}" min="0"></label><label>Freeze<input type="number" name="rouletteCostFreeze" value="${cfg.games.rouletteActionCosts?.freeze||0}" min="0"></label><label>Double<input type="number" name="rouletteCostDouble" value="${cfg.games.rouletteActionCosts?.double||0}" min="0"></label><label>Curse<input type="number" name="rouletteCostCurse" value="${cfg.games.rouletteActionCosts?.curse||0}" min="0"></label><label>Unlink<input type="number" name="rouletteCostUnlink" value="${cfg.games.rouletteActionCosts?.unlink||0}" min="0"></label><label>Add<input type="number" name="rouletteCostAdd" value="${cfg.games.rouletteActionCosts?.add||0}" min="0"></label><label>عداد بدء الكراسي<input type="number" name="chairsStartCountdownSeconds" value="${cfg.games.chairs?.startCountdownSeconds||5}" min="1" max="60"></label><label>فاصل الجولات ms<input type="number" name="chairsBetweenRoundsMs" value="${cfg.games.chairs?.betweenRoundsMs||2500}" min="250"></label></div>
+    <h3>🎮 الألعاب</h3>${lockedNote(canGameSettings,'تعديل إعدادات الألعاب غير متاح في خطتك.')}<div class="z-game-command-guide"><b>⌨️ طريقة تشغيل الألعاب من الشات</b><p>اكتب <code>#</code> ثم اسم اللعبة: <code>#اسئلة</code> <code>#تخمين</code> <code>#سرعة</code> <code>#ترتيب</code> <code>#صح-خطأ</code> <code>#حساب</code> <code>#الاقرب</code> <code>#كلمة</code> <code>#عجلة</code> <code>#يومي</code> <code>#مافيا</code> <code>#روليت</code> <code>#كراسي</code> <code>#من-القاتل</code>.</p><small>إذا تجاوزت قيمة الحد الذي حدده Owner لخطتك، لن يتم الحفظ وستظهر رسالة ترقية الاشتراك.</small></div><div class="form-grid"><label class="wide">الرتب المسموح لها ببدء الألعاب<select multiple name="gameStartRoleIds">${roleOptions(roles,guild.id,cfg.games?.startRoleIds)}</select><small class="hint">الأدمن وManage Server مسموح لهم دائمًا. إذا لم تختَر رتبة إضافية، تبقى الألعاب للإدارة فقط.</small></label></div><div class="table-wrap game-table"><table><thead><tr><th>اللعبة</th><th>تشغيل</th><th>الجولات</th><th>الوقت</th><th>الجائزة</th></tr></thead><tbody>${gameRows}</tbody></table></div><div class="form-grid"><label>Roulette Min<input type="number" name="rouletteMinPlayers" value="${cfg.games.lobby?.roulette?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Roulette Max<input type="number" name="rouletteMaxPlayers" value="${cfg.games.lobby?.roulette?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Chairs Min<input type="number" name="chairsMinPlayers" value="${cfg.games.lobby?.chairs?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Chairs Max<input type="number" name="chairsMaxPlayers" value="${cfg.games.lobby?.chairs?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Mafia Min<input type="number" name="mafiaMinPlayers" value="${cfg.games.lobby?.mafia?.minPlayers||4}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label><label>Mafia Max<input type="number" name="mafiaMaxPlayers" value="${cfg.games.lobby?.mafia?.maxPlayers||20}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label></div>
+    <h3>✏️ تغيير الاسم</h3><div class="form-grid"><label><input type="checkbox" name="nameChangeEnabled" ${cfg.nameChange?.enabled===true?'checked':''}> تشغيل النظام</label><label>عنوان اللوحة<input name="nameChangeTitle" value="${esc(cfg.nameChange?.title||'')}"></label><label>اسم الزر<input name="nameChangeButtonLabel" value="${esc(cfg.nameChange?.buttonLabel||'تغيير اسمي')}"></label><label>Emoji<input name="nameChangeButtonEmoji" value="${esc(cfg.nameChange?.buttonEmoji||'✏️')}"></label><label>عنوان Modal<input name="nameChangeModalTitle" value="${esc(cfg.nameChange?.modalTitle||'')}"></label><label>اسم الحقل<input name="nameChangeInputLabel" value="${esc(cfg.nameChange?.inputLabel||'')}"></label><label>Placeholder<input name="nameChangeInputPlaceholder" value="${esc(cfg.nameChange?.inputPlaceholder||'')}"></label><label>Cooldown ثانية<input type="number" name="nameChangeCooldownSeconds" value="${cfg.nameChange?.cooldownSeconds||30}" min="0"></label><label>لون<input name="nameChangeColor" value="${esc(cfg.nameChange?.color||'#8B5CF6')}"></label><label class="wide">الوصف<textarea name="nameChangeDescription">${esc(cfg.nameChange?.description||'')}</textarea></label><label class="wide">رسالة النجاح<textarea name="nameChangeSuccessMessage">${esc(cfg.nameChange?.successMessage||'')}</textarea></label><label class="wide">Banner<input name="nameChangeBannerUrl" value="${esc(cfg.nameChange?.bannerUrl||'')}"></label></div>
+    <h3>🎫 شكل التذاكر</h3><div class="form-grid"><label>العنوان<input name="ticketTitle" value="${esc(cfg.tickets.title)}"></label><label>اسم زر الفتح<input name="ticketButtonLabel" value="${esc(cfg.tickets.buttonLabel)}"></label><label>Emoji<input name="ticketButtonEmoji" value="${esc(cfg.tickets.buttonEmoji)}"></label><label class="wide">الوصف<textarea name="ticketDescription">${esc(cfg.tickets.description)}</textarea></label><label class="wide">رتب الدعم العامة<select multiple name="supportRoleIds">${roleOptions(roles,guild.id,cfg.tickets.supportRoleIds)}</select></label></div>
+    <h3>🛒 شكل متجر الرتب — مثل النظام القديم</h3><div class="form-grid"><label>العنوان<input name="storeTitle" value="${esc(cfg.store.title)}"></label><label>Footer<input name="storeFooter" value="${esc(cfg.store.footer||'ZOMBI • ZOM Store')}"></label><label>لون Embed<input name="storeAccentColor" value="${esc(cfg.store.accentColor||cfg.branding.color)}"></label><label class="wide">الوصف<textarea name="storeDescription">${esc(cfg.store.description)}</textarea></label><label class="wide">Logo / Thumbnail<input name="storeThumbnailUrl" value="${esc(cfg.store.thumbnailUrl||'')}"></label><label class="wide">Banner اللوحة<input name="storeBannerUrl" value="${esc(cfg.store.bannerUrl||'')}"></label><label class="wide">Banner تفاصيل الرتبة الافتراضي<input name="storeDetailBannerUrl" value="${esc(cfg.store.detailBannerUrl||'')}"></label></div>
+    <h3>🔔 Self Roles</h3><div class="form-grid"><label>العنوان<input name="rolePanelTitle" value="${esc(cfg.rolePanel.title)}"></label><label>Footer<input name="rolePanelFooter" value="${esc(cfg.rolePanel.footer||'ZOMBI • ROLE CENTER')}"></label><label class="wide">الوصف<textarea name="rolePanelDescription">${esc(cfg.rolePanel.description)}</textarea></label></div>
+    <h3>⚡ الرتبة التلقائية</h3><div class="form-grid"><label><input type="checkbox" name="autoRoleEnabled" ${cfg.autoRole?.enabled?'checked':''}> تفعيل إعطاء رتبة تلقائيًا عند دخول عضو جديد</label><label>الرتبة التلقائية<select name="autoRoleRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,cfg.autoRole?.roleId?[cfg.autoRole.roleId]:[])}</select></label><label><input type="checkbox" name="autoRoleIncludeBots" ${cfg.autoRole?.includeBots?'checked':''}> إعطاء الرتبة للبوتات أيضًا</label><div class="wide hint">يجب أن تكون رتبة ZOMBI BOT أعلى من الرتبة المختارة وأن يملك البوت صلاحية Manage Roles.</div></div>
+    <div class="card-actions"><button class="btn primary" type="submit">💾 حفظ جميع إعدادات البوت</button><button class="btn" type="submit" name="forceBotProfile" value="1" ${canBotProfile?'':'disabled'}>🔄 حفظ وإعادة تطبيق بروفايل البوت${canBotProfile?'':' 🔒 Premium'}</button></div>
+  </form>
+
+  <section class="panel command-sync"><h2>⚡ Discord Panels & Commands</h2><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/sync-commands"><input type="hidden" name="_csrf" value="${token}"><button class="btn primary">🔄 مزامنة أوامر السيرفر</button></form></div><h3>💎 تخصيص كل لوحة بشكل مستقل</h3><p class="hint">${canPanelDesign?'اشتراكك يسمح بالتخصيص. افتح أي لوحة وعدّل شكلها ثم أرسل/حدّث اللوحة.':'الخيار مقفول على Free. بعد تفعيل Premium أو Premium+ تستطيع تخصيص كل لوحة.'}</p><div class="stack">${panelCards}</div></section>
+
+  <section class="panel"><h2>🧠 محتوى الألعاب <small>${questionLimit} لكل نوع</small></h2>${lockedNote(canQuestions)}<form method="post" action="/dashboard/${guild.id}/questions"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label class="wide">Quiz — سؤال | جواب<textarea name="quizText" ${disabled(canQuestions)}>${esc(qaText(content.quizQuestions))}</textarea></label><label class="wide">True/False<textarea name="trueFalseText" ${disabled(canQuestions)}>${esc(qaText(content.trueFalseQuestions))}</textarea></label><label class="wide">Word — الحروف | الجواب<textarea name="wordText" ${disabled(canQuestions)}>${esc(wordsText(content.wordQuestions))}</textarea></label><label class="wide">Speed — كلمة بكل سطر<textarea name="speedText" ${disabled(canQuestions)}>${esc((content.speedWords||[]).join('\n'))}</textarea></label><label class="wide">Daily — سؤال | جواب<textarea name="dailyText" ${disabled(canQuestions)}>${esc(qaText(content.dailyQuestions))}</textarea></label></div><button class="btn primary" ${disabled(canQuestions)}>حفظ المحتوى</button></form></section>
+
+  <section class="panel"><h2>🔪 من القاتل <small>${richKillers.length}/${killerLimit}</small></h2>${lockedNote(canQuestions)}<form class="config-card" method="post" action="/dashboard/${guild.id}/killer/add"><input type="hidden" name="_csrf" value="${token}"><h3>+ إضافة قضية</h3><div class="form-grid"><label>العنوان<input name="title" required></label><label>القاتل<input name="killer" required></label><label class="wide">القصة<textarea name="story" required></textarea></label><label>المشتبه بهم — سطر لكل اسم<textarea name="suspects" required></textarea></label><label>الأدلة<textarea name="clues" required></textarea></label><label>3 تلميحات<textarea name="hints" required></textarea></label><label class="wide">شرح الحل<textarea name="answer" required></textarea></label><label><input type="checkbox" name="enabled" checked> مفعلة</label></div><button class="btn">إضافة</button></form><div class="stack">${killerRows}</div></section>
+
+  <section class="panel"><h2>🏴 قوالب مهمات العصابات <small>${Array.isArray(missionTemplates)?missionTemplates.length:0}/${missionLimit}</small></h2><form class="config-card" method="post" action="/dashboard/${guild.id}/gang-missions/add"><input type="hidden" name="_csrf" value="${token}"><h3>+ إضافة مهمة</h3><div class="form-grid"><label>الاسم<input name="name" required></label><label>الصعوبة<select name="difficulty"><option value="hard">صعبة</option><option value="elite">نخبة</option><option value="legendary">أسطورية</option></select></label><label>أقل مشاركين<input type="number" name="minParticipants" value="2" min="2"></label><label><input type="checkbox" name="enabled" checked> مفعلة</label><label class="wide">الوصف<textarea name="description"></textarea></label><label class="wide">المراحل — سطر لكل مرحلة<textarea name="steps" required></textarea></label></div><button class="btn">إضافة</button></form><div class="stack">${missionRows}</div></section>
+
+  <section class="panel"><h2>🏴 العصابات الحالية</h2><div class="table-wrap"><table><thead><tr><th>العصابة</th><th>القائد</th><th>الأعضاء</th><th>النواب</th><th>الخزنة</th><th>المهمات</th><th>تحكم</th></tr></thead><tbody>${gangRows}</tbody></table></div></section>
+
+  <section class="panel"><h2>🎫 أنواع التذاكر <small>${ticketTypes.length}/${ticketLimit}</small></h2><form class="config-card" method="post" action="/dashboard/${guild.id}/tickets/type/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>الاسم<input name="label" required></label><label>Emoji<input name="emoji" value="🎫"></label><label>Category<select name="categoryId">${categories(channels,cfg.channels.ticketCategory)}</select></label><label>Max Open<input type="number" name="maxOpenPerUser" value="1" min="1" max="10"></label><label class="wide">الوصف<textarea name="description"></textarea></label><label class="wide">رسالة الترحيب<textarea name="welcomeMessage"></textarea></label><label>رتب تستطيع الفتح<select multiple name="openRoleIds">${roleOptions(roles,guild.id)}</select></label><label>رتب الدعم<select multiple name="supportRoleIds">${roleOptions(roles,guild.id)}</select></label><label><input type="checkbox" name="enabled" checked> مفعلة</label></div><button class="btn">إضافة نوع</button></form><div class="stack">${ticketRows}</div></section>
+
+  <section class="panel"><h2>🛒 متجر الرتب القديم المطوّر <small>${products.length}/${storeLimit}</small></h2><p>القسم + السعر + المميزات + الصورة + Banner + رتب خاصة/إدارة، مثل نظام متجرك القديم.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/store/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>Role<select name="roleId" required><option value="">اختر رتبة</option>${roleOptions(roles,guild.id)}</select></label><label>الاسم<input name="name"></label><label>السعر<input type="number" name="price" min="1" required></label><label>القسم<input name="category" value="رتب الأعضاء"></label><label>Emoji<input name="emoji" value="🏷️"></label><label>الترتيب<input type="number" name="sortOrder" value="10"></label><label>الوصول<select name="accessMode"><option value="everyone">للجميع</option><option value="admins">الإدارة فقط</option><option value="roles">رتب محددة</option></select></label><label>الرتب المسموحة<select multiple name="allowedRoleIds">${roleOptions(roles,guild.id)}</select></label><label class="wide">الوصف<textarea name="description"></textarea></label><label class="wide">المميزات — سطر لكل ميزة<textarea name="features"></textarea></label><label class="wide">رابط الصورة<input name="imageUrl"></label><label class="wide">رابط Banner<input name="bannerUrl"></label><label><input type="checkbox" name="enabled" checked> مفعلة</label></div><button class="btn primary">إضافة رتبة</button></form><div class="stack">${productRows}</div></section>
+
+  <section class="panel"><h2>🔔 Self Roles <small>${items.length}/${roleLimit}</small></h2><form class="config-card" method="post" action="/dashboard/${guild.id}/roles/add"><input type="hidden" name="_csrf" value="${token}"><div class="form-grid"><label>الرتبة<select name="roleId" required><option value="">اختر رتبة</option>${roleOptions(roles,guild.id)}</select></label><label>اسم الزر<input name="label"></label><label>Emoji<input name="emoji" value="🔔"></label><label>اللون<select name="style"><option>Primary</option><option>Secondary</option><option>Success</option><option>Danger</option></select></label></div><button class="btn">إضافة</button></form><div class="stack">${roleRows}</div></section>
+
+  <section class="panel server-guide-panel"><h2>🧭 أزرار دليل السيرفر <small>${guideItems.length}/${guideLimit}</small></h2><p>اعمل لوحة اختصارات احترافية؛ كل زر ينقل العضو مباشرة للروم الذي تحدده.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/guide/add"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="guide"><div class="form-grid"><label>اسم الزر<input name="label" placeholder="القوانين" required></label><label>Emoji<input name="emoji" value="➡️"></label><label>الروم<select name="channelId" required><option value="">اختر روم</option>${textChannels(channels,'')}</select></label><label>الترتيب<input type="number" name="sortOrder" value="10" min="0" max="9999"></label><label><input type="checkbox" name="enabled" checked> مفعّل</label></div><button class="btn primary">➕ إضافة اختصار</button></form><div class="stack">${guideRows}</div></section>
+
+  <section class="panel city-director-panel"><h2>🌆 City Director • 100 حدث مدمج <small>+ ${directorTemplates.length}/${directorTemplateLimit} مخصص</small></h2><p>اختر من 100 حدث جاهز قوي أو أضف أحداثك الخاصة. كل حدث يوزع مهمات نصية حيّة بين الشاتات المفتوحة.</p>${activeDirectorText}<div class="director-actions"><form method="post" action="/dashboard/${guild.id}/city-director/start"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="director"><select name="templateId"><option value="">🎲 حدث عشوائي</option>${directorTemplateOptions}</select><button class="btn primary">🚨 تشغيل حدث الآن</button></form><form method="post" action="/dashboard/${guild.id}/city-director/stop"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="director"><button class="btn danger">🛑 إيقاف الحدث الحالي</button></form></div><form class="config-card" method="post" action="/dashboard/${guild.id}/city-director/template/add"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="director"><div class="form-grid"><label>اسم الحدث<input name="name" required></label><label>Emoji<input name="emoji" value="🌆"></label><label>الصعوبة<select name="difficulty"><option value="normal">عادي</option><option value="hard">صعب</option><option value="elite">نخبة</option><option value="legendary">أسطوري</option></select></label><label>مضاعف الهدف<input type="number" step="0.05" min="0.25" max="5" name="goalMultiplier" value="1"></label><label><input type="checkbox" name="enabled" checked> مفعّل</label><label class="wide">الوصف<textarea name="description" required></textarea></label></div><button class="btn primary">➕ إضافة حدث</button></form><div class="stack">${directorRows}</div></section>
+
+  <section class="panel event-system-panel"><h2>🎉 Event / ايفنت</h2><p>نظام نقاط فعاليات يدعم أكثر من شات حسب الخطة، مع رتب محددة. الترتيب يظهر من الأعلى للأقل، وتقدر تضيف أوامر مثل <code>-انشاء</code> وتحدد لكل أمر نقاط وZOM من الداشبورد.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/event/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid">
+      <label><input type="checkbox" name="enabled" ${evt.enabled?'checked':''}> تفعيل نظام الأيفنت</label>
+      <label class="wide event-channels-field">شاتات الأيفنت <span class="event-plan-limit">${esc(eventPlan)} • الحد ${eventChannelsMax}</span><select multiple size="7" name="eventChannelIds" data-event-channel-select data-max="${eventChannelsMax}">${textChannelMultiOptions(channels,evt.channelIds)}</select><small>اختار أكثر من شات باستخدام Ctrl/⌘. الأوامر لن تعمل خارج الشاتات المحددة. <b data-event-channel-count>${Math.min(evt.channelIds.length,eventChannelsMax)}</b>/${eventChannelsMax} محدد.</small></label>
+      <label>لوق الأيفنت<select name="logEvent">${textChannels(channels,cfg.channels.logEvent||'')}</select></label>
+      <label>اسم النقطة<input name="pointLabel" value="${esc(evt.pointLabel)}" placeholder="نقطة"></label>
+      <label>أمر عرض الترتيب<input name="leaderboardCommand" value="${esc(evt.leaderboardCommand)}" placeholder="نقاط"></label>
+      <label>أمر الترسيت<input name="resetCommand" value="${esc(evt.resetCommand)}" placeholder="ترسيت"></label>
+      <label>عدد الأشخاص بالترتيب<input type="number" name="leaderboardLimit" value="${evt.leaderboardLimit}" min="3" max="25"></label>
+      <label><input type="checkbox" name="publicLeaderboard" ${evt.publicLeaderboard?'checked':''}> أي عضو يقدر يكتب «${esc(evt.leaderboardCommand)}»</label>
+      <label><input type="checkbox" name="directPointsEnabled" ${evt.directPointsEnabled?'checked':''}> تفعيل إضافة/خصم النقاط بصيغة 1+ و1-</label>
+      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
+    </div><button class="btn primary">💾 حفظ إعدادات الأيفنت</button></form>
+
+    <div class="event-help-grid">
+      <article class="config-card compact-card"><h3>➕ إضافة نقاط</h3><code>1+ @العضو نقاط</code><p>يضيف نقطة. تقدر تغيّر الرقم لأي كمية.</p></article>
+      <article class="config-card compact-card"><h3>➖ خصم نقاط</h3><code>1- @العضو نقاط</code><p>يخصم نقطة من الشخص.</p></article>
+      <article class="config-card compact-card"><h3>🏆 الترتيب</h3><code>${esc(evt.leaderboardCommand)}</code><p>يعرض النقاط من الأعلى إلى الأقل. ومع منشن يعرض نقاط عضو واحد.</p></article>
+      <article class="config-card compact-card"><h3>♻️ الترسيت</h3><code>${esc(evt.resetCommand)}</code><p>يصفّر الكل ويبدأ موسم جديد. ومع منشن يصفّر شخصًا واحدًا.</p></article>
+    </div>
+
+    <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شاتات الأيفنت المحددة وللرتب المحددة.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/event/actions/add"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><div class="form-grid"><label>الأمر<input name="command" value="-انشاء" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="1" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="0" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention">لازم منشن عضو</option><option value="self">صاحب الأمر نفسه</option><option value="either">المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" checked> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="✅ تم تسجيل {user} • نقاطه الآن {points}"></textarea></label></div><button class="btn">➕ إضافة أمر</button></form>
+    <div class="stack">${eventActionRows}</div>
+
+    <h3>🧾 تعديل نقاط عضو من الداشبورد</h3><form class="inline-form event-member-form" method="post" action="/dashboard/${guild.id}/event/member"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input name="userId" placeholder="User ID" required><select name="action"><option value="add">إضافة</option><option value="remove">خصم</option><option value="set">تعيين</option><option value="reset">تصفير الشخص</option></select><input type="number" name="amount" value="1" min="0" max="1000000000"><button class="btn">تنفيذ</button></form>
+    <form method="post" action="/dashboard/${guild.id}/event/reset" onsubmit="return confirm('تصفير جميع نقاط الأيفنت وبدء موسم جديد؟')"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><button class="btn danger">♻️ ترسيت جميع النقاط</button></form>
+
+    <h3>🏆 الترتيب الحالي — الموسم ${evtState.season}</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>User ID</th><th>النقاط</th><th>المضاف</th><th>المخصوم</th><th>ZOM من الأيفنت</th></tr></thead><tbody>${eventTopRows}</tbody></table></div>
+    <h3>📜 آخر عمليات الأيفنت</h3><div class="table-wrap"><table><thead><tr><th>الوقت</th><th>النوع</th><th>المنفّذ</th><th>المستهدف</th><th>النقاط</th><th>ZOM</th><th>الأمر</th></tr></thead><tbody>${eventHistoryRows}</tbody></table></div>
+  </section>
+
+  <section class="panel"><h2>🧾 إدارة أرصدة الأعضاء ${lockedNote(canEconomyAdmin)}</h2><form class="inline-form" method="post" action="/dashboard/${guild.id}/economy/user"><input type="hidden" name="_csrf" value="${token}"><input name="userId" placeholder="User ID" required ${disabled(canEconomyAdmin)}><select name="account" ${disabled(canEconomyAdmin)}><option value="wallet">المحفظة</option><option value="bank">البنك</option></select><select name="action" ${disabled(canEconomyAdmin)}><option value="set">تعيين</option><option value="add">إضافة</option><option value="remove">خصم</option></select><input type="number" name="amount" min="0" required ${disabled(canEconomyAdmin)}><button class="btn" ${disabled(canEconomyAdmin)}>تنفيذ</button></form><div class="table-wrap"><table><thead><tr><th>User ID</th><th>المحفظة</th><th>البنك</th><th>Level</th></tr></thead><tbody>${topUsers}</tbody></table></div></section>
+
+  <section class="panel premium-bot-profile"><h2>🤖 تخصيص هوية ZOMBI — اشتراك + مالك السيرفر ${lockedNote(canBotProfile,profileLockText)}</h2><p>غيّر Nickname البوت الفعلي داخل السيرفر، وLogo/Banner/Bio المستخدم في لوحات ZOMBI لهذا السيرفر. هذه الميزة للمشتركين فقط ويعدلها مالك السيرفر.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/bot-profile"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="premium"><div class="form-grid"><label>Nickname البوت داخل السيرفر<input name="botNickname" maxlength="32" value="${esc(cfg.branding.botNickname||'')}" placeholder="ZOMBI" ${disabled(canBotProfile)}></label><label class="wide">رابط Logo اللوحات<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">رابط Banner اللوحات<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio اللوحات<textarea name="botBio" maxlength="190" placeholder="نبذة تظهر في بروفايل البوت داخل السيرفر" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label></div><div class="warn small">💎 التخصيص حسب خطة السيرفر ومالك السيرفر فقط. Nickname يتغير فعليًا داخل Discord؛ روابط Logo/Banner/Bio تُستخدم في لوحات وEmbeds ZOMBI الخاصة بهذا السيرفر.</div><div class="card-actions"><button class="btn primary" type="submit" name="profileMode" value="save" ${disabled(canBotProfile)}>💾 حفظ وتطبيق التغييرات</button><button class="btn" type="submit" name="profileMode" value="force" ${disabled(canBotProfile)}>🔄 إعادة تطبيق الكل</button><button class="btn danger" type="submit" name="profileMode" value="reset" ${disabled(canBotProfile)} onclick="return confirm('إرجاع Nickname والصورة والبنر وBio للوضع الافتراضي لهذا السيرفر؟')">↩️ إعادة الافتراضي</button></div></form></section>
+
+  <div class="two"><section class="panel"><h2>💎 Premium / Premium+</h2><a class="btn primary" href="/premium">مقارنة الخطط والاشتراك</a><p>${store.isPremium(cfg)?`مفعّل حتى <b>${new Date(cfg.premiumUntil).toLocaleDateString('ar-JO')}</b>`:'الخطة الحالية مجانية.'}</p><form method="post" action="/dashboard/${guild.id}/redeem"><input type="hidden" name="_csrf" value="${token}"><input name="code" placeholder="ZOMBI-XXXXXXXXXXXX"><button class="btn">تفعيل كود</button></form></section><section class="panel"><h2>📌 حدود الخطة</h2>${LIMIT_DEFS.map(d=>`<p>${esc(d.label)}: <b>${maxFor(req,cfg,site,d.key).toLocaleString()}</b></p>`).join('')}</section></div>`,site,cfg,owner);
+}
+
+async function sendPanelMessage(channelId,messageId,payload){if(!channelId)throw new Error('حدد الروم أولًا.');if(messageId){try{return await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'PATCH',body:JSON.stringify(payload)});}catch{}}return botFetch(`/channels/${channelId}/messages`,{method:'POST',body:JSON.stringify(payload)});}
+function legacyHomeGamesPanelPayload(cfg){
+  const rows=[
+    [['quiz','أسئلة','🧠',1],['guess','تخمين','🔢',1],['rps','حجر ورق','✂️',1],['speed','سرعة','⚡',1],['scramble','ترتيب','🔤',1]],
+    [['truefalse','صح / خطأ','✅',2],['math','حساب','➗',2],['closest','الأقرب','🎯',2],['word','الكلمة','🔎',2],['wheel','عجلة الحظ','🎡',3]],
+    [['daily','اليومي','🏆',3],['mafia','مافيا','🎭',4],['roulette','روليت','🎰',4],['chairs','كراسي','🪑',2],['killer','من القاتل','🔪',4]]
+  ].map(row=>({type:1,components:row.map(([id,label,emoji,style])=>({type:2,style,custom_id:`game_${id}`,label,emoji:{name:emoji}}))}));
+  return {embeds:[{color:0x3498DB,title:'🎮 ألعاب ZOM',description:'اختر اللعبة التي تريد تشغيلها.\n\n🎯 وقت الجولة وعدد الجولات والجائزة النهائية يتم تحديدها من **Dashboard** لكل لعبة.\n⭐ فوز الجولة = **نقطة**، والجائزة تُصرف للفائز النهائي فقط.\n🎭 المافيا والروليت لها نظام مستقل.\n🪑 الكراسي و 🔪 من القاتل موجودة.\n\n👑 لوحة الإدارة متاحة للإدارة فقط.',footer:{text:'ZOM Games System'}}],components:rows};
+}
+function legacyHomeTicketPanelPayload(cfg){
+  const types=(cfg.tickets?.types||[]).filter(x=>x.enabled!==false).slice(0,25);if(!types.length)throw new Error('أضف نوع تذكرة أولًا.');
+  const options=types.map(t=>({label:String(t.name||t.label||'تذكرة').slice(0,100),value:String(t.id).slice(0,100),description:String(t.description||'فتح تكت جديد').slice(0,100),...(t.emoji?{emoji:{name:String(t.emoji)}}:{})}));
+  return {embeds:[{color:0x7C3AED,title:cfg.tickets?.title||'🎫 ZOMBI Tickets',description:`${cfg.tickets?.description||'اختر نوع التكت الذي تريد فتحه من القائمة بالأسفل.'}\n\n📋 بعد اختيار النوع سيظهر نموذج الاسم والعمر وسبب فتح التكت.`,footer:{text:cfg.branding?.customFooter||'ZOMBI Support'}}],components:[{type:1,components:[{type:3,custom_id:'ticket_type_select',placeholder:'🎫 اختر نوع التكت الذي تريد فتحه...',min_values:1,max_values:1,options}]}]};
+}
+function legacyHomeStorePanelPayload(cfg){
+  const products=(cfg.store?.products||[]).filter(p=>p.enabled!==false).sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0));if(!products.length)throw new Error('أضف منتجات أولًا.');
+  const publicProducts=products.filter(p=>!p.accessMode||p.accessMode==='everyone'),restricted=products.some(p=>p.accessMode&&p.accessMode!=='everyone');
+  const groups=new Map();for(const p of publicProducts){const k=String(p.category||'رتب الأعضاء').slice(0,80)||'رتب الأعضاء';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p);}const components=[];let idx=0;
+  for(const [category,items] of [...groups.entries()].slice(0,restricted?4:5)){components.push({type:1,components:[{type:3,custom_id:`zom_store_select_${idx++}`,placeholder:category.slice(0,150),options:items.slice(0,25).map(p=>({label:String(p.name||'Role').slice(0,100),description:`السعر: ${Number(p.price||0).toLocaleString()} ZOM`.slice(0,100),value:String(p.id),...(p.emoji?{emoji:{name:String(p.emoji)}}:{})}))}]});}
+  if(restricted&&components.length<5)components.push({type:1,components:[{type:2,style:2,custom_id:'zom_store_private_open',label:'الرتب الخاصة',emoji:{name:'🔒'}}]});
+  const embed={color:parseInt(String(cfg.store?.accentColor||'#B00020').replace('#',''),16)||0xB00020,title:cfg.store?.title||'متجر الرتب',description:`${cfg.store?.description||'افتح القائمة واختار الرتبة التي تريد معرفة سعرها ومميزاتها، وبعدها اضغط زر الشراء.'}\n\n💰 الأسعار بالـ **ZOM**${restricted?'\n🔒 يوجد قسم رتب خاصة حسب صلاحيات العضو.':''}`,footer:{text:cfg.store?.footer||'ZOMBI • ZOM Store'}};
+  const thumb=cfg.store?.thumbnailUrl||cfg.branding?.panelLogoUrl;if(thumb)embed.thumbnail={url:thumb};const banner=cfg.store?.bannerUrl||cfg.branding?.panelBannerUrl;if(banner)embed.image={url:banner};return{embeds:[embed],components:components.slice(0,5)};
+}
+function legacyHomeRolePanelPayload(cfg,bundle){
+  const items=(cfg.rolePanel?.items||[]).slice(0,25),styleMap={Primary:1,Secondary:2,Success:3,Danger:4},rows=[];
+  for(let i=0;i<items.length;i+=5)rows.push({type:1,components:items.slice(i,i+5).map(x=>({type:2,style:styleMap[x.style]||1,custom_id:`zombi_selfrole_${x.roleId}`,label:String(x.label||bundle.roles.find(r=>r.id===x.roleId)?.name||'Notification').slice(0,80),...(x.emoji?{emoji:{name:String(x.emoji)}}:{})}))});
+  return{embeds:[{color:0x2F8CFF,title:cfg.rolePanel?.title||'🔔 ZOMBI • مركز الإشعارات',description:cfg.rolePanel?.description||'اختر الرتب التي تريدها من الأزرار بالأسفل.',footer:{text:cfg.rolePanel?.footer||'ZOMBI • ROLE CENTER'}}],components:rows.slice(0,5)};
+}
+
+
+function legacyHomeBankPanelPayload(cfg){
+  return {
+    embeds:[{
+      color:0x8b5cf6,
+      title:cfg.bank?.title||'🏦 ZOMBI City Bank',
+      description:'مرحبًا بك في البنك المركزي لمدينة **ZOMBI City**.\n\nإدارة الكاش والبنك والشركات والتداول، بالإضافة إلى **حماية الكاش** و**الكفالة** وحالة ألعاب النهب.\n\n🎯 للنهب: اكتب نهب ثم منشن العضو. النجاح = 15% من كاشه.',
+      footer:{text:'ZOMBI City Bank • اللوحة الرسمية'}
+    }],
+    components:[
+      {type:1,components:[
+        {type:2,style:1,custom_id:'bank_balance',label:'حسابي',emoji:{name:'🏦'}},
+        {type:2,style:3,custom_id:'bank_deposit',label:'إيداع',emoji:{name:'📥'}},
+        {type:2,style:4,custom_id:'bank_withdraw',label:'سحب',emoji:{name:'📤'}},
+        {type:2,style:1,custom_id:'bank_transfer',label:'تحويل',emoji:{name:'💸'}},
+        {type:2,style:2,custom_id:'bank_gold',label:'الذهب',emoji:{name:'🪙'}}
+      ]},
+      {type:1,components:[
+        {type:2,style:3,custom_id:'bank_loan',label:'قرض',emoji:{name:'🏦'}},
+        {type:2,style:4,custom_id:'bank_repay_loan',label:'تسديد قرض',emoji:{name:'💳'}},
+        {type:2,style:2,custom_id:'bank_history',label:'السجل',emoji:{name:'📜'}},
+        {type:2,style:2,custom_id:'bank_job',label:'الوظائف',emoji:{name:'💼'}},
+        {type:2,style:3,custom_id:'bank_salary',label:'راتبي',emoji:{name:'💰'}}
+      ]},
+      {type:1,components:[
+        {type:2,style:2,custom_id:'bank_companies',label:'الشركات',emoji:{name:'🏢'}},
+        {type:2,style:3,custom_id:'bank_my_companies',label:'شركاتي',emoji:{name:'🏙️'}},
+        {type:2,style:1,custom_id:'bank_portfolio',label:'محفظتي',emoji:{name:'📊'}},
+        {type:2,style:1,custom_id:'bank_trade',label:'تداول',emoji:{name:'📈'}},
+        {type:2,style:2,custom_id:'bank_top',label:'التوب',emoji:{name:'🏆'}}
+      ]},
+      {type:1,components:[
+        {type:2,style:3,custom_id:'bank_cash_protection',label:'حماية الكاش',emoji:{name:'🛡️'}},
+        {type:2,style:4,custom_id:'bank_bail',label:'دفع الكفالة',emoji:{name:'🔓'}},
+        {type:2,style:2,custom_id:'bank_heist_status',label:'حالة النهب',emoji:{name:'🎯'}}
+      ]}
+    ]
+  };
+}
+
+function rawBankPanelPayload(cfg,site){
+ if(!featureAllowed(site,cfg,'bank'))throw new Error('البنك غير متاح لهذه الخطة.');
+ return legacyHomeBankPanelPayload(cfg);
+}
+
+function rawStorePanelPayload(cfg,site){
+  const products=(cfg.store?.products||[]).filter(p=>p.enabled!==false).slice(0,limitFor(site,cfg,'storeProducts')).sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0));
+  if(!products.length)throw new Error('أضف منتجات أولًا.');
+  const publicProducts=products.filter(p=>!p.accessMode||p.accessMode==='everyone'),restricted=products.some(p=>p.accessMode&&p.accessMode!=='everyone');
+  const customCurrency=featureAllowed(site,cfg,'customCurrency'),customBrand=featureAllowed(site,cfg,'customBranding'),customProfile=featureAllowed(site,cfg,'customBotProfile'),currencyName=customCurrency?(cfg.currency?.name||'ZOM'):'ZOM';
+  const groups=new Map();for(const p of publicProducts){const k=String(p.category||'رتب الأعضاء').slice(0,80)||'رتب الأعضاء';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p);}
+  const components=[];let idx=0;for(const [category,items] of [...groups.entries()].slice(0,restricted?4:5)){components.push({type:1,components:[{type:3,custom_id:`pub:store:select:${idx++}`,placeholder:category.slice(0,150),options:items.slice(0,25).map(p=>({label:String(p.name||'Role').slice(0,100),description:`السعر: ${Number(p.price||0).toLocaleString()} ${currencyName}`.slice(0,100),value:String(p.id),...(p.emoji?{emoji:{name:p.emoji}}:{})}))}]});}
+  if(restricted&&components.length<5)components.push({type:1,components:[{type:2,style:2,custom_id:'pub:store:private',label:'الرتب الخاصة',emoji:{name:'🔒'}}]});
+  const embed={color:parseInt(String(customBrand?(cfg.store?.accentColor||cfg.branding?.color||'#7c3aed'):'#7c3aed').replace('#',''),16)||0x7c3aed,title:cfg.store?.title||'متجر الرتب',description:`${cfg.store?.description||'اختر الرتبة من القائمة.'}\n\n${publicProducts.length?`💰 الأسعار بالـ **${currencyName}** • الرتب العامة: **${publicProducts.length}**`:'❌ لا توجد رتب عامة حاليًا.'}${restricted?'\n🔒 يوجد **قسم رتب خاصة** يظهر حسب صلاحيات العضو.':''}`,footer:{text:customBrand?(cfg.store?.footer||cfg.branding?.customFooter||'ZOMBI • ZOM Store'):'Powered by ZOMBI'}};
+  if(customProfile){const thumb=cfg.store?.thumbnailUrl||cfg.branding?.panelLogoUrl||cfg.branding?.avatarUrl;if(thumb)embed.thumbnail={url:thumb};const image=cfg.store?.bannerUrl||cfg.branding?.panelBannerUrl||cfg.branding?.bannerUrl;if(image)embed.image={url:image};}return{embeds:[embed],components:components.slice(0,5)};
+}
+function rawGuidePanelPayload(cfg,guildId){
+  if(cfg.serverGuide?.enabled===false)throw new Error('فعّل دليل السيرفر أولًا.');
+  const items=(cfg.serverGuide?.items||[]).filter(x=>x.enabled!==false).sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0)).slice(0,25);
+  if(!items.length)throw new Error('أضف اختصارًا واحدًا على الأقل إلى دليل السيرفر.');
+  const rows=[];
+  for(let i=0;i<items.length;i+=5){
+    rows.push({type:1,components:items.slice(i,i+5).map(item=>({
+      type:2,style:5,label:String(item.label||'انتقال').slice(0,80),
+      url:`https://discord.com/channels/${guildId}/${item.channelId}`,
+      ...(item.emoji?{emoji:{name:String(item.emoji).slice(0,32)}}:{})
+    }))});
+  }
+  const hex=parseInt(String(cfg.serverGuide?.color||cfg.branding?.color||'#7c3aed').replace('#',''),16);
+  const embed={color:Number.isFinite(hex)?hex:0x7c3aed,title:cfg.serverGuide?.title||'🧭 دليل السيرفر',description:cfg.serverGuide?.description||'اختر القسم الذي تريد الانتقال إليه من الأزرار بالأسفل.',footer:{text:cfg.serverGuide?.footer||'ZOMBI • SERVER GUIDE'}};
+  if(cfg.serverGuide?.bannerUrl)embed.image={url:cfg.serverGuide.bannerUrl};
+  return{embeds:[embed],components:rows};
+}
+
+async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await Promise.all([options.config||store.getConfig(guildId),store.getGlobalConfig()]);
+  const key=which==='roles'?'rolePanel':which;
+  if(site.emergency?.[key]?.disabled&&!options.preview)throw new Error(site.emergency[key].reason||'النظام متوقف للصيانة.');
+  const sendOrUpdate=async(channelId,messageId,payload)=>{
+    const designCfg=structuredClone(cfg);if(!store.isPremium(cfg)&&designCfg.panelDesigns)delete designCfg.panelDesigns[which];
+    payload=operations.applyDesign(payload,designCfg,which);
+    if(options.preview){const e=new Error('PREVIEW');e.previewPayload=payload;throw e;}
+    return sendPanelMessage(channelId,messageId,payload);
+  };
+  const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
+  if(String(guildId)===homeId){
+    if(which==='bank'){const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,legacyHomeBankPanelPayload(cfg));cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='games'){const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,legacyHomeGamesPanelPayload(cfg));cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='tickets'){const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets?.panelMessageId,legacyHomeTicketPanelPayload(cfg));cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='store'){const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store?.panelMessageId,legacyHomeStorePanelPayload(cfg));cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
+    if(which==='roles'){const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel?.panelMessageId,legacyHomeRolePanelPayload(cfg,bundle));cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  }
+  if(which==='bank'){const payload=rawBankPanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,payload);cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  if(which==='games'){if(!featureAllowed(site,cfg,'games'))throw new Error('Games غير متاحة لهذه الخطة.');const payload=rawGamesPanelPayload(cfg);const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,payload);cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  if(which==='tickets'){if(!featureAllowed(site,cfg,'tickets'))throw new Error('Tickets غير متاحة لهذه الخطة.');const types=(cfg.tickets.types||[]).filter(t=>t.enabled!==false).slice(0,limitFor(site,cfg,'ticketTypes'));if(!types.length)throw new Error('أضف نوع تذكرة أولًا.');const rows=[];for(let i=0;i<types.length;i+=5)rows.push({type:1,components:types.slice(i,i+5).map(t=>({type:2,style:1,custom_id:`pub:ticket:open:${t.id}`,label:String(t.label||'تذكرة').slice(0,80),...(t.emoji?{emoji:{name:t.emoji}}:{})}))});const footer=featureAllowed(site,cfg,'customBranding')?(cfg.branding.customFooter||cfg.branding.footer):'Powered by ZOMBI';const payload={embeds:[{color:color(cfg),title:cfg.tickets.title,description:cfg.tickets.description,footer:{text:footer}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets.panelMessageId,payload);cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  if(which==='store'){if(!featureAllowed(site,cfg,'store'))throw new Error('Store غير متاح لهذه الخطة.');const payload=rawStorePanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store.panelMessageId,payload);cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
+  if(which==='name'){if(!cfg.nameChange?.enabled)throw new Error('فعّل نظام تغيير الاسم أولًا.');if(!cfg.channels.nameChangePanel)throw new Error('حدد روم لوحة تغيير الاسم أولًا.');const hex=parseInt(String(cfg.nameChange.color||'#8B5CF6').replace('#',''),16);const embed={color:Number.isFinite(hex)?hex:0x8B5CF6,title:cfg.nameChange.title||'تغيير اسمك في السيرفر',description:cfg.nameChange.description||'اضغط الزر لتغيير اسمك.',footer:{text:'ZOMBI • NAME CENTER'}};if(cfg.nameChange.bannerUrl)embed.image={url:cfg.nameChange.bannerUrl};const payload={embeds:[embed],components:[{type:1,components:[{type:2,style:1,custom_id:'zombi_name_change_open',label:String(cfg.nameChange.buttonLabel||'تغيير اسمي').slice(0,80),emoji:{name:String(cfg.nameChange.buttonEmoji||'✏️')}}]}]};const m=await sendOrUpdate(cfg.channels.nameChangePanel,cfg.nameChange.panelMessageId,payload);cfg.nameChange.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  if(which==='roles'){if(!featureAllowed(site,cfg,'rolePanel'))throw new Error('Self Roles غير متاحة لهذه الخطة.');const items=(cfg.rolePanel.items||[]).slice(0,limitFor(site,cfg,'selfRoles'));if(!items.length)throw new Error('أضف رتب Self Roles أولًا.');const roleMap=new Map(bundle.roles.map(r=>[r.id,r])),styleMap={Primary:1,Secondary:2,Success:3,Danger:4},rows=[];for(let i=0;i<items.length;i+=5)rows.push({type:1,components:items.slice(i,i+5).map(x=>({type:2,style:styleMap[x.style]||2,custom_id:`pub:role:${x.roleId}`,label:String(x.label||roleMap.get(x.roleId)?.name||'Role').slice(0,80),...(x.emoji?{emoji:{name:x.emoji}}:{})}))});const payload={embeds:[{color:color(cfg),title:cfg.rolePanel.title,description:cfg.rolePanel.description,footer:{text:cfg.rolePanel.footer||'ZOMBI • ROLE CENTER'}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel.panelMessageId,payload);cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  if(which==='guide'){if(!featureAllowed(site,cfg,'serverGuide'))throw new Error('دليل السيرفر غير متاح لهذه الخطة.');if(!cfg.channels?.serverGuidePanel)throw new Error('حدد روم لوحة دليل السيرفر أولًا.');const payload=rawGuidePanelPayload(cfg,guildId);const m=await sendOrUpdate(cfg.channels.serverGuidePanel,cfg.serverGuide?.panelMessageId,payload);cfg.serverGuide.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+}
+
+function parsePairs(text,max,kind='qa'){const out=[];for(const raw of String(text||'').split(/\r?\n/)){const line=raw.trim();if(!line)continue;const pos=line.indexOf('|');if(pos<0)continue;const a=line.slice(0,pos).trim(),b=line.slice(pos+1).trim();if(!a||!b)continue;out.push(kind==='word'?{scrambled:a,answer:b}:{question:a,answer:b});if(out.length>=max)break;}return out;}
+function parseWords(text,max){return String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,max);}
+function slug(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06ff_-]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);}
+
+function parseBankJobs(text){const out={};for(const raw of String(text||'').split(/\r?\n/)){const [id,name,salary]=raw.split('|').map(x=>String(x||'').trim());if(!id||!name)continue;out[slug(id)]={name:name.slice(0,80),salary:int(salary,0,0,1000000000)};}return out;}
+function parseBankCompanies(text){const out={};for(const raw of String(text||'').split(/\r?\n/)){const [id,name,description,priceGold]=raw.split('|').map(x=>String(x||'').trim());if(!id||!name)continue;const key=slug(id);out[key]={id:key,name:name.slice(0,80),description:String(description||'').slice(0,300),priceGold:int(priceGold,0,0,1000000000)};}return out;}
+function parseBankStocks(text){const out={};for(const raw of String(text||'').split(/\r?\n/)){const [symbol,name,price]=raw.split('|').map(x=>String(x||'').trim());const key=String(symbol||'').toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,20);if(!key||!name)continue;out[key]={symbol:key,name:name.slice(0,80),price:int(price,0,0,1000000000)};}return out;}
+
+function planSummaryHtml(site,planName){const p=site.plans[planName];const feats=FEATURE_DEFS.filter(f=>p.features[f.key]).map(f=>`${f.emoji} ${f.label}`).join(' • ')||'—';const games=GAME_DEFS.filter(g=>g.publicSupported&&p.games[g.id]).map(g=>g.label).join('، ')||'—';return `<p><b>الميزات:</b> ${esc(feats)}</p><p><b>الألعاب:</b> ${esc(games)}</p><p><b>Store:</b> ${p.limits.storeProducts} • <b>Self Roles:</b> ${p.limits.selfRoles} • <b>Ticket Types:</b> ${p.limits.ticketTypes} • <b>Questions:</b> ${p.limits.questionsPerGame}</p>`;}
+
+async function start(){
+  const required=['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','PUBLIC_BASE_URL','SESSION_SECRET','DATABASE_URL'];const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
+  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(express.urlencoded({extended:true,limit:'8mb'}));app.use(express.json({limit:'8mb'}));for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','upgrade.js','operations-ui.js','zombi-logo.png','zombi-site-background.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.sendFile(require('path').join(__dirname,req.params.file));});
+  let sessionStore;if(String(process.env.DATABASE_URL||'').trim()){const {Pool}=require('pg');const ssl=String(process.env.DATABASE_SSL||'').toLowerCase()==='false'?false:{rejectUnauthorized:false};const sessionPool=new Pool({connectionString:process.env.DATABASE_URL,ssl,max:5});class PgSessionStore extends session.Store{get(sid,cb){sessionPool.query('SELECT sess,expire_at FROM zombi_web_sessions WHERE sid=$1',[sid]).then(r=>{const row=r.rows[0];if(!row||Number(row.expire_at||0)<Date.now())return cb(null,null);cb(null,row.sess);}).catch(cb);}set(sid,sess,cb){const exp=sess?.cookie?.expires?new Date(sess.cookie.expires).getTime():Date.now()+7*86400000;sessionPool.query(`INSERT INTO zombi_web_sessions(sid,sess,expire_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(sid) DO UPDATE SET sess=EXCLUDED.sess,expire_at=EXCLUDED.expire_at`,[sid,JSON.stringify(sess||{}),exp]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}destroy(sid,cb){sessionPool.query('DELETE FROM zombi_web_sessions WHERE sid=$1',[sid]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}}sessionStore=new PgSessionStore();}
+  app.use(session({store:sessionStore,secret:process.env.SESSION_SECRET||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session.user||null;next();});
+  operations.install(app,{store,layout,requireLogin,requireOwner,requireGuildAccess,checkCsrf,csrf,botFetch,requireBotSync,pricing,publicSiteConfig,
+    previewPanel:async(which,gid,bundle,config)=>{try{await sendPanel(which,gid,bundle,{preview:true,config});}catch(e){if(e.previewPayload)return e.previewPayload;throw e;}throw new Error('لا توجد لوحة للمعاينة.');}});
+  // Secure bot <-> website fallback sync. Used only when a shared DATABASE_URL is not configured on both hosts.
+  app.get('/api/bot-sync/global',requireBotSync,async(_req,res,next)=>{try{res.json({ok:true,global:await store.getGlobalConfig(),source:(await store.health()).mode});}catch(e){next(e);}});
+  app.get('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{res.json({ok:true,config:await store.getConfig(req.params.guildId),source:(await store.health()).mode});}catch(e){next(e);}});
+  app.put('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{const input=req.body?.config||req.body||{};const config=await store.saveConfig(req.params.guildId,input);res.json({ok:true,config});}catch(e){next(e);}});
+  app.post('/api/bot-sync/redeem',requireBotSync,async(req,res)=>{try{const guildId=String(req.body?.guildId||'').trim(),code=String(req.body?.code||'').trim();if(!/^\d{15,25}$/.test(guildId)||!code)return res.status(400).json({ok:false,error:'بيانات التفعيل غير صالحة.'});const result=await store.redeemCode(guildId,code);res.json({ok:true,result});}catch(e){res.status(400).json({ok:false,error:e?.message||'تعذر تفعيل الاشتراك.'});}});
+  app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
+  app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
+  app.get('/terms',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('شروط الخدمة',`<section class="legal"><h1>شروط الخدمة</h1><p>باستخدام ZOMBI أو Dashboard فإنك توافق على استخدام الخدمة بشكل قانوني ووفق شروط Discord.</p><h2>صلاحيات السيرفر</h2><p>يجب أن تكون مخولًا لإضافة البوت أو تعديل إعدادات السيرفر. بعض الوظائف تحتاج صلاحيات Discord مثل Manage Channels وManage Roles، ويجب أن تكون رتبة البوت أعلى من الرتب التي يديرها.</p><h2>Free وPremium وPremium+</h2><p>الميزات والحدود المتاحة لكل خطة يحددها مالك ZOMBI وقد تتغير. مدة Premium تبدأ حسب الكود أو التفعيل الممنوح للسيرفر، ولا يمنح Premium حق تغيير حساب البوت العالمي لكل سيرفر؛ التخصيص لكل سيرفر يقتصر على الخيارات التي يوفرها Dashboard.</p><h2>الاستخدام المقبول</h2><p>لا تستخدم الخدمة للإساءة، التخريب، الاحتيال، انتهاك حقوق الآخرين أو مخالفة قواعد Discord. يجوز تعطيل الوصول عند إساءة الاستخدام.</p><h2>توفر الخدمة</h2><p>نسعى لاستمرار الخدمة لكن لا نضمن عدم الانقطاع أو فقدان البيانات بسبب أعطال خارجية. يُنصح بالاحتفاظ بنسخ احتياطية للإعدادات المهمة.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
+  app.get('/auth/discord',(req,res)=>{const state=crypto.randomBytes(24).toString('hex');req.session.oauthState=state;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
+  app.get('/auth/discord/callback',async(req,res,next)=>{try{if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);if(!req.query.code||!req.query.state||String(req.query.state)!==String(req.session.oauthState||''))return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));delete req.session.oauthState;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
+    async function readJsonResponse(response,label){const raw=await response.text();let data=null;try{data=raw?JSON.parse(raw):{};}catch{throw new Error(`${label} رجّع رد غير متوقع (${response.status}): ${raw.replace(/\s+/g,' ').slice(0,180)}`);}if(!response.ok){const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||0);throw err;}return data;}
+    async function loginViaProxy(code){const proxyUrl=String(process.env.OAUTH_PROXY_URL||'').trim(),proxySecret=String(process.env.OAUTH_PROXY_SECRET||'').trim();if(!proxyUrl)return null;if(!proxySecret)throw new Error('OAUTH_PROXY_SECRET غير موجود في إعدادات Render.');const response=await fetch(proxyUrl,{method:'POST',headers:{Authorization:`Bearer ${proxySecret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:String(code),redirect_uri:redirect})});const data=await readJsonResponse(response,'ZOMBI OAuth Proxy');if(!data?.ok||!data?.user)throw new Error(data?.error||'OAuth Proxy لم يرجع بيانات المستخدم.');return{user:data.user,guilds:Array.isArray(data.guilds)?data.guilds:[]};}
+    async function loginDirect(code){const clientId=String(process.env.DISCORD_CLIENT_ID||'').trim(),clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim(),auth=Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),body=new URLSearchParams({grant_type:'authorization_code',code:String(code),redirect_uri:redirect});const tr=await fetch(OAUTH_TOKEN_URL,{method:'POST',headers:{Authorization:`Basic ${auth}`,'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body});const td=await readJsonResponse(tr,'Discord OAuth token');if(!td?.access_token)throw new Error('Discord لم يرجع access token.');const headers={Authorization:`Bearer ${td.access_token}`,Accept:'application/json'},[ur,gr]=await Promise.all([fetch(`${API}/users/@me`,{headers}),fetch(`${API}/users/@me/guilds`,{headers})]);return{user:await readJsonResponse(ur,'Discord user profile'),guilds:await readJsonResponse(gr,'Discord guild list')};}
+    const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
+  }catch(e){if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord حدّد تسجيل الدخول مؤقتًا</h1><p>انتظر تقريبًا ${seconds} ثانية ثم جرّب مرة ثانية.</p><a class="btn" href="/">رجوع</a></section>`,req.user));}next(e);}});
+  app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>req.session.destroy(()=>res.redirect('/')));
+
+  app.get('/checkout',requireLogin,async(req,res,next)=>{try{
+    const plan=paymentPlan(req.query.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);
+    if(!zain.enabled)return res.status(503).send(layout('Zain Cash',`<section class="login"><h1>🟡 الدفع عبر Zain Cash غير مفعّل</h1><p>لم يتم إعداد رقم المحفظة بعد. تواصل مع مالك ZOMBI.</p><a class="btn" href="/premium">رجوع للاشتراكات</a></section>`,req.user));
+    const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed).map(x=>x.g);
+    const amount=paymentAmount(zain,plan),days=paymentDays(zain,plan),token=csrf(req),planLabel=PLAN_LABELS[plan];
+    const options=installed.map(g=>`<option value="${esc(g.id)}">${esc(g.name)} — ${esc(g.id)}</option>`).join('');
+    const body=`<section class="z-pay-wrap"><div class="z-pay-head"><span class="badge">ZAIN CASH PAYMENT</span><h1>🟡 اشترك في ${esc(planLabel)}</h1><p>الدفع يدوي وآمن: حوّل المبلغ ثم ارفع صورة التحويل. التفعيل يتم بعد موافقة Owner.</p></div>
+      <div class="z-pay-grid"><article class="panel z-wallet-card"><span class="z-wallet-mark">Z</span><h2>بيانات التحويل</h2><div class="z-wallet-amount">${amount.toFixed(3).replace(/\.000$/,'')} <small>JOD</small></div><dl><div><dt>المحفظة</dt><dd dir="ltr">${esc(zain.walletNumber)}</dd></div><div><dt>اسم صاحب المحفظة</dt><dd>${esc(zain.walletName||'—')}</dd></div><div><dt>مدة الاشتراك</dt><dd>${days} يوم</dd></div></dl><p class="hint">${esc(zain.instructions)}</p></article>
+      <form id="zainCheckoutForm" class="panel z-payment-form" method="post" action="/checkout"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="plan" value="${plan}"><input type="hidden" name="proofData" id="proofData"><h2>إرسال إثبات الدفع</h2>${installed.length?`<label>السيرفر<select name="guildId" required><option value="">اختر السيرفر</option>${options}</select></label>`:'<div class="warn">ما عندك سيرفر مثبت عليه ZOMBI وتملك فيه Manage Server. أضف البوت أولًا.</div>'}<label>رقم الهاتف الذي تم التحويل منه<input name="payerPhone" dir="ltr" inputmode="tel" placeholder="07XXXXXXXX أو +962..." required></label><label>رقم العملية <small>(اختياري إذا ظاهر بالإيصال)</small><input name="transactionRef" dir="ltr" maxlength="100" placeholder="Transaction ID"></label><label>صورة إثبات التحويل<input id="paymentProofFile" type="file" accept="image/png,image/jpeg,image/webp" required><small>PNG / JPG / WEBP — الحد الأقصى 3MB</small></label><button class="btn primary" ${installed.length?'':'disabled'}>📤 إرسال طلب الدفع</button><a class="btn" href="/payments">عرض دفعاتي</a></form></div></section>
+      <script>(function(){const f=document.getElementById('zainCheckoutForm'),file=document.getElementById('paymentProofFile'),hidden=document.getElementById('proofData');if(!f||!file||!hidden)return;let prepared=false;f.addEventListener('submit',function(e){if(prepared)return;e.preventDefault();const x=file.files&&file.files[0];if(!x){file.setCustomValidity('ارفع صورة إثبات الدفع');file.reportValidity();return;}file.setCustomValidity('');if(x.size>3*1024*1024){alert('حجم الصورة أكبر من 3MB.');return;}if(!['image/png','image/jpeg','image/webp'].includes(x.type)){alert('استخدم PNG أو JPG أو WEBP.');return;}const r=new FileReader();r.onload=function(){hidden.value=String(r.result||'');prepared=true;f.requestSubmit();};r.onerror=function(){alert('تعذر قراءة صورة الإثبات.');};r.readAsDataURL(x);});})();</script>`;
+    res.send(layout('الدفع عبر Zain Cash',body,req.user));
+  }catch(e){next(e);}});
+
+  app.post('/checkout',requireLogin,checkCsrf,async(req,res,next)=>{try{
+    const plan=paymentPlan(req.body.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);if(!zain.enabled)throw new Error('الدفع عبر Zain Cash غير مفعّل.');
+    const gid=String(req.body.guildId||'').trim(),g=userGuild(req,gid);if(!g||!canManage(g))return res.status(403).send(layout('Payment Error','<section class="login"><h1>❌ لا تملك صلاحية إدارة هذا السيرفر</h1><a class="btn" href="/checkout?plan='+plan+'">رجوع</a></section>',req.user));
+    if(!await getBotGuild(gid).catch(()=>null))throw new Error('بوت ZOMBI غير موجود في السيرفر المحدد.');
+    const currentPlan=planNameForConfig(await store.getConfig(gid));if(currentPlan==='premium_plus'&&plan==='premium')throw new Error('هذا السيرفر لديه Premium+ فعّال. اختر Premium+ للتجديد بدل Premium.');
+    const payerPhone=normalizePayerPhone(req.body.payerPhone);if(!payerPhone)throw new Error('رقم الهاتف غير صالح.');
+    const proof=parsePaymentProof(req.body.proofData),amount=paymentAmount(zain,plan),days=paymentDays(zain,plan);
+    const item=await payments.create({userId:req.user.id,username:req.user.displayName||req.user.username||'',guildId:gid,guildName:g.name||gid,plan,amount,days,payerPhone,transactionRef:String(req.body.transactionRef||'').trim(),...proof});
+    res.send(layout('تم إرسال طلب الدفع',`<section class="login z-payment-success"><div class="z-success-icon">✓</div><h1>تم إرسال طلب الدفع</h1><p>رقم الطلب: <code>${esc(item.id)}</code></p><p>الخطة: <b>${esc(PLAN_LABELS[item.plan])}</b> • ${item.amount.toFixed(3).replace(/\.000$/,'')} JOD • ${item.days} يوم</p><p>الحالة: <b>⏳ بانتظار مراجعة Owner</b></p><div class="actions"><a class="btn primary" href="/payments">متابعة حالة الدفع</a><a class="btn" href="/dashboard/${esc(gid)}">Dashboard</a></div></section>`,req.user));
+  }catch(e){next(e);}});
+
+  app.get('/payments',requireLogin,async(req,res,next)=>{try{
+    const items=await payments.list({userId:req.user.id,limit:100});
+    const rows=items.map(x=>`<tr><td><code>${esc(x.id)}</code><small>${esc(paymentDate(x.createdAt))}</small></td><td><b>${esc(x.guildName||x.guildId)}</b><small>${esc(x.guildId)}</small></td><td>${esc(PLAN_LABELS[x.plan]||x.plan)}<small>${Number(x.amount).toFixed(3).replace(/\.000$/,'')} JOD • ${x.days} يوم</small></td><td><span class="z-payment-status z-status-${esc(x.status)}">${paymentStatusLabel(x.status)}</span>${x.reviewNote?`<small>${esc(x.reviewNote)}</small>`:''}</td></tr>`).join('');
+    res.send(layout('دفعاتي',`<section class="dash-head"><div><h1>💳 دفعاتي</h1><p>تابع حالة طلبات Zain Cash الخاصة بك.</p></div><a class="btn primary" href="/premium">اشتراك جديد</a></section><section class="panel"><div class="table-wrap"><table><thead><tr><th>الطلب</th><th>السيرفر</th><th>الخطة</th><th>الحالة</th></tr></thead><tbody>${rows||'<tr><td colspan="4">لا توجد طلبات دفع بعد.</td></tr>'}</tbody></table></div></section>`,req.user));
+  }catch(e){next(e);}});
+
+  app.get('/dashboard',requireLogin,async(req,res,next)=>{try{const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed),missing=statuses.filter(x=>!x.installed);const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${planBadge(cfg)}</span></div><em>إدارة ←</em></a>`;}))).join(''),add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section><div class="servers">${cards||'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>'}</div>${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));}catch(e){next(e);}});
+  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/sync-commands',requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{const appId=String(process.env.DISCORD_CLIENT_ID||'').trim();if(!appId)throw new Error('DISCORD_CLIENT_ID غير موجود.');const result=await botFetch(`/applications/${appId}/guilds/${req.params.guildId}/commands`,{method:'PUT',body:JSON.stringify(publicCommandPayload())});res.send(layout('Commands Synced',`<section class="login"><h1>✅ تمت مزامنة أوامر السيرفر</h1><p>تم تسجيل <b>${Array.isArray(result)?result.length:'كل'}</b> أمر. ارجع لديسكورد واكتب <code>/games</code> أو <code>/roulette</code>.</p><a class="btn primary" href="/dashboard/${req.params.guildId}">رجوع للداشبورد</a></section>`,req.user));}catch(e){res.status(400).send(layout('Command Sync Error',`<section class="login"><h1>❌ تعذر مزامنة الأوامر</h1><p>${esc(e.message)}</p><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
+
+  app.post('/dashboard/:guildId/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
+    const beforeSettings=structuredClone(cfg);
+    const requestedSection=String(req.body?._settingsSection||'all').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'all';
+    const knownSections=new Set(['all','warnings','logs','overview','economy','members','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director']);
+    const settingsSection=knownSections.has(requestedSection)?requestedSection:'all';
+    const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
+    const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
+
+    // Only validate the section that is actually being saved. Hidden fields in
+    // other dashboard pages must never block this request.
+    const rejectOverLimit=(raw,limitKey,label)=>{
+      if(raw===undefined||raw===''||Number(raw)<=Number(maxFor(req,cfg,site,limitKey)))return false;
+      return sendUpgradeRequired(req,res,site,cfg,`${label}: الحد الحالي في خطتك هو ${Number(maxFor(req,cfg,site,limitKey)).toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك، أو يرفع Owner الحد المسموح للخطة من لوحة المالك.`);
+    };
+    if(saves('guide')){
+      if(featureAllowed(site,cfg,'serverGuide'))cfg.features.serverGuide=Boolean(req.body.serverGuideEnabled);
+      cfg.serverGuide={...cfg.serverGuide,enabled:Boolean(req.body.serverGuideEnabled),title:String(req.body.serverGuideTitle||cfg.serverGuide?.title||'🧭 دليل السيرفر').slice(0,256),description:String(req.body.serverGuideDescription||cfg.serverGuide?.description||'').slice(0,2000),footer:String(req.body.serverGuideFooter||cfg.serverGuide?.footer||'ZOMBI • SERVER GUIDE').slice(0,160),color:/^#[0-9a-f]{6}$/i.test(String(req.body.serverGuideColor||''))?String(req.body.serverGuideColor):String(cfg.serverGuide?.color||'#7c3aed'),bannerUrl:String(req.body.serverGuideBannerUrl||'').trim()};
+    }
+    if(saves('director')){
+      if(featureAllowed(site,cfg,'cityDirector'))cfg.features.cityDirector=Boolean(req.body.cityDirectorEnabled);
+      cfg.cityDirector={...cfg.cityDirector,
+        enabled:Boolean(req.body.cityDirectorEnabled),
+        autoEnabled:Boolean(req.body.cityDirectorAutoEnabled),
+        useBuiltinEvents:Boolean(req.body.cityDirectorUseBuiltinEvents),
+        spreadAllOpenChannels:Boolean(req.body.cityDirectorSpreadAllOpenChannels),
+        intervalMinutes:int(req.body.cityDirectorIntervalMinutes,cfg.cityDirector?.intervalMinutes||120,5,10080),
+        durationMinutes:int(req.body.cityDirectorDurationMinutes,cfg.cityDirector?.durationMinutes||10,1,180),
+        minParticipants:int(req.body.cityDirectorMinParticipants,cfg.cityDirector?.minParticipants||2,2,500),
+        maxParticipants:int(req.body.cityDirectorMaxParticipants,cfg.cityDirector?.maxParticipants||30,2,500),
+        missionStages:int(req.body.cityDirectorMissionStages,cfg.cityDirector?.missionStages||8,2,100),
+        taskSeconds:int(req.body.cityDirectorTaskSeconds,cfg.cityDirector?.taskSeconds||45,15,300),
+        successPercent:int(req.body.cityDirectorSuccessPercent,cfg.cityDirector?.successPercent||70,50,100),
+        rewardMin:int(req.body.cityDirectorRewardMin,cfg.cityDirector?.rewardMin||500,0,1000000000),
+        rewardMax:int(req.body.cityDirectorRewardMax,cfg.cityDirector?.rewardMax||1500,0,1000000000),
+        penaltiesEnabled:Boolean(req.body.cityDirectorPenaltiesEnabled),
+        cashPenaltyAmount:int(req.body.cityDirectorCashPenaltyAmount,cfg.cityDirector?.cashPenaltyAmount||1000,0,1000000000),
+        bankPenaltyAmount:int(req.body.cityDirectorBankPenaltyAmount,cfg.cityDirector?.bankPenaltyAmount||1500,0,1000000000),
+        mutePenaltyMinutes:int(req.body.cityDirectorMutePenaltyMinutes,cfg.cityDirector?.mutePenaltyMinutes||120,5,10080),
+        punishmentChannelId:String(req.body.cityDirectorPunishmentChannelId||''),
+        excludedChannelIds:arr(req.body.cityDirectorExcludedChannelIds).filter(x=>/^\d{15,25}$/.test(String(x))).slice(0,100),
+        mentionEveryone:Boolean(req.body.cityDirectorMentionEveryone)
+      };
+      if(cfg.cityDirector.maxParticipants<cfg.cityDirector.minParticipants)cfg.cityDirector.maxParticipants=cfg.cityDirector.minParticipants;
+      if(cfg.cityDirector.rewardMax<cfg.cityDirector.rewardMin)cfg.cityDirector.rewardMax=cfg.cityDirector.rewardMin;
+    }
+
+    if(saves('economy')){
+      if(rejectOverLimit(req.body.dailyAmount,'maxDailyReward','Daily Reward'))return;
+      if(rejectOverLimit(req.body.messageReward,'maxMessageReward','مكافأة الرسائل'))return;
+      if(rejectOverLimit(req.body.voiceReward,'maxVoiceReward','Voice Reward'))return;
+    }
+    if(saves('city')&&rejectOverLimit(req.body.bankMaxTransaction,'maxBankTransaction','أقصى عملية بالبنك'))return;
+    if(saves('gangs')){
+      if(rejectOverLimit(req.body.gangMaxMembers,'gangMembers','أقصى أعضاء العصابة'))return;
+      if(rejectOverLimit(req.body.gangMaxDeputies,'gangDeputies','أقصى نواب العصابة'))return;
+    }
+    if(saves('robbery')&&rejectOverLimit(req.body.robberyMinParticipants,'robberyParticipants','عدد المشاركين بسرقة البنك'))return;
+
+    if(saves('games')){
+      const checks=[];
+      const limits={
+        maxRounds:limitFor(site,cfg,'maxRounds'),
+        maxRoundTimeSeconds:limitFor(site,cfg,'maxRoundTimeSeconds'),
+        maxWinnerReward:limitFor(site,cfg,'maxWinnerReward'),
+        maxGamePlayers:limitFor(site,cfg,'maxGamePlayers')
+      };
+      for(const g of GAME_DEFS){
+        checks.push(
+          [req.body[`game_rounds_${g.id}`],limits.maxRounds,`${g.label}: عدد الجولات`],
+          [req.body[`game_time_${g.id}`],limits.maxRoundTimeSeconds,`${g.label}: وقت الجولة`],
+          [req.body[`game_reward_${g.id}`],limits.maxWinnerReward,`${g.label}: جائزة الفائز`]
+        );
+      }
+      for(const name of ['rouletteMinPlayers','rouletteMaxPlayers','chairsMinPlayers','chairsMaxPlayers','mafiaMinPlayers','mafiaMaxPlayers']){
+        checks.push([req.body[name],limits.maxGamePlayers,'عدد اللاعبين']);
+      }
+      const exceeded=checks.find(([raw,max])=>raw!==undefined&&raw!==''&&Number(raw)>Number(max));
+      if(exceeded)return sendUpgradeRequired(req,res,site,cfg,`${exceeded[2]}: الحد الحالي في خطتك هو ${Number(exceeded[1]).toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك، أو يرفع Owner الحد المسموح للخطة من لوحة المالك.`);
+    }
+
+    const oldBotProfile={
+      botNickname:String(cfg.branding?.botNickname||''),
+      avatarUrl:String(cfg.branding?.avatarUrl||''),
+      bannerUrl:String(cfg.branding?.bannerUrl||''),
+      bio:String(cfg.branding?.bio||'')
+    };
+
+    if(saves('overview')){
+      cfg.system={
+        ...cfg.system,
+        presenceText:String(req.body.presenceText||cfg.system?.presenceText||'ZOM Economy | /help').slice(0,128),
+        presenceStatus:['online','idle','dnd','invisible'].includes(String(req.body.presenceStatus))?String(req.body.presenceStatus):(cfg.system?.presenceStatus||'online')
+      };
+      for(const k of CORE_FEATURES){
+        cfg.features[k]=featureAllowed(site,cfg,k)?Boolean(req.body[`feature_${k}`]):false;
+      }
+      if(featureAllowed(site,cfg,'customBranding')){
+        cfg.branding.color=String(req.body.brandColor||cfg.branding.color);
+        cfg.branding.customName=String(req.body.customName||'').slice(0,80);
+        cfg.branding.customFooter=String(req.body.customFooter||'').slice(0,160);
+      }
+      if(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')){
+        cfg.branding.botNickname=String(req.body.botNickname||'').slice(0,32);
+        cfg.branding.avatarUrl=String(req.body.avatarUrl||'').trim();
+        cfg.branding.bannerUrl=String(req.body.bannerUrl||'').trim();
+        cfg.branding.bio=String(req.body.botBio||'').trim().slice(0,190);
+        cfg.branding.panelLogoUrl=String(req.body.panelLogoUrl||'').trim();
+        cfg.branding.panelBannerUrl=String(req.body.panelBannerUrl||'').trim();
+      }
+    }
+
+    if(saves('economy')){
+      if(featureAllowed(site,cfg,'customCurrency'))cfg.currency.name=String(req.body.currencyName||cfg.currency.name).slice(0,20);
+      cfg.currency.emoji=String(req.body.currencyEmoji||cfg.currency.emoji).slice(0,16);
+      cfg.economy={
+        ...cfg.economy,
+        dailyAmount:int(req.body.dailyAmount,cfg.economy.dailyAmount,0,maxFor(req,cfg,site,'maxDailyReward')),
+        dailyCooldownHours:int(req.body.dailyCooldownHours,cfg.economy.dailyCooldownHours,1,720),
+        messageEvery:int(req.body.messageEvery,cfg.economy.messageEvery,1,10000),
+        messageReward:int(req.body.messageReward,cfg.economy.messageReward,0,maxFor(req,cfg,site,'maxMessageReward')),
+        messageCooldownSeconds:int(req.body.messageCooldownSeconds,cfg.economy.messageCooldownSeconds,0,86400),
+        transferCooldownSeconds:int(req.body.transferCooldownSeconds,cfg.economy.transferCooldownSeconds,0,86400),
+        voiceEveryMinutes:int(req.body.voiceEveryMinutes,cfg.economy.voiceEveryMinutes,1,1440),
+        voiceReward:int(req.body.voiceReward,cfg.economy.voiceReward,0,maxFor(req,cfg,site,'maxVoiceReward')),
+        messageChannelIds:arr(req.body.messageChannelIds).slice(0,50)
+      };
+    }
+
+    // Channel selectors are physically moved between pages by dashboard.js.
+    // Update only selectors that were submitted so another page can never be erased.
+    if(saves('logs') && has('loggingPresent')){
+      cfg.moderation={...cfg.moderation,logActions:Boolean(req.body.modLogActions)};
+      cfg.logging={...cfg.logging};
+      for(const key of ['audit','messages','members','voice','games','commands','actions'])cfg.logging[key]=Boolean(req.body['log_'+key]);
+      const selected=String(req.body.logs||'');
+      if(selected&&!req.bundle.channels.some(c=>c.id===selected&&[0,5].includes(c.type)))return res.status(400).send('روم اللوج غير صالح لهذا السيرفر.');
+    }
+    const channelNames=['logs','logBank','logEconomy','logGangs','logRobbery','logTickets','logStore','logWarnings','logGames','logLevels','logVoice','logMusic','logModeration','logMessages','logMembers','logCommands','logPanels','logRoles','logNameChange','logPremium','logEvent','logSystem','levelUp','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel','serverGuidePanel','cityDirector'];
+    for(const name of channelNames){if(has(name))cfg.channels[name]=String(req.body[name]||'');}
+
+    if(saves('city')){
+      cfg.bank={
+        ...cfg.bank,
+        depositEnabled:Boolean(req.body.bankDepositEnabled),
+        withdrawEnabled:Boolean(req.body.bankWithdrawEnabled),
+        maxTransaction:int(req.body.bankMaxTransaction,cfg.bank?.maxTransaction||1,1,maxFor(req,cfg,site,'maxBankTransaction')),
+        title:String(req.body.bankTitle||cfg.bank?.title||'').slice(0,256),
+        description:String(req.body.bankDescription||cfg.bank?.description||'').slice(0,2000),
+        goldValue:int(req.body.bankGoldValue,cfg.bank?.goldValue||100000,1,1000000000),
+        salaryCooldownHours:int(req.body.bankSalaryCooldownHours,cfg.bank?.salaryCooldownHours??4,0,720),
+        maxSalary:int(req.body.bankMaxSalary,cfg.bank?.maxSalary??1000,0,1000000000),
+        tradeProfitPercent:int(req.body.bankTradeProfitPercent,cfg.bank?.tradeProfitPercent??15,0,1000),
+        tradeSessionMinutes:int(req.body.bankTradeSessionMinutes,cfg.bank?.tradeSessionMinutes??5,1,1440),
+        maxLoan:int(req.body.bankMaxLoan,cfg.bank?.maxLoan??100000,0,1000000000),
+        loanInterestPercent:int(req.body.bankLoanInterestPercent,cfg.bank?.loanInterestPercent??10,0,1000),
+        companyEmployeeStartSalary:int(req.body.companyEmployeeStartSalary,cfg.bank?.companyEmployeeStartSalary??4000,0,1000000000),
+        companyEmployeeSalaryIncrease:int(req.body.companyEmployeeSalaryIncrease,cfg.bank?.companyEmployeeSalaryIncrease??500,0,1000000000),
+        companyLevelUpHours:int(req.body.companyLevelUpHours,cfg.bank?.companyLevelUpHours??24,1,8760),
+        companyOwnerStartSalary:int(req.body.companyOwnerStartSalary,cfg.bank?.companyOwnerStartSalary??100000,0,1000000000),
+        companyOwnerSalaryIncrease:int(req.body.companyOwnerSalaryIncrease,cfg.bank?.companyOwnerSalaryIncrease??5000,0,1000000000)
+      };
+      if(featureAllowed(site,cfg,'bank')){
+        await store.saveData(req.params.guildId,'bank-catalog.json',{
+          jobs:parseBankJobs(req.body.bankJobsText),
+          companies:parseBankCompanies(req.body.bankCompaniesText),
+          stocks:parseBankStocks(req.body.bankStocksText)
+        });
+      }
+    }
+
+    if(saves('heist')){
+      cfg.bank={
+        ...cfg.bank,
+        heistEnabled:Boolean(req.body.heistEnabled),
+        heistGameCooldownSeconds:int(req.body.heistGameCooldownSeconds,cfg.bank?.heistGameCooldownSeconds||7200,60,604800),
+        heistTimeSeconds:int(req.body.heistTimeSeconds,cfg.bank?.heistTimeSeconds||25,10,120),
+        heistJailHours:int(req.body.heistJailHours,cfg.bank?.heistJailHours||2,1,24),
+        heistBailPrice:int(req.body.heistBailPrice,cfg.bank?.heistBailPrice||50000,0,1000000000),
+        cashProtectionPrice:int(req.body.cashProtectionPrice,cfg.bank?.cashProtectionPrice||25000,0,1000000000),
+        cashProtectionMinutes:int(req.body.cashProtectionMinutes,cfg.bank?.cashProtectionMinutes||60,1,10080),
+        cashProtectionCooldownMinutes:int(req.body.cashProtectionCooldownMinutes,cfg.bank?.cashProtectionCooldownMinutes||240,1,43200)
+      };
+      cfg.bank.heistGamesEnabled={...(cfg.bank.heistGamesEnabled||{})};
+      for(const g of HEIST_GAME_DEFS){
+        if(heistGameAllowed(site,cfg,g.id))cfg.bank.heistGamesEnabled[g.id]=Boolean(req.body[`heist_game_${g.id}`]);
+      }
+    }
+
+    if(saves('members')){
+      cfg.levels={
+        ...cfg.levels,
+        xpPerMessage:int(req.body.xpPerMessage,cfg.levels.xpPerMessage,1,10000),
+        xpCooldownSeconds:int(req.body.xpCooldownSeconds,cfg.levels.xpCooldownSeconds,5,3600),
+        baseXp:int(req.body.baseXp,cfg.levels.baseXp,10,1000000),
+        growth:int(req.body.levelGrowth,cfg.levels.growth,0,1000000)
+      };
+      cfg.moderation={
+        ...cfg.moderation,
+        clearEnabled:Boolean(req.body.modClearEnabled),
+        kickEnabled:Boolean(req.body.modKickEnabled),
+        banEnabled:Boolean(req.body.modBanEnabled),
+        lockEnabled:Boolean(req.body.modLockEnabled),
+        logActions:cfg.moderation?.logActions!==false
+      };
+    }
+
+    if(saves('warnings')){
+      if(['warningChannelId','warningRoleIds'].some(has)){
+        if(!featureAllowed(site,cfg,'warnings'))return sendUpgradeRequired(req,res,site,cfg,'نظام التحذيرات غير متاح لخطة هذا السيرفر حسب إعدادات الأونر.');
+        const warningChannelId=String(req.body.warningChannelId||'');
+        if(warningChannelId&&!req.bundle.channels.some(c=>c.id===warningChannelId&&[0,5].includes(c.type)))return res.status(400).send('روم التحذيرات غير صالح لهذا السيرفر.');
+        const warningRoles=arr(req.body.warningRoleIds).map(id=>String(id).trim());
+        if(warningRoles.some(id=>id&&!req.bundle.roles.some(r=>r.id===id&&!r.managed&&id!==req.params.guildId)))return res.status(400).send('رتبة تحذير غير صالحة لهذا السيرفر.');
+        cfg.warnings={...cfg.warnings,channelId:warningChannelId,roleIds:warningRoles,role1Id:warningRoles[0]||'',role2Id:warningRoles[1]||'',role3Id:warningRoles[2]||''};
+      }
+    }
+
+    if(saves('gangs')){
+      cfg.gangs={
+        ...cfg.gangs,
+        maxMembers:int(req.body.gangMaxMembers,cfg.gangs.maxMembers,2,maxFor(req,cfg,site,'gangMembers')),
+        maxDeputies:int(req.body.gangMaxDeputies,cfg.gangs.maxDeputies||0,0,maxFor(req,cfg,site,'gangDeputies')),
+        createCost:int(req.body.gangCreateCost,cfg.gangs.createCost||0,0,1000000000),
+        bankEnabled:Boolean(req.body.gangBankEnabled),
+        missionsEnabled:Boolean(req.body.gangMissionsEnabled),
+        missionCooldownMinutes:int(req.body.gangMissionCooldownMinutes,cfg.gangs.missionCooldownMinutes||240,1,10080),
+        missionDurationMinutes:int(req.body.gangMissionDurationMinutes,cfg.gangs.missionDurationMinutes||30,5,180),
+        missionRewardMin:int(req.body.gangMissionRewardMin,cfg.gangs.missionRewardMin||0,0,1000000000),
+        missionRewardMax:int(req.body.gangMissionRewardMax,cfg.gangs.missionRewardMax||0,0,1000000000),
+        minMissionParticipants:int(req.body.gangMinMissionParticipants,cfg.gangs.minMissionParticipants||2,2,25),
+        maxMissionSteps:int(req.body.gangMaxMissionSteps,cfg.gangs.maxMissionSteps||5,1,10),
+        puzzleMaxAttempts:int(req.body.gangPuzzleMaxAttempts,cfg.gangs.puzzleMaxAttempts||2,1,20),
+        chatMaxAttempts:int(req.body.gangChatMaxAttempts,cfg.gangs.chatMaxAttempts||2,1,20),
+        relayMaxAttempts:int(req.body.gangRelayMaxAttempts,cfg.gangs.relayMaxAttempts||2,1,20),
+        missionVoiceSeconds:int(req.body.gangMissionVoiceSeconds,cfg.gangs.missionVoiceSeconds||60,10,3600),
+        roleColor:String(req.body.gangRoleColor||cfg.gangs.roleColor||'#2b2d31')
+      };
+      if(cfg.gangs.missionRewardMax<cfg.gangs.missionRewardMin)cfg.gangs.missionRewardMax=cfg.gangs.missionRewardMin;
+    }
+
+    if(saves('robbery')){
+      cfg.robbery={
+        ...cfg.robbery,
+        enabled:Boolean(req.body.robberyEnabled),
+        minParticipants:int(req.body.robberyMinParticipants,cfg.robbery?.minParticipants||5,2,maxFor(req,cfg,site,'robberyParticipants')),
+        lobbyMinutes:int(req.body.robberyLobbyMinutes,cfg.robbery?.lobbyMinutes||10,2,60),
+        missionMinutes:int(req.body.robberyMissionMinutes,cfg.robbery?.missionMinutes||25,5,180),
+        reward:int(req.body.robberyReward,cfg.robbery?.reward||50000,1,1000000000),
+        cooldownHours:int(req.body.robberyCooldownHours,cfg.robbery?.cooldownHours||12,0,720),
+        equipment:{
+          mask:int(req.body.robberyMask,cfg.robbery?.equipment?.mask||0,0,1000000000),
+          hacking:int(req.body.robberyHacking,cfg.robbery?.equipment?.hacking||0,0,1000000000),
+          drill:int(req.body.robberyDrill,cfg.robbery?.equipment?.drill||0,0,1000000000),
+          radio:int(req.body.robberyRadio,cfg.robbery?.equipment?.radio||0,0,1000000000),
+          car:int(req.body.robberyCar,cfg.robbery?.equipment?.car||0,0,1000000000)
+        }
+      };
+    }
+
+    if(saves('voice')){
+      cfg.voiceRooms={
+        ...cfg.voiceRooms,
+        enabled:Boolean(req.body.voiceRoomsEnabled),
+        roomName:String(req.body.voiceRoomName||cfg.voiceRooms?.roomName||'🎙️・{username}').slice(0,80),
+        userLimit:int(req.body.voiceUserLimit,cfg.voiceRooms?.userLimit||0,0,99),
+        bitrate:int(req.body.voiceBitrate,cfg.voiceRooms?.bitrate||64000,8000,384000)
+      };
+      cfg.economy={...cfg.economy,voiceChannelIds:arr(req.body.voiceChannelIds).slice(0,50)};
+    }
+
+    if(saves('name')){
+      cfg.nameChange={
+        ...cfg.nameChange,
+        enabled:Boolean(req.body.nameChangeEnabled),
+        title:String(req.body.nameChangeTitle||cfg.nameChange?.title||'').slice(0,160),
+        description:String(req.body.nameChangeDescription||cfg.nameChange?.description||'').slice(0,1200),
+        buttonLabel:String(req.body.nameChangeButtonLabel||cfg.nameChange?.buttonLabel||'تغيير اسمي').slice(0,80),
+        buttonEmoji:String(req.body.nameChangeButtonEmoji||cfg.nameChange?.buttonEmoji||'✏️').slice(0,32),
+        modalTitle:String(req.body.nameChangeModalTitle||cfg.nameChange?.modalTitle||'').slice(0,80),
+        inputLabel:String(req.body.nameChangeInputLabel||cfg.nameChange?.inputLabel||'').slice(0,80),
+        inputPlaceholder:String(req.body.nameChangeInputPlaceholder||cfg.nameChange?.inputPlaceholder||'').slice(0,120),
+        successMessage:String(req.body.nameChangeSuccessMessage||cfg.nameChange?.successMessage||'').slice(0,1200),
+        cooldownSeconds:int(req.body.nameChangeCooldownSeconds,cfg.nameChange?.cooldownSeconds||30,0,86400),
+        color:String(req.body.nameChangeColor||cfg.nameChange?.color||'#8B5CF6'),
+        bannerUrl:String(req.body.nameChangeBannerUrl||'').trim()
+      };
+    }
+
+    if(saves('tickets')){
+      cfg.tickets={
+        ...cfg.tickets,
+        title:String(req.body.ticketTitle||cfg.tickets.title).slice(0,256),
+        description:String(req.body.ticketDescription||cfg.tickets.description).slice(0,2000),
+        buttonLabel:String(req.body.ticketButtonLabel||cfg.tickets.buttonLabel).slice(0,80),
+        buttonEmoji:String(req.body.ticketButtonEmoji||cfg.tickets.buttonEmoji).slice(0,32),
+        supportRoleIds:arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles'))
+      };
+    }
+
+    if(saves('store')){
+      cfg.store={
+        ...cfg.store,
+        title:String(req.body.storeTitle||cfg.store.title).slice(0,256),
+        description:String(req.body.storeDescription||cfg.store.description).slice(0,2000),
+        footer:String(req.body.storeFooter||cfg.store.footer||'ZOMBI • ZOM Store').slice(0,160),
+        accentColor:String(req.body.storeAccentColor||cfg.store.accentColor||cfg.branding.color),
+        thumbnailUrl:String(req.body.storeThumbnailUrl||'').trim(),
+        bannerUrl:String(req.body.storeBannerUrl||'').trim(),
+        detailBannerUrl:String(req.body.storeDetailBannerUrl||'').trim()
+      };
+    }
+
+    if(saves('roles')){
+      cfg.rolePanel={
+        ...cfg.rolePanel,
+        title:String(req.body.rolePanelTitle||cfg.rolePanel.title).slice(0,256),
+        description:String(req.body.rolePanelDescription||cfg.rolePanel.description).slice(0,2000),
+        footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)
+      };
+      const autoRoleId=String(req.body.autoRoleRoleId||'').trim();
+      if(autoRoleId&&!req.bundle.roles.some(r=>r.id===autoRoleId&&r.id!==String(req.params.guildId)&&!r.managed)){
+        return res.status(400).send('الرتبة التلقائية غير صالحة لهذا السيرفر.');
+      }
+      cfg.autoRole={
+        enabled:Boolean(req.body.autoRoleEnabled)&&Boolean(autoRoleId),
+        roleId:autoRoleId,
+        includeBots:Boolean(req.body.autoRoleIncludeBots)
+      };
+    }
+
+    if(saves('games')){
+      const canRules=featureAllowed(site,cfg,'gameSettings');
+      for(const g of GAME_DEFS){
+        const allowed=gameAllowed(site,cfg,g.id);
+        cfg.games.enabled[g.id]=allowed&&Boolean(req.body[`game_enabled_${g.id}`]);
+        if(canRules&&allowed){
+          const old=cfg.games.quickGameSettings[g.id]||{};
+          cfg.games.quickGameSettings[g.id]={
+            rounds:int(req.body[`game_rounds_${g.id}`],old.rounds||5,1,maxFor(req,cfg,site,'maxRounds')),
+            roundTimeSeconds:int(req.body[`game_time_${g.id}`],old.roundTimeSeconds||25,5,maxFor(req,cfg,site,'maxRoundTimeSeconds')),
+            winnerReward:int(req.body[`game_reward_${g.id}`],old.winnerReward||300,0,maxFor(req,cfg,site,'maxWinnerReward'))
+          };
+        }
+      }
+      cfg.games.startRoleIds=arr(req.body.gameStartRoleIds).map(String).filter(id=>/^\d{15,25}$/.test(id)).slice(0,25);
+      cfg.games.wheelRewards=String(req.body.wheelRewards||'').split(/[\s,]+/).map(x=>Number(x)).filter(Number.isFinite).map(x=>Math.max(0,Math.round(x))).slice(0,30);
+      if(!cfg.games.wheelRewards.length)cfg.games.wheelRewards=[50,75,100,150,200,300];
+      cfg.games.rouletteEnabled=Boolean(req.body.rouletteEnabled);
+      cfg.games.rouletteTurnSeconds=int(req.body.rouletteTurnSeconds,cfg.games.rouletteTurnSeconds||25,10,120);
+      cfg.games.rouletteActionCosts={
+        revive:int(req.body.rouletteCostRevive,cfg.games.rouletteActionCosts?.revive||0,0,1000000000),
+        link:int(req.body.rouletteCostLink,cfg.games.rouletteActionCosts?.link||0,0,1000000000),
+        protect:int(req.body.rouletteCostProtect,cfg.games.rouletteActionCosts?.protect||0,0,1000000000),
+        freeze:int(req.body.rouletteCostFreeze,cfg.games.rouletteActionCosts?.freeze||0,0,1000000000),
+        double:int(req.body.rouletteCostDouble,cfg.games.rouletteActionCosts?.double||0,0,1000000000),
+        curse:int(req.body.rouletteCostCurse,cfg.games.rouletteActionCosts?.curse||0,0,1000000000),
+        unlink:int(req.body.rouletteCostUnlink,cfg.games.rouletteActionCosts?.unlink||0,0,1000000000),
+        add:int(req.body.rouletteCostAdd,cfg.games.rouletteActionCosts?.add||0,0,1000000000)
+      };
+      cfg.games.chairs={
+        ...cfg.games.chairs,
+        startCountdownSeconds:int(req.body.chairsStartCountdownSeconds,cfg.games.chairs?.startCountdownSeconds||5,1,60),
+        betweenRoundsMs:int(req.body.chairsBetweenRoundsMs,cfg.games.chairs?.betweenRoundsMs||2500,250,30000)
+      };
+      const playerMax=maxFor(req,cfg,site,'maxGamePlayers');
+      cfg.games.lobby=cfg.games.lobby||{};
+      for(const id of ['roulette','chairs']){
+        const min=int(req.body[`${id}MinPlayers`],cfg.games.lobby?.[id]?.minPlayers||2,2,playerMax);
+        const max=int(req.body[`${id}MaxPlayers`],cfg.games.lobby?.[id]?.maxPlayers||playerMax,min,playerMax);
+        cfg.games.lobby[id]={minPlayers:min,maxPlayers:max};
+      }
+      {
+        const min=int(req.body.mafiaMinPlayers,cfg.games.lobby?.mafia?.minPlayers||4,4,playerMax);
+        const max=int(req.body.mafiaMaxPlayers,cfg.games.lobby?.mafia?.maxPlayers||playerMax,min,playerMax);
+        cfg.games.lobby.mafia={minPlayers:min,maxPlayers:max};
+      }
+    }
+
+    access.restoreLocked(beforeSettings,cfg,site);
+    cfg.setupComplete=true;
+    const saved=await store.saveConfig(req.params.guildId,cfg);
+
+    if(saves('overview')&&isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')){
+      const forceProfile=String(req.body.forceBotProfile||'')==='1';
+      const nickChanged=forceProfile||oldBotProfile.botNickname!==String(saved.branding.botNickname||'');
+      if(nickChanged){
+        try{
+          await botFetch(`/guilds/${req.params.guildId}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding.botNickname||null})});
+        }catch(e){
+          const d=discordFormDetails(e);
+          throw new Error(`تم حفظ الإعدادات، لكن Discord رفض تغيير Nickname البوت: ${e.message}${d?` — ${d}`:''}`);
+        }
+      }
+    }
+
+    redirectDashboard(req,res);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/questions',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gameQuestions'))return res.status(403).send('تعديل الأسئلة غير متاح في خطتك.');const max=maxFor(req,cfg,site,'questionsPerGame'),next=normalizeGameContent({quizQuestions:parsePairs(req.body.quizText,max,'qa'),trueFalseQuestions:parsePairs(req.body.trueFalseText,max,'qa'),wordQuestions:parsePairs(req.body.wordText,max,'word'),speedWords:parseWords(req.body.speedText,max),dailyQuestions:parsePairs(req.body.dailyText,max,'qa')});await store.saveGameContent(req.params.guildId,next);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/gangs/bank',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),g=state.gangs?.[String(req.body.gangId||'')];if(!g)return res.status(404).send('العصابة غير موجودة.');g.bank=Math.max(0,Math.round(Number(req.body.amount)||0));await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'bank',gangId:g.id,amount:g.bank});redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/gangs/reset-mission',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),g=state.gangs?.[String(req.body.gangId||'')];if(!g)return res.status(404).send('العصابة غير موجودة.');g.lastMissionAt=0;await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'reset-mission',gangId:g.id});redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/gangs/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),site=await store.getGlobalConfig();if(!featureAllowed(site,cfg,'gangs'))return res.status(403).send('Gangs غير متاحة لهذه الخطة.');const state=await store.data(req.params.guildId,'gangs-public.json',{gangs:{},membership:{}}),id=String(req.body.gangId||''),g=state.gangs?.[id];if(!g)return res.status(404).send('العصابة غير موجودة.');if(g.channelId)await botFetch(`/channels/${g.channelId}`,{method:'DELETE'}).catch(()=>{});if(g.roleId)await botFetch(`/guilds/${req.params.guildId}/roles/${g.roleId}`,{method:'DELETE'}).catch(()=>{});for(const uid of g.members||g.memberIds||[])if(state.membership?.[uid]===id)delete state.membership[uid];delete state.gangs[id];await store.saveData(req.params.guildId,'gangs-public.json',state);await appendHomeAdminOp(req.params.guildId,'home-gang-admin-ops.json',{type:'gang',action:'delete',gangId:id});redirectDashboard(req,res);}catch(e){next(e);}});
+
+  // ============================================================
+  // 🎉 EVENT SYSTEM — points / leaderboard / reset / custom commands
+  // ============================================================
+  app.post('/dashboard/:guildId/event/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),current=eventConfig(cfg);
+    const validChannelIds=new Set(req.bundle.channels.filter(c=>[0,5].includes(Number(c.type))).map(c=>String(c.id)));
+    const submittedChannels=req.body.eventChannelIds!==undefined?arr(req.body.eventChannelIds):arr(req.body.eventChannelId);
+    const requestedChannels=[...new Set(submittedChannels.map(String).map(x=>x.trim()).filter(x=>validChannelIds.has(x)))];
+    const channelLimit=eventChannelLimit(cfg);
+    if(requestedChannels.length>channelLimit)return res.status(400).send(`خطتك تسمح بحد أقصى ${channelLimit} شات للأيفنت.`);
+    if(Boolean(req.body.enabled)&&!requestedChannels.length)return res.status(400).send('حدد شات نصي واحد على الأقل لنظام الأيفنت.');
+    const roleIds=new Set(req.bundle.roles.map(r=>String(r.id)));
+    const staffRoleIds=arr(req.body.staffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
+    const logEvent=String(req.body.logEvent||'').trim();
+    if(logEvent&&!req.bundle.channels.some(c=>String(c.id)===logEvent&&[0,5].includes(Number(c.type))))return res.status(400).send('شات لوق الأيفنت غير صحيح.');
+    cfg.event={...current,
+      enabled:Boolean(req.body.enabled),
+      channelIds:requestedChannels,
+      channelId:requestedChannels[0]||'',
+      staffRoleIds,
+      publicLeaderboard:Boolean(req.body.publicLeaderboard),
+      leaderboardLimit:int(req.body.leaderboardLimit,current.leaderboardLimit,3,25),
+      pointLabel:String(req.body.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
+      leaderboardCommand:String(req.body.leaderboardCommand||'نقاط').trim().replace(/\s+/g,' ').slice(0,40)||'نقاط',
+      resetCommand:String(req.body.resetCommand||'ترسيت').trim().replace(/\s+/g,' ').slice(0,40)||'ترسيت',
+      directPointsEnabled:Boolean(req.body.directPointsEnabled),
+      quickCommands:normalizeEventQuickCommands(current.quickCommands)
+    };
+    cfg.channels=cfg.channels||{};cfg.channels.logEvent=logEvent;
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),list=normalizeEventQuickCommands(evt.quickCommands);
+    if(list.length>=30)return res.status(400).send('الحد الأقصى 30 أمر أيفنت.');
+    const command=String(req.body.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)return res.status(400).send('اكتب اسم الأمر.');
+    if(list.some(x=>x.command.toLowerCase()===command.toLowerCase()))return res.status(400).send('هذا الأمر موجود مسبقًا.');
+    const action={id:`event_${Date.now().toString(36)}_${Math.floor(Math.random()*9999)}`,command,label:String(req.body.label||command).trim().slice(0,80)||command,points:int(req.body.points,0,-1000000,1000000),zom:int(req.body.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(req.body.targetMode)?req.body.targetMode:'mention',response:String(req.body.response||'').trim().slice(0,500),enabled:Boolean(req.body.enabled)};
+    cfg.event={...evt,quickCommands:[...list,action]};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),list=normalizeEventQuickCommands(evt.quickCommands),action=list.find(x=>x.id===String(req.body.actionId||''));
+    if(!action)return res.status(404).send('أمر الأيفنت غير موجود.');
+    const command=String(req.body.command||'').trim().replace(/\s+/g,' ').slice(0,40);if(!command)return res.status(400).send('اكتب اسم الأمر.');
+    if(list.some(x=>x.id!==action.id&&x.command.toLowerCase()===command.toLowerCase()))return res.status(400).send('يوجد أمر آخر بنفس الاسم.');
+    Object.assign(action,{command,label:String(req.body.label||command).trim().slice(0,80)||command,points:int(req.body.points,0,-1000000,1000000),zom:int(req.body.zom,0,0,1000000000),targetMode:['mention','self','either'].includes(req.body.targetMode)?req.body.targetMode:'mention',response:String(req.body.response||'').trim().slice(0,500),enabled:Boolean(req.body.enabled)});
+    cfg.event={...evt,quickCommands:list};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/actions/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),evt=eventConfig(cfg),actionId=String(req.body.actionId||'');
+    cfg.event={...evt,quickCommands:normalizeEventQuickCommands(evt.quickCommands).filter(x=>x.id!==actionId)};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/member',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const userId=String(req.body.userId||'').trim();if(!/^\d{15,25}$/.test(userId))return res.status(400).send('User ID غير صحيح.');
+    const action=['add','remove','set','reset'].includes(String(req.body.action||''))?String(req.body.action):'add';
+    const amount=Math.max(0,Math.min(1000000000,Math.round(Number(req.body.amount)||0)));
+    const state=eventState(await store.data(req.params.guildId,'event-system.json',{season:1,users:{},history:[]}));
+    const before=Number(state.users[userId]?.points||0);let after=before;
+    if(action==='add')after=before+amount;else if(action==='remove')after=before-amount;else if(action==='set')after=amount;else after=0;
+    const old=state.users[userId]||{points:0,added:0,removed:0,zomAwarded:0};
+    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard')};
+    state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:userId,type:`dashboard-${action}`,delta:after-before,zom:0,command:'Dashboard',note:`${action}: ${before} -> ${after}`});state.history=state.history.slice(0,500);
+    await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/reset',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const state=eventState(await store.data(req.params.guildId,'event-system.json',{season:1,users:{},history:[]})),count=Object.keys(state.users||{}).length;
+    state.season=Number(state.season||1)+1;state.users={};state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:'',type:'dashboard-reset-all',delta:0,zom:0,command:'Dashboard',note:`Reset ${count} members`});state.history=state.history.slice(0,500);
+    await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/bot-profile',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
+    if(!isGuildOwner(req)||!featureAllowed(site,cfg,'customBotProfile'))return res.status(403).send(layout('Premium',`<section class="login"><h1>🔒 Premium + مالك السيرفر فقط</h1><p>تخصيص Nickname ولوجو وبنر ZOMBI متاح للمشترك، ولا يستطيع تغييره إلا مالك السيرفر.</p><a class="btn" href="/dashboard/${req.params.guildId}?section=premium">رجوع</a></section>`,req.user));
+    const mode=['save','force','reset'].includes(String(req.body.profileMode||''))?String(req.body.profileMode):'save';
+    const old={botNickname:String(cfg.branding?.botNickname||''),avatarUrl:String(cfg.branding?.avatarUrl||''),bannerUrl:String(cfg.branding?.bannerUrl||''),bio:String(cfg.branding?.bio||'')};
+    const nextProfile=mode==='reset'?{botNickname:'',avatarUrl:'',bannerUrl:'',bio:''}:{botNickname:String(req.body.botNickname||'').trim().slice(0,32),avatarUrl:String(req.body.avatarUrl||'').trim(),bannerUrl:String(req.body.bannerUrl||'').trim(),bio:String(req.body.botBio||'').trim().slice(0,190)};
+    const force=mode==='force'||mode==='reset';
+    if(force||old.botNickname!==nextProfile.botNickname){try{await botFetch(`/guilds/${req.params.guildId}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:nextProfile.botNickname||null})});}catch(e){{const d=discordFormDetails(e);throw new Error(`Discord رفض تغيير Nickname البوت: ${e.message}${d?` — ${d}`:''}`);}}}
+    // Discord لا يوفر Avatar/Banner منفصلًا للبوت لكل Guild عبر member PATCH.
+    // نحفظ الروابط كتخصيص خاص بلوحات/Embeds هذا السيرفر فقط، بينما Nickname يتطبق فعليًا داخل السيرفر.
+    cfg.branding.botNickname=nextProfile.botNickname;cfg.branding.avatarUrl=nextProfile.avatarUrl;cfg.branding.bannerUrl=nextProfile.bannerUrl;cfg.branding.panelLogoUrl=nextProfile.avatarUrl;cfg.branding.panelBannerUrl=nextProfile.bannerUrl;cfg.branding.bio=nextProfile.bio;await store.saveConfig(req.params.guildId,cfg);
+    redirectDashboard(req,res);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/redeem',requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await store.redeemCode(req.params.guildId,req.body.code);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Premium',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
+  app.post('/dashboard/:guildId/economy/user',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
+    if(!featureAllowed(site,cfg,'economyAdmin')) return res.status(403).send('إدارة أرصدة الأعضاء غير متاحة في هذه الخطة.');
+    const userId=String(req.body.userId||'').trim();if(!/^\d{15,25}$/.test(userId))return res.status(400).send('User ID غير صحيح.');
+    const account=req.body.account==='bank'?'bank':'wallet',action=['set','add','remove'].includes(req.body.action)?req.body.action:'set',amount=Math.max(0,Math.round(Number(req.body.amount)||0));
+    await store.updateUser(req.params.guildId,userId,u=>{const key=account==='bank'?'bankBalance':'balance';if(action==='set')u[key]=amount;else if(action==='add')u[key]=Number(u[key]||0)+amount;else u[key]=Math.max(0,Number(u[key]||0)-amount);});
+    await appendHomeAdminOp(req.params.guildId,'home-economy-admin-ops.json',{type:'economy',userId,account,action,amount});
+    redirectDashboard(req,res);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/store/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'store'))return res.status(403).send('Store غير متاح لهذه الخطة.');const limit=maxFor(req,cfg,site,'storeProducts');if(cfg.store.products.length>=limit)return res.status(403).send(`وصلت للحد المسموح (${limit}).`);const role=req.bundle.roles.find(r=>r.id===String(req.body.roleId));if(!role)return res.status(400).send('Role invalid');if(cfg.store.products.some(p=>p.roleId===role.id))return res.status(400).send('هذه الرتبة موجودة في المتجر.');cfg.store.products.push({id:`product_${Date.now()}_${Math.floor(Math.random()*9999)}`,type:'role',roleId:role.id,name:String(req.body.name||role.name).slice(0,80),price:Math.max(1,Math.round(Number(req.body.price)||1)),category:String(req.body.category||'رتب الأعضاء').slice(0,80),emoji:String(req.body.emoji||'🏷️').slice(0,32),description:String(req.body.description||'').slice(0,1000),features:String(req.body.features||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,8),imageUrl:String(req.body.imageUrl||'').trim(),bannerUrl:String(req.body.bannerUrl||'').trim(),enabled:Boolean(req.body.enabled),sortOrder:int(req.body.sortOrder,10,0,9999),accessMode:['everyone','admins','roles'].includes(req.body.accessMode)?req.body.accessMode:'everyone',allowedRoleIds:arr(req.body.allowedRoleIds).slice(0,25)});await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/store/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),p=cfg.store.products.find(x=>String(x.id)===String(req.body.productId));if(!p)return res.status(404).send('المنتج غير موجود.');const role=req.bundle.roles.find(r=>r.id===String(req.body.roleId));if(role)p.roleId=role.id;p.name=String(req.body.name||role?.name||p.name).slice(0,80);p.price=Math.max(1,Math.round(Number(req.body.price)||1));p.category=String(req.body.category||'رتب الأعضاء').slice(0,80);p.emoji=String(req.body.emoji||'🏷️').slice(0,32);p.description=String(req.body.description||'').slice(0,1000);p.features=String(req.body.features||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,8);p.imageUrl=String(req.body.imageUrl||'').trim();p.bannerUrl=String(req.body.bannerUrl||'').trim();p.enabled=Boolean(req.body.enabled);p.sortOrder=int(req.body.sortOrder,p.sortOrder||0,0,9999);p.accessMode=['everyone','admins','roles'].includes(req.body.accessMode)?req.body.accessMode:'everyone';p.allowedRoleIds=arr(req.body.allowedRoleIds).slice(0,25);await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/store/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),id=String(req.body.productId||'');cfg.store.products=cfg.store.products.filter(p=>String(p.id)!==id);await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/roles/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'rolePanel'))return res.status(403).send('Self Roles غير متاحة لهذه الخطة.');const limit=maxFor(req,cfg,site,'selfRoles');if(cfg.rolePanel.items.length>=limit)return res.status(403).send(`وصلت للحد المسموح (${limit}).`);const role=req.bundle.roles.find(r=>r.id===String(req.body.roleId));if(!role)return res.status(400).send('Role invalid');if(!cfg.rolePanel.items.some(p=>p.roleId===role.id))cfg.rolePanel.items.push({roleId:role.id,label:String(req.body.label||role.name).slice(0,80),emoji:String(req.body.emoji||'🔔').slice(0,32),style:['Primary','Secondary','Success','Danger'].includes(req.body.style)?req.body.style:'Primary'});await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/roles/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),item=cfg.rolePanel.items.find(x=>x.roleId===String(req.body.roleId));if(!item)return res.status(404).send('الرتبة غير موجودة.');const newRole=req.bundle.roles.find(r=>r.id===String(req.body.newRoleId));if(newRole)item.roleId=newRole.id;item.label=String(req.body.label||newRole?.name||item.label).slice(0,80);item.emoji=String(req.body.emoji||'🔔').slice(0,32);item.style=['Primary','Secondary','Success','Danger'].includes(req.body.style)?req.body.style:'Primary';await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/roles/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);cfg.rolePanel.items=cfg.rolePanel.items.filter(p=>p.roleId!==String(req.body.roleId));await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/guide/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
+    if(!featureAllowed(site,cfg,'serverGuide'))return res.status(403).send('دليل السيرفر غير متاح لهذه الخطة.');
+    const limit=maxFor(req,cfg,site,'serverGuideButtons');if((cfg.serverGuide?.items||[]).length>=limit)return res.status(403).send(`وصلت لحد أزرار دليل السيرفر (${limit}).`);
+    const channelId=String(req.body.channelId||'');if(!req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(c.type)))return res.status(400).send('الروم المحدد غير صالح.');
+    let id=slug(req.body.label)||`guide-${Date.now().toString(36)}`;while((cfg.serverGuide.items||[]).some(x=>x.id===id))id=`${id}-${Math.floor(Math.random()*99)}`;
+    cfg.serverGuide.items.push({id,label:String(req.body.label||'انتقال').slice(0,80),emoji:String(req.body.emoji||'➡️').slice(0,32),channelId,sortOrder:int(req.body.sortOrder,10,0,9999),enabled:Boolean(req.body.enabled)});
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'guide');
+  }catch(e){next(e);}});
+  app.post('/dashboard/:guildId/guide/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),item=(cfg.serverGuide?.items||[]).find(x=>String(x.id)===String(req.body.itemId||''));if(!item)return res.status(404).send('اختصار دليل السيرفر غير موجود.');
+    const channelId=String(req.body.channelId||'');if(!req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(c.type)))return res.status(400).send('الروم المحدد غير صالح.');
+    item.label=String(req.body.label||item.label||'انتقال').slice(0,80);item.emoji=String(req.body.emoji||'➡️').slice(0,32);item.channelId=channelId;item.sortOrder=int(req.body.sortOrder,item.sortOrder||0,0,9999);item.enabled=Boolean(req.body.enabled);
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'guide');
+  }catch(e){next(e);}});
+  app.post('/dashboard/:guildId/guide/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),id=String(req.body.itemId||'');cfg.serverGuide.items=(cfg.serverGuide?.items||[]).filter(x=>String(x.id)!==id);await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'guide');}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/city-director/template/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'cityDirector'))return res.status(403).send('City Director غير متاح لهذه الخطة.');
+    const limit=maxFor(req,cfg,site,'cityDirectorTemplates');if((cfg.cityDirector?.templates||[]).length>=limit)return res.status(403).send(`وصلت لحد قوالب City Director (${limit}).`);
+    let id=slug(req.body.name)||`event-${Date.now().toString(36)}`;while((cfg.cityDirector.templates||[]).some(x=>x.id===id))id=`${id}-${Math.floor(Math.random()*99)}`;
+    cfg.cityDirector.templates.push({id,name:String(req.body.name||'حدث المدينة').slice(0,100),emoji:String(req.body.emoji||'🌆').slice(0,32),description:String(req.body.description||'').slice(0,1500),difficulty:['normal','hard','elite','legendary'].includes(String(req.body.difficulty))?String(req.body.difficulty):'normal',goalMultiplier:Math.max(.25,Math.min(5,Number(req.body.goalMultiplier)||1)),enabled:Boolean(req.body.enabled)});
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'director');
+  }catch(e){next(e);}});
+  app.post('/dashboard/:guildId/city-director/template/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),item=(cfg.cityDirector?.templates||[]).find(x=>String(x.id)===String(req.body.templateId||''));if(!item)return res.status(404).send('قالب City Director غير موجود.');
+    item.name=String(req.body.name||item.name||'حدث المدينة').slice(0,100);item.emoji=String(req.body.emoji||'🌆').slice(0,32);item.description=String(req.body.description||'').slice(0,1500);item.difficulty=['normal','hard','elite','legendary'].includes(String(req.body.difficulty))?String(req.body.difficulty):'normal';item.goalMultiplier=Math.max(.25,Math.min(5,Number(req.body.goalMultiplier)||1));item.enabled=Boolean(req.body.enabled);
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'director');
+  }catch(e){next(e);}});
+  app.post('/dashboard/:guildId/city-director/template/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),id=String(req.body.templateId||'');cfg.cityDirector.templates=(cfg.cityDirector?.templates||[]).filter(x=>String(x.id)!==id);await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'director');}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/city-director/start',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'cityDirector'))return res.status(403).send('City Director غير متاح لهذه الخطة.');if(cfg.cityDirector?.enabled===false)return res.status(400).send('فعّل City Director واحفظ الإعدادات أولًا.');if(!cfg.channels?.cityDirector)return res.status(400).send('حدد روم City Director أولًا.');
+    const wanted=String(req.body.templateId||'');
+    if(wanted){
+      const customOk=(cfg.cityDirector.templates||[]).some(x=>x.id===wanted&&x.enabled!==false);
+      const builtinOk=cfg.cityDirector?.useBuiltinEvents!==false&&builtInEvents().some(x=>x.id===wanted);
+      if(!customOk&&!builtinOk)return res.status(400).send('قالب الحدث غير صالح أو غير مفعّل.');
+    }
+    cfg.cityDirector.pendingAction={id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`,action:'start',templateId:wanted,createdAt:Date.now()};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'director');
+  }catch(e){next(e);}});
+  app.post('/dashboard/:guildId/city-director/stop',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'cityDirector'))return res.status(403).send('City Director غير متاح لهذه الخطة.');cfg.cityDirector.pendingAction={id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`,action:'stop',createdAt:Date.now()};await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'director');}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/tickets/type/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'tickets'))return res.status(403).send('Tickets غير متاحة لهذه الخطة.');const limit=maxFor(req,cfg,site,'ticketTypes');if(cfg.tickets.types.length>=limit)return res.status(403).send(`وصلت لحد أنواع التذاكر (${limit}).`);let id=slug(req.body.label)||`type-${Date.now().toString(36)}`;while(cfg.tickets.types.some(x=>x.id===id))id=`${id}-${Math.floor(Math.random()*99)}`;cfg.tickets.types.push({id,label:String(req.body.label||'دعم').slice(0,80),name:String(req.body.label||'دعم').slice(0,80),emoji:String(req.body.emoji||'🎫').slice(0,32),description:String(req.body.description||'').slice(0,300),welcomeMessage:String(req.body.welcomeMessage||'اشرح طلبك وسيتم الرد عليك من الإدارة.').slice(0,1200),categoryId:String(req.body.categoryId||''),supportRoleIds:arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles')),viewRoleIds:arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles')),openRoleIds:arr(req.body.openRoleIds).slice(0,50),maxOpenPerUser:int(req.body.maxOpenPerUser,1,1,10),enabled:Boolean(req.body.enabled)});await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/tickets/type/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]),t=cfg.tickets.types.find(x=>x.id===String(req.body.typeId));if(!t)return res.status(404).send('نوع التذكرة غير موجود.');t.label=String(req.body.label||t.label).slice(0,80);t.name=t.label;t.emoji=String(req.body.emoji||'🎫').slice(0,32);t.description=String(req.body.description||'').slice(0,300);t.welcomeMessage=String(req.body.welcomeMessage||'').slice(0,1200);t.categoryId=String(req.body.categoryId||'');t.supportRoleIds=arr(req.body.supportRoleIds).slice(0,maxFor(req,cfg,site,'ticketSupportRoles'));t.viewRoleIds=[...t.supportRoleIds];t.openRoleIds=arr(req.body.openRoleIds).slice(0,50);t.maxOpenPerUser=int(req.body.maxOpenPerUser,t.maxOpenPerUser||1,1,10);t.enabled=Boolean(req.body.enabled);await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/tickets/type/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);cfg.tickets.types=cfg.tickets.types.filter(x=>x.id!==String(req.body.typeId));await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/killer/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gameQuestions'))return res.status(403).send('Killer Editor غير متاح في خطتك.');const list=await store.data(req.params.guildId,'killer-cases.json',[]),limit=maxFor(req,cfg,site,'killerCases');if(list.length>=limit)return res.status(403).send(`وصلت لحد القضايا (${limit}).`);const suspects=String(req.body.suspects||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,5),clues=String(req.body.clues||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,10),hints=String(req.body.hints||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,3),killer=String(req.body.killer||'').trim();if(suspects.length<2||!suspects.includes(killer)||!clues.length||hints.length!==3)return res.status(400).send('القضية تحتاج 2-5 مشتبهين، القاتل واحد منهم، دليل واحد على الأقل و3 تلميحات بالضبط.');list.push({id:`case_${Date.now()}_${Math.floor(Math.random()*9999)}`,enabled:Boolean(req.body.enabled),title:String(req.body.title||'قضية').slice(0,120),story:String(req.body.story||'').slice(0,2000),suspects,clues,hints,killer,answer:String(req.body.answer||'').slice(0,2000),updatedAt:Date.now()});await store.saveData(req.params.guildId,'killer-cases.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/killer/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const list=await store.data(req.params.guildId,'killer-cases.json',[]),c=list.find(x=>String(x.id)===String(req.body.caseId));if(!c)return res.status(404).send('القضية غير موجودة.');const suspects=String(req.body.suspects||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,5),clues=String(req.body.clues||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,10),hints=String(req.body.hints||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,3),killer=String(req.body.killer||'').trim();if(suspects.length<2||!suspects.includes(killer)||!clues.length||hints.length!==3)return res.status(400).send('القضية تحتاج 2-5 مشتبهين، القاتل واحد منهم، دليل واحد على الأقل و3 تلميحات بالضبط.');Object.assign(c,{enabled:Boolean(req.body.enabled),title:String(req.body.title||'قضية').slice(0,120),story:String(req.body.story||'').slice(0,2000),suspects,clues,hints,killer,answer:String(req.body.answer||'').slice(0,2000),updatedAt:Date.now()});await store.saveData(req.params.guildId,'killer-cases.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/killer/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{let list=await store.data(req.params.guildId,'killer-cases.json',[]);list=list.filter(x=>String(x.id)!==String(req.body.caseId));await store.saveData(req.params.guildId,'killer-cases.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/gang-missions/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gangMissions'))return res.status(403).send('مهمات العصابات غير متاحة.');const list=await store.data(req.params.guildId,'gang-missions.json',[]),limit=maxFor(req,cfg,site,'gangMissionTemplates');if(list.length>=limit)return res.status(403).send(`وصلت لحد المهمات (${limit}).`);const steps=String(req.body.steps||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,5);if(!steps.length)return res.status(400).send('أضف مرحلة واحدة على الأقل.');list.push({id:`gm_${Date.now()}_${Math.floor(Math.random()*9999)}`,enabled:Boolean(req.body.enabled),name:String(req.body.name||'مهمة').slice(0,100),description:String(req.body.description||'').slice(0,600),difficulty:['hard','elite','legendary'].includes(req.body.difficulty)?req.body.difficulty:'hard',minParticipants:int(req.body.minParticipants,2,2,maxFor(req,cfg,site,'gangMembers')),steps,updatedAt:Date.now()});await store.saveData(req.params.guildId,'gang-missions.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/gang-missions/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]),list=await store.data(req.params.guildId,'gang-missions.json',[]),m=list.find(x=>String(x.id)===String(req.body.missionId));if(!m)return res.status(404).send('المهمة غير موجودة.');const steps=String(req.body.steps||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,5);if(!steps.length)return res.status(400).send('أضف مرحلة واحدة على الأقل.');Object.assign(m,{enabled:Boolean(req.body.enabled),name:String(req.body.name||'مهمة').slice(0,100),description:String(req.body.description||'').slice(0,600),difficulty:['hard','elite','legendary'].includes(req.body.difficulty)?req.body.difficulty:'hard',minParticipants:int(req.body.minParticipants,2,2,maxFor(req,cfg,site,'gangMembers')),steps,updatedAt:Date.now()});await store.saveData(req.params.guildId,'gang-missions.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/gang-missions/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{let list=await store.data(req.params.guildId,'gang-missions.json',[]);list=list.filter(x=>String(x.id)!==String(req.body.missionId));await store.saveData(req.params.guildId,'gang-missions.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/restore-legacy',requireLogin,requireOwner,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');if(String(req.params.guildId)!==homeId)return res.status(403).send('الاسترجاع متاح لسيرفر ZOMBI الأصلي فقط.');const current=await store.getConfig(homeId),keep={plan:current.plan,premiumUntil:current.premiumUntil,createdAt:current.createdAt},cfg={...legacyPreset.config,...keep,legacyPresetVersion:'v8.8',legacyPresetImportedAt:Date.now()};await store.saveConfig(homeId,cfg);for(const [name,value] of Object.entries(legacyPreset.data||{}))await store.saveData(homeId,name,value);res.redirect(`/dashboard/${homeId}`);}catch(e){next(e);}});
+
+  for(const which of ['bank','games','tickets','store','roles','name','guide'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
+
+  app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(publicSiteConfig(await store.getGlobalConfig())),req.user));}catch(e){next(e);}});
+
+  app.get('/owner',requireLogin,requireOwner,async(req,res,next)=>{try{
+    const token=csrf(req),ids=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse(),paymentItems=await payments.list({limit:100});
+    const zain=resolvedZainCash(site),pendingPayments=paymentItems.filter(x=>x.status==='pending').length;
+    const entries=await Promise.all(ids.slice(0,250).map(async id=>{
+      const [g,cfg]=await Promise.all([getBotGuild(id).catch(()=>null),store.getConfig(id)]);
+      return {id,g,cfg,plan:planNameForConfig(cfg)};
+    }));
+    const premiumCount=entries.filter(x=>x.plan==='premium').length,plusCount=entries.filter(x=>x.plan==='premium_plus').length,freeCount=entries.filter(x=>x.plan==='free').length;
+    const availableCodes=codes.filter(c=>!c.usedAt).length;
+    const rows=entries.map(({id,g,cfg,plan})=>`<tr><td><div class="owner-server-name"><span class="owner-server-icon">${g?.icon?`<img src="https://cdn.discordapp.com/icons/${id}/${g.icon}.png" alt="">`:'Z'}</span><span><b>${esc(g?.name||'Unknown')}</b><small>${id}</small></span></div></td><td>${Number(g?.approximate_member_count||0).toLocaleString()}</td><td><span class="owner-plan-chip owner-plan-${plan}">${planBadge(cfg)}</span></td><td><div class="owner-actions"><a class="mini-link" href="/dashboard/${id}">فتح الداشبورد</a><form class="mini owner-plan-form" method="post" action="/owner/premium"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="guildId" value="${id}"><select name="plan" aria-label="خطة الاشتراك"><option value="premium" ${cfg.plan!=='premium_plus'?'selected':''}>Premium</option><option value="premium_plus" ${cfg.plan==='premium_plus'?'selected':''}>Premium+</option></select><button name="days" value="30">+30 يوم</button><button name="days" value="90">+90 يوم</button><button name="days" value="365">+سنة</button><button class="danger" name="days" value="0">إلغاء</button></form>${g?`<form class="mini owner-leave-form" method="post" action="/owner/guilds/${id}/leave" onsubmit="return confirm('⚠️ سيتم إخراج ZOMBI من سيرفر ${esc(g.name||id)} مباشرة. هل أنت متأكد؟')"><input type="hidden" name="_csrf" value="${token}"><button class="danger owner-leave-btn" type="submit">🚪 حذف السيرفر</button></form>`:'<span class="owner-missing-guild">البوت غير موجود</span>'}</div></td></tr>`).join('');
+
+    const featureRows=FEATURE_DEFS.map(f=>{
+      const subscriberOnly=f.key==='customBotProfile';
+      return `<tr class="${subscriberOnly?'subscriber-only-row':''}"><td><div class="owner-feature-label"><span>${f.emoji}</span><div><b>${esc(f.label)}</b>${subscriberOnly?'<small>للمشتركين فقط — لا يمكن تفعيله على Free</small>':''}</div></div></td><td><input type="checkbox" name="free_feature_${f.key}" ${!subscriberOnly&&site.plans.free.features[f.key]?'checked':''} ${subscriberOnly?'disabled':''}>${subscriberOnly?'<span class="owner-lock-tag">🔒 مشترك فقط</span>':''}</td><td><input type="checkbox" name="premium_feature_${f.key}" ${site.plans.premium.features[f.key]?'checked':''}></td><td><input type="checkbox" name="premium_plus_feature_${f.key}" ${site.plans.premium_plus.features[f.key]?'checked':''}></td></tr>`;
+    }).join('');
+
+    const gameRows=GAME_DEFS.map(g=>g.publicSupported?`<tr><td>${g.emoji} ${esc(g.label)}</td><td><input type="checkbox" name="free_game_${g.id}" ${site.plans.free.games[g.id]?'checked':''}></td><td><input type="checkbox" name="premium_game_${g.id}" ${site.plans.premium.games[g.id]?'checked':''}></td><td><input type="checkbox" name="premium_plus_game_${g.id}" ${site.plans.premium_plus.games[g.id]?'checked':''}></td></tr>`:`<tr class="locked"><td>${g.emoji} ${esc(g.label)}<small>للسيرفر الأساسي فقط</small></td><td>—</td><td>—</td><td>—</td></tr>`).join('');
+    const heistGameRows=HEIST_GAME_DEFS.map(g=>`<tr><td>${g.emoji} ${esc(g.label)}</td><td><input type="checkbox" name="free_heist_${g.id}" ${site.plans.free.heistGames?.[g.id]?'checked':''}></td><td><input type="checkbox" name="premium_heist_${g.id}" ${site.plans.premium.heistGames?.[g.id]?'checked':''}></td><td><input type="checkbox" name="premium_plus_heist_${g.id}" ${site.plans.premium_plus.heistGames?.[g.id]?'checked':''}></td></tr>`).join('');
+    const limitRows=LIMIT_DEFS.map(d=>`<tr><td><b>${esc(d.label)}</b><small>${d.min.toLocaleString()} – ${d.max.toLocaleString()}</small></td><td><input type="number" name="free_limit_${d.key}" value="${site.plans.free.limits[d.key]}" min="${d.min}" max="${d.max}"></td><td><input type="number" name="premium_limit_${d.key}" value="${site.plans.premium.limits[d.key]}" min="${d.min}" max="${d.max}"></td><td><input type="number" name="premium_plus_limit_${d.key}" value="${site.plans.premium_plus.limits[d.key]}" min="${d.min}" max="${d.max}"></td></tr>`).join('');
+
+    const codeCards=codes.map(c=>`<div class="owner-code-card ${c.usedAt?'used':''}"><code>${esc(c.code)}</code><span>${PLAN_LABELS[c.plan||'premium']} • ${c.days} يوم</span><b>${c.usedAt?'مستخدم':'جاهز للتفعيل'}</b></div>`).join('')||'<p>لا يوجد أكواد.</p>';
+    const paymentRows=paymentItems.map(x=>`<tr><td><code>${esc(x.id)}</code><small>${esc(paymentDate(x.createdAt))}</small></td><td><b>${esc(x.username||x.userId)}</b><small>${esc(x.userId)}</small></td><td><b>${esc(x.guildName||x.guildId)}</b><small>${esc(x.guildId)}</small></td><td>${esc(PLAN_LABELS[x.plan]||x.plan)}<small>${Number(x.amount).toFixed(3).replace(/\.000$/,'')} JOD • ${x.days} يوم</small></td><td><span dir="ltr">${esc(x.payerPhone)}</span>${x.transactionRef?`<small>Ref: ${esc(x.transactionRef)}</small>`:'<small>بدون رقم عملية</small>'}</td><td><a class="mini-link" target="_blank" rel="noopener" href="/owner/payments/${encodeURIComponent(x.id)}/proof">🧾 الإثبات</a></td><td><span class="z-payment-status z-status-${esc(x.status)}">${paymentStatusLabel(x.status)}</span>${x.reviewNote?`<small>${esc(x.reviewNote)}</small>`:''}</td><td>${x.status==='pending'?`<div class="owner-payment-actions"><form method="post" action="/owner/payments/${encodeURIComponent(x.id)}/approve"><input type="hidden" name="_csrf" value="${token}"><button class="btn success">✅ قبول وتفعيل</button></form><form method="post" action="/owner/payments/${encodeURIComponent(x.id)}/reject"><input type="hidden" name="_csrf" value="${token}"><input name="note" maxlength="300" placeholder="سبب الرفض (اختياري)"><button class="btn danger">❌ رفض</button></form></div>`:'—'}</td></tr>`).join('');
+
+    res.send(layout('Owner',`<div class="owner-console">
+      <section class="owner-hero">
+        <div><span class="badge">ZOMBI CONTROL CENTER</span><h1>👑 لوحة المالك</h1><p>إدارة الاشتراكات والأسعار والمميزات والحدود من مكان واحد. إعدادات أي سيرفر تبقى ملتزمة بخطته حتى عند فتحها من حساب Owner.</p></div>
+        <div class="owner-hero-mark">Z</div>
+      </section>
+
+      <section class="owner-stat-grid">
+        <article><span>🌐</span><div><small>كل السيرفرات</small><strong>${ids.length.toLocaleString()}</strong></div></article>
+        <article><span>🆓</span><div><small>Free</small><strong>${freeCount.toLocaleString()}</strong></div></article>
+        <article><span>💎</span><div><small>Premium</small><strong>${premiumCount.toLocaleString()}</strong></div></article>
+        <article><span>👑</span><div><small>Premium+</small><strong>${plusCount.toLocaleString()}</strong></div></article>
+        <article><span>🎟️</span><div><small>أكواد متاحة</small><strong>${availableCodes.toLocaleString()}</strong></div></article>
+        <article><span>💳</span><div><small>دفعات بانتظارك</small><strong>${pendingPayments.toLocaleString()}</strong></div></article>
+      </section>
+
+      <section class="panel owner-section owner-site-settings">
+        <div class="owner-section-head"><div><span class="owner-section-icon">🌐</span><div><h2>إعدادات الموقع والاشتراك</h2><p>الأسعار وروابط الشراء ورسالة الترويج التي تظهر للمستخدمين.</p></div></div><span class="owner-section-pill">GLOBAL</span></div>
+        <form class="form-grid owner-form-grid" method="post" action="/owner/site"><input type="hidden" name="_csrf" value="${token}">
+          <label>سعر Premium<input name="premiumPrice" value="${esc(site.premiumPrice)}" placeholder="مثال: 3 JD / شهر"></label>
+          <label>سعر Premium+<input name="premiumPlusPrice" value="${esc(site.premiumPlusPrice)}" placeholder="مثال: 6 JD / شهر"></label>
+          <label class="owner-toggle"><input type="checkbox" name="zainCashEnabled" ${site.zainCash?.enabled?'checked':''}><span>تفعيل الدفع اليدوي عبر Zain Cash</span></label>
+          <label>رقم محفظة Zain Cash<input name="zainWalletNumber" dir="ltr" value="${esc(site.zainCash?.walletNumber||'')}" placeholder="07XXXXXXXX"></label>
+          <label>اسم صاحب المحفظة<input name="zainWalletName" value="${esc(site.zainCash?.walletName||'')}"></label>
+          <label>مبلغ Premium بالدينار<input type="number" step="0.001" min="0.1" name="zainPremiumAmount" value="${Number(site.zainCash?.premiumAmount??4.99)}"></label>
+          <label>مبلغ Premium+ بالدينار<input type="number" step="0.001" min="0.1" name="zainPremiumPlusAmount" value="${Number(site.zainCash?.premiumPlusAmount??7.99)}"></label>
+          <label>مدة Premium بالأيام<input type="number" min="1" max="3650" name="zainPremiumDays" value="${Number(site.zainCash?.premiumDays??30)}"></label>
+          <label>مدة Premium+ بالأيام<input type="number" min="1" max="3650" name="zainPremiumPlusDays" value="${Number(site.zainCash?.premiumPlusDays??30)}"></label>
+          <label class="wide">تعليمات التحويل<textarea name="zainInstructions">${esc(site.zainCash?.instructions||'')}</textarea></label>
+          <div class="wide hint">إذا وضعت ZAIN_CASH_WALLET أو ZAIN_CASH_NAME في Environment على Render فالقيمة هناك تتغلب على القيمة المحفوظة هنا.</div>
+          <label>رابط شراء Premium<input type="url" name="purchaseUrl" value="${esc(site.purchaseUrl)}"></label>
+          <label>رابط شراء Premium+<input type="url" name="premiumPlusPurchaseUrl" value="${esc(site.premiumPlusPurchaseUrl)}"></label>
+          <label>رابط الدعم<input type="url" name="supportUrl" value="${esc(site.supportUrl||'')}"></label>
+          <label class="owner-toggle"><input type="checkbox" name="premiumPromoEnabled" ${site.premiumPromo?.enabled!==false?'checked':''}><span>إظهار ترويج Premium لغير المشتركين</span></label>
+          <label>نسبة ظهور الترويج %<input type="number" name="premiumPromoChance" value="${Number(site.premiumPromo?.chancePercent??40)}" min="0" max="100"></label>
+          <label>Cooldown الترويج بالدقائق<input type="number" name="premiumPromoCooldown" value="${Number(site.premiumPromo?.cooldownMinutes??10)}" min="1" max="1440"></label>
+          <label class="wide">نص ترويج Premium<textarea name="premiumPromoText">${esc(site.premiumPromo?.text||'💎 اشترك في ZOMBI Premium وافتح مميزات وألعاب أكثر من Dashboard.')}</textarea></label>
+          <label class="wide">إعلان Dashboard<textarea name="announcement">${esc(site.announcement)}</textarea></label>
+          <div class="wide owner-save-row"><button class="btn primary">💾 حفظ إعدادات الموقع</button></div>
+        </form>
+      </section>
+
+      <section class="panel owner-section">
+        <div class="owner-section-head"><div><span class="owner-section-icon">🧩</span><div><h2>مصفوفة الخطط</h2><p>حدد بالضبط ما يحصل عليه Free وPremium وPremium+. هوية البوت تبقى للمشتركين فقط.</p></div></div><span class="owner-section-pill">LIVE POLICY</span></div>
+        <form method="post" action="/owner/plans"><input type="hidden" name="_csrf" value="${token}">
+          <div class="owner-plan-banner"><div><b>🆓 Free</b><span>أساسيات وحدود منخفضة</span></div><div><b>💎 Premium</b><span>مميزات وتخصيص أكبر</span></div><div><b>👑 Premium+</b><span>أعلى حدود ومزايا</span></div></div>
+          <h3>المميزات</h3><div class="table-wrap"><table class="plan-table owner-plan-table"><thead><tr><th>الميزة</th><th>Free</th><th>Premium</th><th>Premium+</th></tr></thead><tbody>${featureRows}</tbody></table></div>
+          <h3>الألعاب العادية</h3><div class="table-wrap"><table class="plan-table owner-plan-table"><thead><tr><th>اللعبة</th><th>Free</th><th>Premium</th><th>Premium+</th></tr></thead><tbody>${gameRows}</tbody></table></div>
+          <h3>🎯 ألعاب النهب</h3><div class="table-wrap"><table class="plan-table owner-plan-table"><thead><tr><th>لعبة النهب</th><th>Free</th><th>Premium</th><th>Premium+</th></tr></thead><tbody>${heistGameRows}</tbody></table></div>
+          <h3>الحدود</h3><p class="hint">أي سيرفر يحاول تجاوز الحد المحدد لخطته يتم رفض الحفظ وتظهر له رسالة ترقية الاشتراك.</p><div class="table-wrap"><table class="plan-table owner-plan-table owner-limits-table"><thead><tr><th>الحد</th><th>Free</th><th>Premium</th><th>Premium+</th></tr></thead><tbody>${limitRows}</tbody></table></div>
+          <div class="owner-save-row"><button class="btn primary">💾 حفظ الخطط الثلاث وتطبيقها</button></div>
+        </form>
+      </section>
+
+      <div class="owner-two">
+        <section class="panel owner-section">
+          <div class="owner-section-head"><div><span class="owner-section-icon">🎟️</span><div><h2>أكواد الاشتراك</h2><p>أنشئ أكواد Premium أو Premium+ بمدة تحددها.</p></div></div></div>
+          <form class="inline-form code-form owner-code-create" method="post" action="/owner/codes"><input type="hidden" name="_csrf" value="${token}"><select name="plan"><option value="premium">Premium</option><option value="premium_plus">Premium+</option></select><input type="number" name="days" value="30" min="1" max="3650"><button class="btn primary">+ إنشاء كود</button></form>
+          <div class="codes owner-codes">${codeCards}</div>
+        </section>
+        <section class="panel owner-section owner-rules-card">
+          <div class="owner-section-head"><div><span class="owner-section-icon">🔐</span><div><h2>قواعد الحماية</h2><p>قواعد ثابتة لا تتجاوزها Dashboard السيرفر.</p></div></div></div>
+          <ul><li>تغيير Nickname وصورة/Banner لوحات البوت: <b>للمشتركين فقط</b>.</li><li>تعديل هوية البوت: <b>مالك السيرفر فقط</b>.</li><li>حساب Owner لا يتجاوز اشتراك السيرفر داخل Dashboard.</li><li>القيم فوق Limits لا تُحفظ؛ تظهر رسالة ترقية.</li></ul>
+        </section>
+      </div>
+
+      <section class="panel owner-section owner-payments">
+        <div class="owner-section-head"><div><span class="owner-section-icon">💳</span><div><h2>طلبات الدفع عبر Zain Cash</h2><p>راجع الإثبات ثم اقبل الطلب لتفعيل الاشتراك تلقائيًا، أو ارفضه مع ملاحظة.</p></div></div><span class="owner-section-pill">${pendingPayments} PENDING</span></div>
+        <div class="table-wrap"><table><thead><tr><th>الطلب</th><th>المستخدم</th><th>السيرفر</th><th>الخطة</th><th>المحوّل</th><th>الإثبات</th><th>الحالة</th><th>القرار</th></tr></thead><tbody>${paymentRows||'<tr><td colspan="8">لا توجد طلبات دفع بعد.</td></tr>'}</tbody></table></div>
+      </section>
+
+      <section class="panel owner-section owner-servers">
+        <div class="owner-section-head"><div><span class="owner-section-icon">🖥️</span><div><h2>السيرفرات والاشتراكات</h2><p>فعّل أو مدد أو ألغِ الاشتراك مباشرة لكل سيرفر.</p></div></div><span class="owner-section-pill">${entries.length} SERVER</span></div>
+        <div class="table-wrap"><table><thead><tr><th>السيرفر</th><th>الأعضاء</th><th>الخطة</th><th>تحكم</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </section>
+    </div>`,req.user));
+  }catch(e){next(e);}});
+
+  app.get('/owner/payments/:id/proof',requireLogin,requireOwner,async(req,res,next)=>{try{
+    const item=await payments.get(req.params.id,true);if(!item)return res.sendStatus(404);const m=String(item.proofData||'').match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);if(!m)return res.sendStatus(404);const buf=Buffer.from(m[2],'base64');res.set('Content-Type',m[1].toLowerCase());res.set('Cache-Control','private, no-store, max-age=0');res.set('X-Content-Type-Options','nosniff');res.send(buf);
+  }catch(e){next(e);}});
+
+  app.post('/owner/payments/:id/approve',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{let item=null;try{
+    item=await payments.claim(req.params.id,req.user.id);if(!item)throw new Error('هذا الطلب تمت مراجعته مسبقًا أو تتم معالجته الآن.');
+    const current=planNameForConfig(await store.getConfig(item.guildId));if(current==='premium_plus'&&item.plan==='premium')throw new Error('السيرفر أصبح Premium+ قبل مراجعة هذا الطلب. لا يمكن تنزيل الخطة تلقائيًا إلى Premium.');
+    await store.setPremium(item.guildId,item.days,item.plan);await payments.finalize(item.id,'approved',req.user.id,String(req.body.note||'تم التحقق من التحويل وتفعيل الاشتراك.'));
+    res.redirect('/owner');
+  }catch(e){if(item?.id)await payments.release(item.id).catch(()=>{});next(e);}});
+
+  app.post('/owner/payments/:id/reject',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{let item=null;try{
+    item=await payments.claim(req.params.id,req.user.id);if(!item)throw new Error('هذا الطلب تمت مراجعته مسبقًا أو تتم معالجته الآن.');await payments.finalize(item.id,'rejected',req.user.id,String(req.body.note||'تم رفض إثبات الدفع.').slice(0,1000));res.redirect('/owner');
+  }catch(e){if(item?.id)await payments.release(item.id).catch(()=>{});next(e);}});
+
+  app.post('/owner/plans',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const plans=Object.fromEntries(PLAN_IDS.map(p=>[p,{features:{},games:{},heistGames:{},limits:{}}]));const current=await store.getGlobalConfig();for(const p of PLAN_IDS){for(const f of FEATURE_DEFS)plans[p].features[f.key]=(p==='free'&&f.key==='customBotProfile')?false:Boolean(req.body[`${p}_feature_${f.key}`]);for(const g of GAME_DEFS)plans[p].games[g.id]=g.publicSupported?Boolean(req.body[`${p}_game_${g.id}`]):Boolean(current.plans?.[p]?.games?.[g.id]);for(const g of HEIST_GAME_DEFS)plans[p].heistGames[g.id]=Boolean(req.body[`${p}_heist_${g.id}`]);for(const d of LIMIT_DEFS)plans[p].limits[d.key]=int(req.body[`${p}_limit_${d.key}`],d.min,d.min,d.max);}await store.saveGlobalConfig({plans:normalizePlans(plans)});res.redirect('/owner');});
+  app.post('/owner/guilds/:guildId/leave',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{try{const guildId=String(req.params.guildId||'').trim();if(!/^\d{15,25}$/.test(guildId))throw new Error('Guild ID غير صالح.');const guild=await getBotGuild(guildId);if(!guild)throw new Error('البوت غير موجود في هذا السيرفر.');await botFetch(`/users/@me/guilds/${guildId}`,{method:'DELETE'});res.redirect('/owner?left=1');}catch(e){next(e);}});
+  app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const days=Number(req.body.days||0);if(days>0)await store.setPremium(req.body.guildId,days,req.body.plan||'premium');else await store.removePremium(req.body.guildId);res.redirect('/owner');});
+  app.post('/owner/codes',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.createCode(Number(req.body.days||30),req.body.plan||'premium');res.redirect('/owner');});
+  app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,zainCash:{enabled:Boolean(req.body.zainCashEnabled),walletNumber:String(req.body.zainWalletNumber||'').trim(),walletName:String(req.body.zainWalletName||'').trim(),premiumAmount:Number(req.body.zainPremiumAmount||4.99),premiumPlusAmount:Number(req.body.zainPremiumPlusAmount||7.99),premiumDays:int(req.body.zainPremiumDays,30,1,3650),premiumPlusDays:int(req.body.zainPremiumPlusDays,30,1,3650),instructions:req.body.zainInstructions},premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
+
+  app.get('/health',async(_req,res)=>res.json({ok:true,database:await store.health(),uptime:process.uptime()}));
+  app.use((err,req,res,_next)=>{console.error(err);res.status(500).send(layout('Error',`<section class="login"><h1>❌ حدث خطأ</h1><p>${esc(err.message)}</p></section>`,req.user));});
+  const port=Number(process.env.PORT||3000),host=process.env.HOST||'0.0.0.0';app.listen(port,host,()=>console.log(`🌐 ZOMBI Website: ${baseUrl()} (${host}:${port})`));
+}
+module.exports={start,layout,landing,decorateDashboard,upgradeResponse};
+if(require.main===module)start().catch(e=>{console.error('❌ Website startup failed:',e);process.exit(1);});
