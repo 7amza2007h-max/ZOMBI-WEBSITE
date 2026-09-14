@@ -922,7 +922,7 @@ async function start(){
         footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)
       };
       const autoRoleId=String(req.body.autoRoleRoleId||'').trim();
-      if(autoRoleId&&!req.bundle.roles.some(r=>r.id===autoRoleId&&r.id!==guild.id&&!r.managed)){
+      if(autoRoleId&&!req.bundle.roles.some(r=>r.id===autoRoleId&&r.id!==String(req.params.guildId)&&!r.managed)){
         return res.status(400).send('الرتبة التلقائية غير صالحة لهذا السيرفر.');
       }
       cfg.autoRole={
