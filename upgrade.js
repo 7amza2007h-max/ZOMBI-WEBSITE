@@ -36,11 +36,18 @@
    const over=[...form.querySelectorAll('[data-plan-max]')].find(field=>!field.disabled&&field.value!==''&&Number(field.value)>Number(field.dataset.planMax));
    if(over){e.preventDefault();const max=Number(over.dataset.planMax),label=over.dataset.limitLabel||'هذا الإعداد',plans=data.current==='Free'||data.current==='free'?'premium,premium_plus':data.current==='Premium'||data.current==='premium'?'premium_plus':'premium,premium_plus';show(plans,`${label}: الحد الحالي في خطتك هو ${max.toLocaleString()}. هذه القيمة تحتاج ترقية الاشتراك أو تعديل الحد من Owner.`);over.focus();return;}
    if(!form.checkValidity())return;
+
+   // Dashboard forms use native browser POST + redirect. This avoids fetch/redirect
+   // races, stale FormData and formaction bugs that could make a successful click
+   // look like nothing was saved. Server-side validation still handles plan locks.
+   const actionAttr=String(e.submitter?.getAttribute('formaction')||form.getAttribute('action')||'');
+   if(actionAttr.startsWith('/dashboard/'))return;
+
    e.preventDefault();
    const body=new URLSearchParams(new FormData(form));if(e.submitter?.name)body.set(e.submitter.name,e.submitter.value);
    const buttons=[...form.querySelectorAll('button')],previous=buttons.map(b=>b.disabled);buttons.forEach(b=>b.disabled=true);
    try{
-    const actionUrl=form.getAttribute('action')||location.href;
+    const actionUrl=actionAttr||location.href;
     const res=await fetch(actionUrl,{method:'POST',headers:{Accept:'application/json'},body});
     if(res.status===403&&res.headers.get('content-type')?.includes('application/json')){form.dispatchEvent(new Event('z-save-failed'));const denied=await res.json();show((denied.plans||[]).join(','),denied.message);return;}
     if(res.redirected){window.location.assign(res.url);return;}
@@ -55,7 +62,6 @@
      }catch{}
      const status=document.createElement('p');status.className='warn z-save-error';status.setAttribute('role','alert');status.textContent=detail;form.querySelector('.z-save-error')?.remove();form.appendChild(status);show('',detail);return;
     }
-    // Some legacy routes return an HTML success page.
     const html=await res.text();document.open();document.write(html);document.close();
    }catch{form.dispatchEvent(new Event('z-save-failed'));show('','تعذر الاتصال. تغييراتك ما زالت في الصفحة؛ حاول الحفظ مجددًا.');}
    finally{buttons.forEach((b,i)=>b.disabled=previous[i]);}

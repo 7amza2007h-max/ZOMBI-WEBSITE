@@ -142,7 +142,7 @@
     text = String(text || '');
     if (text.includes('إدارة الرتب والصلاحيات المتقدمة')) return 'permissions';
     if (text.includes('⚠️ التحذيرات')) return 'warnings';
-    if (text.includes('سجل السيرفر Log')) return 'logs';
+    if (text.includes('سجل السيرفر Log') || text.includes('مركز لوقات ZOMBI') || text.includes('لوقات ZOMBI')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
@@ -162,6 +162,7 @@
     if (text.includes('متجر الرتب')) return 'store';
     if (text.includes('Self Roles')) return 'roles';
     if (text.includes('الرتبة التلقائية')) return 'roles';
+    if (text.includes('تخصيص كل لوحة')) return 'premium';
     return 'overview';
   };
 
@@ -176,17 +177,20 @@
       ensureSettingsGroup(page).appendChild(node);
     }
     settingsGroups.forEach((w, pageId) => {
-      // Keep an explicit save button inside every settings section so the user
-      // never has to hunt for the global/sticky save bar.
-      const localBar = document.createElement('div');
-      localBar.className = 'z-local-save-bar';
-      const localSave = document.createElement('button');
-      localSave.type = 'submit';
-      localSave.className = 'btn primary z-local-save';
-      localSave.dataset.page = pageId;
-      localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
-      localBar.appendChild(localSave);
-      w.appendChild(localBar);
+      // The advanced permissions page has its own sticky save/apply button.
+      // Do not add a second generic settings submit there because it cannot
+      // serialize the JavaScript-managed Discord permission state.
+      if (pageId !== 'permissions') {
+        const localBar = document.createElement('div');
+        localBar.className = 'z-local-save-bar';
+        const localSave = document.createElement('button');
+        localSave.type = 'submit';
+        localSave.className = 'btn primary z-local-save';
+        localSave.dataset.page = pageId;
+        localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
+        localBar.appendChild(localSave);
+        w.appendChild(localBar);
+      }
       settingsForm.appendChild(w);
     });
     if (actionBar) {
@@ -481,6 +485,7 @@
       return true;
     };
 
+    let preparedSubmitter = null;
     settingsForm.addEventListener('click', event => {
       const button = event.target.closest('button[type="submit"]');
       if (!button || button.form !== settingsForm) return;
@@ -488,7 +493,19 @@
         ? 'overview'
         : (button.dataset.page || currentFromUrl());
       button.dataset.page = page;
-      if (!prepareSectionSave(button, page)) event.preventDefault();
+      if (!prepareSectionSave(button, page)) { event.preventDefault(); return; }
+      preparedSubmitter = button;
+    }, true);
+
+    // Keyboard submits / requestSubmit() do not always produce a click event.
+    // Prepare the active section again at submit time so only that page is sent.
+    settingsForm.addEventListener('submit', event => {
+      if (event.defaultPrevented) return;
+      const button = event.submitter || preparedSubmitter || settingsForm.querySelector('.z-local-save:not(.z-section-hidden)') || settingsForm.querySelector('.z-save-bar button[type="submit"]');
+      if (!button) return;
+      const page = button.name === 'forceBotProfile' ? 'overview' : (button.dataset.page || currentFromUrl());
+      if (preparedSubmitter !== button && !prepareSectionSave(button, page)) event.preventDefault();
+      preparedSubmitter = null;
     }, true);
 
     settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
@@ -525,6 +542,8 @@
       const hasSettings = settingsGroups.has(section);
       showNode(settingsForm, hasSettings);
       settingsGroups.forEach((group, key) => showNode(group, key === section));
+      const globalSaveBar = settingsForm.querySelector('.z-save-bar');
+      if (globalSaveBar) showNode(globalSaveBar, section !== 'permissions');
       const saveBtn = settingsForm.querySelector('.z-save-bar button[type="submit"]:not([name="forceBotProfile"])');
       if (saveBtn) {
         saveBtn.dataset.page = section;
@@ -550,6 +569,20 @@
 
   window.addEventListener('popstate', () => render(currentFromUrl()));
   render(currentFromUrl());
+
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('saved') === '1') {
+    const toast = document.createElement('div');
+    toast.className = 'z-save-toast ok';
+    toast.setAttribute('role','status');
+    toast.textContent = '✅ تم حفظ الإعدادات بنجاح.';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 30);
+    setTimeout(() => toast.remove(), 3500);
+    qs.delete('saved');
+    const clean = `${location.pathname}${qs.toString()?`?${qs}`:''}${location.hash}`;
+    history.replaceState({}, '', clean);
+  }
 })();
 
 // ZOMBI 9: section search, accessible navigation, unsaved change feedback.

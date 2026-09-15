@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.16.2",
-  "description": "ZOMBI V9.16.2 — professional Arabic role permissions, channel controls and content protection dashboard",
+  "version": "9.16.4",
+  "description": "ZOMBI V9.16.4 — reliable dashboard save flow + role permissions/content protection fixes",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
