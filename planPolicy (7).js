@@ -17,6 +17,8 @@ const FEATURE_DEFS = [
   ['gangs', 'Gangs', '🏴'],
   ['gangMissions', 'مهمات العصابات', '🎯'],
   ['bankRobbery', 'سرقة البنك المركزي', '🚨'],
+  ['serverGuide', 'دليل السيرفر التفاعلي', '🧭'],
+  ['cityDirector', 'ZOMBI City Director', '🌆'],
   ['customBranding', 'Custom Branding', '🎨'],
   ['customCurrency', 'Custom Currency', '🪙'],
   ['customBotProfile', 'بروفايل البوت لكل سيرفر', '🤖'],
@@ -75,7 +77,9 @@ const LIMIT_DEFS = [
   { key:'maxClearMessages', label:'أقصى عدد رسائل للحذف', min:1, max:100 },
   { key:'maxDailyReward', label:'أقصى Daily Reward', min:0, max:1000000000 },
   { key:'maxMessageReward', label:'أقصى مكافأة رسائل', min:0, max:1000000000 },
-  { key:'maxVoiceReward', label:'أقصى Voice Reward', min:0, max:1000000000 }
+  { key:'maxVoiceReward', label:'أقصى Voice Reward', min:0, max:1000000000 },
+  { key:'serverGuideButtons', label:'أزرار دليل السيرفر', min:1, max:25 },
+  { key:'cityDirectorTemplates', label:'قوالب City Director', min:1, max:25 }
 ];
 
 function allFeatureDefaults(value=false){ return Object.fromEntries(FEATURE_DEFS.map(x=>[x.key,Boolean(value)])); }
@@ -88,7 +92,7 @@ const DEFAULT_PLAN_RULES = {
       ...allFeatureDefaults(false),
       economy:true, bank:true, games:true, tickets:true, store:true, rolePanel:true,
       levels:true, voiceRewards:true, moderation:true,
-      voiceRooms:false, gangs:false, gangMissions:false, bankRobbery:false,
+      voiceRooms:false, gangs:false, gangMissions:false, bankRobbery:false, serverGuide:true, cityDirector:false,
       customBranding:false, customCurrency:false, customBotProfile:false,
       gameSettings:true, gameQuestions:false, economyAdmin:false
     },
@@ -105,7 +109,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:3,selfRoles:3,ticketTypes:1,ticketSupportRoles:3,questionsPerGame:20,killerCases:10,
       maxRounds:5,maxRoundTimeSeconds:60,maxWinnerReward:5000,gangMembers:5,gangDeputies:1,gangMissionTemplates:5,
       maxGamePlayers:10,robberyParticipants:5,maxTransferAmount:10000,maxBankTransaction:25000,maxClearMessages:25,
-      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100
+      maxDailyReward:2000,maxMessageReward:100,maxVoiceReward:100,serverGuideButtons:8,cityDirectorTemplates:3
     }
   },
   premium: {
@@ -116,7 +120,7 @@ const DEFAULT_PLAN_RULES = {
       storeProducts:25,selfRoles:20,ticketTypes:10,ticketSupportRoles:20,questionsPerGame:500,killerCases:500,
       maxRounds:25,maxRoundTimeSeconds:180,maxWinnerReward:1000000000,gangMembers:25,gangDeputies:5,gangMissionTemplates:100,
       maxGamePlayers:25,robberyParticipants:25,maxTransferAmount:1000000000,maxBankTransaction:1000000000,maxClearMessages:100,
-      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000
+      maxDailyReward:1000000000,maxMessageReward:1000000000,maxVoiceReward:1000000000,serverGuideButtons:25,cityDirectorTemplates:12
     }
   }
 };

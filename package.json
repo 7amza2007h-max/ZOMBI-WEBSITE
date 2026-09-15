@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.15.4.1",
-  "description": "ZOMBI V9.15.4.1 — Auto Role guild validation fix + JSON balance fixes + City Director systems",
+  "version": "9.15.4",
+  "description": "ZOMBI V9.15.4 — Auto Role dashboard + JSON balance fixes + City Director systems",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
