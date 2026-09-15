@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.15.8",
-  "description": "ZOMBI V9.15.8 — final Premium+ sync, bot detection, robbery dashboard controls, system stability",
+  "version": "9.16.2",
+  "description": "ZOMBI V9.16.2 — professional Arabic role permissions, channel controls and content protection dashboard",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

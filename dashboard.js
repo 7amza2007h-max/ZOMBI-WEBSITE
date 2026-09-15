@@ -11,6 +11,7 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
+    permissions: {label:'الرتب والصلاحيات',icon:'🛡️',desc:'تحكم عربي كامل بصلاحيات الرتب والقنوات وحماية الروابط والوسائط.'},
     warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
@@ -38,7 +39,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director']],
-    ['الأنظمة', ['warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
+    ['الأنظمة', ['permissions', 'warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -139,6 +140,7 @@
 
   const headingPage = text => {
     text = String(text || '');
+    if (text.includes('إدارة الرتب والصلاحيات المتقدمة')) return 'permissions';
     if (text.includes('⚠️ التحذيرات')) return 'warnings';
     if (text.includes('سجل السيرفر Log')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
