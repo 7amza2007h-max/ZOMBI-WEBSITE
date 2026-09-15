@@ -129,10 +129,38 @@ DEFAULT_PLAN_RULES.premium_plus = {features:allFeatureDefaults(true),games:allGa
 const PLAN_IDS=['free','premium','premium_plus'];
 const PLAN_LABELS={free:'Free',premium:'Premium',premium_plus:'Premium+'};
 function mergePlans(current={},patch={}){return normalizePlans(Object.fromEntries(PLAN_IDS.map(p=>[p,Object.fromEntries(['features','games','heistGames','limits'].map(k=>[k,{...(current[p]?.[k]||{}),...(patch[p]?.[k]||{})}]))])));}
+function normalizePlanId(value){
+  const raw=String(value??'').trim().toLowerCase().replace(/[\s-]+/g,'_');
+  if(['premium_plus','premium+','premiumplus','plus','pro_plus','pro+'].includes(raw))return 'premium_plus';
+  if(['premium','pro','paid'].includes(raw))return 'premium';
+  return 'free';
+}
+function parseExpiryMs(value){
+  if(value===null||value===undefined||value==='')return 0;
+  if(typeof value==='string'&&/^(lifetime|forever|never)$/i.test(value.trim()))return Number.MAX_SAFE_INTEGER;
+  const n=Number(value);
+  if(Number.isFinite(n)&&n>0)return n<1e12?n*1000:n;
+  const parsed=Date.parse(String(value));
+  return Number.isFinite(parsed)&&parsed>0?parsed:0;
+}
+function configuredPlanForConfig(cfg={}){
+  if(cfg?.isPremiumPlus===true||cfg?.premiumPlus===true||cfg?.premium?.plus===true)return 'premium_plus';
+  const candidates=[cfg?.plan,cfg?.premiumPlan,cfg?.subscriptionPlan,cfg?.membershipPlan,cfg?.subscription?.plan,cfg?.premium?.plan,cfg?.membership?.plan];
+  for(const value of candidates){const plan=normalizePlanId(value);if(plan!=='free')return plan;}
+  if(cfg?.isPremium===true||cfg?.premium===true||cfg?.subscription?.active===true)return 'premium';
+  return 'free';
+}
+function premiumUntilForConfig(cfg={}){
+  if(cfg?.premiumLifetime===true||cfg?.lifetimePremium===true||cfg?.subscription?.lifetime===true||cfg?.premium?.lifetime===true)return Number.MAX_SAFE_INTEGER;
+  const values=[cfg?.premiumUntil,cfg?.premiumExpiresAt,cfg?.premiumExpiry,cfg?.premiumEnd,cfg?.subscriptionUntil,cfg?.subscriptionExpiresAt,cfg?.subscription?.premiumUntil,cfg?.subscription?.expiresAt,cfg?.subscription?.until,cfg?.premium?.expiresAt,cfg?.premium?.until,cfg?.membership?.expiresAt];
+  return values.reduce((max,value)=>Math.max(max,parseExpiryMs(value)),0);
+}
 function applySubscription(cfg,days=30,plan='premium'){
+ plan=normalizePlanId(plan);
  if(!['premium','premium_plus'].includes(plan))throw new Error('خطة غير صالحة.');
  const active=planNameForConfig(cfg);
- const base=active===plan?Math.max(Date.now(),Number(cfg.premiumUntil||0)):Date.now();
+ const currentUntil=premiumUntilForConfig(cfg);
+ const base=active===plan?Math.max(Date.now(),currentUntil):Date.now();
  return {...cfg,plan,premiumUntil:base+integer(days,30,1,3650)*86400000};
 }
 function clone(v){ return JSON.parse(JSON.stringify(v)); }
@@ -146,8 +174,17 @@ function normalizePlan(planName,input={}){
   for(const def of LIMIT_DEFS) out.limits[def.key]=integer(input?.limits?.[def.key],d.limits[def.key],def.min,def.max);
   return out;
 }
-function normalizePlans(input={}){ return Object.fromEntries(PLAN_IDS.map(p=>[p,normalizePlan(p,input[p]||{})])); }
-function planNameForConfig(cfg){ return ['premium','premium_plus'].includes(cfg?.plan)&&Number(cfg?.premiumUntil||0)>Date.now()?cfg.plan:'free'; }
+function normalizePlans(input={}){
+  const out=Object.fromEntries(PLAN_IDS.map(p=>[p,normalizePlan(p,input[p]||{})]));
+  // Premium+ is always a superset of Premium. A stale/older Owner matrix can no longer
+  // make a Premium+ server lose a feature that is available to Premium.
+  for(const f of FEATURE_DEFS)out.premium_plus.features[f.key]=Boolean(out.premium_plus.features[f.key]||out.premium.features[f.key]);
+  for(const g of GAME_DEFS)out.premium_plus.games[g.id]=Boolean(out.premium_plus.games[g.id]||out.premium.games[g.id]);
+  for(const g of HEIST_GAME_DEFS)out.premium_plus.heistGames[g.id]=Boolean(out.premium_plus.heistGames[g.id]||out.premium.heistGames[g.id]);
+  for(const d of LIMIT_DEFS)out.premium_plus.limits[d.key]=Math.max(Number(out.premium_plus.limits[d.key]||0),Number(out.premium.limits[d.key]||0));
+  return out;
+}
+function planNameForConfig(cfg){const plan=configuredPlanForConfig(cfg);return plan!=='free'&&premiumUntilForConfig(cfg)>Date.now()?plan:'free';}
 function planForConfig(site,cfg){ return normalizePlans(site?.plans||{})[planNameForConfig(cfg)]; }
 function featureAllowed(site,cfg,key){ if(site?.emergency?.[key]?.disabled)return false; const plan=planNameForConfig(cfg); if(key==='customBotProfile'&&plan==='free')return false; return Boolean(planForConfig(site,cfg)?.features?.[key]); }
 function gameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'games')&&planForConfig(site,cfg)?.games?.[gameId]); }
@@ -156,4 +193,4 @@ function limitFor(site,cfg,key){ const p=planForConfig(site,cfg),def=LIMIT_DEFS.
 function isPublicGame(gameId){ return PUBLIC_GAME_IDS.includes(String(gameId)); }
 function gameDef(gameId){ return GAME_DEFS.find(x=>x.id===String(gameId))||null; }
 
-module.exports={PLAN_IDS,PLAN_LABELS,mergePlans,applySubscription,FEATURE_DEFS,GAME_DEFS,HEIST_GAME_DEFS,QUICK_RULE_GAME_IDS,PUBLIC_GAME_IDS,LIMIT_DEFS,DEFAULT_PLAN_RULES,normalizePlans,planNameForConfig,planForConfig,featureAllowed,gameAllowed,heistGameAllowed,limitFor,isPublicGame,gameDef,clone};
+module.exports={PLAN_IDS,PLAN_LABELS,mergePlans,applySubscription,FEATURE_DEFS,GAME_DEFS,HEIST_GAME_DEFS,QUICK_RULE_GAME_IDS,PUBLIC_GAME_IDS,LIMIT_DEFS,DEFAULT_PLAN_RULES,normalizePlans,normalizePlanId,configuredPlanForConfig,premiumUntilForConfig,planNameForConfig,planForConfig,featureAllowed,gameAllowed,heistGameAllowed,limitFor,isPublicGame,gameDef,clone};

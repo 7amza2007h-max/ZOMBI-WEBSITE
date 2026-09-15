@@ -29,10 +29,10 @@ let GIFEncoder = null;
 
 try {
     ({ createCanvas, loadImage } = require('canvas'));
-    GIFEncoder = require('gif-encoder-2');
+    GIFEncoder = require('gifencoder');
 } catch (error) {
     console.warn(
-        '⚠️ canvas/gif-encoder-2 غير متوفرين؛ ستعمل عجلة ZOM بالأنيميشن النصي.'
+        '⚠️ canvas/gifencoder غير متوفرين؛ ستعمل عجلة ZOM بالأنيميشن النصي.'
     );
 }
 
@@ -361,7 +361,9 @@ async function syncHomePublicGameSettings(force = false) {
             dashboardConfig.gangs.puzzleMaxAttempts = Number(sharedCfg.gangs.puzzleMaxAttempts || dashboardConfig.gangs.puzzleMaxAttempts || 2);
             dashboardConfig.gangs.chatMaxAttempts = Number(sharedCfg.gangs.chatMaxAttempts || dashboardConfig.gangs.chatMaxAttempts || 2);
             dashboardConfig.gangs.relayMaxAttempts = Number(sharedCfg.gangs.relayMaxAttempts || dashboardConfig.gangs.relayMaxAttempts || 2);
-            dashboardConfig.gangs.missionCooldownHours = Math.max(1, Number(sharedCfg.gangs.missionCooldownMinutes || 60) / 60);
+            dashboardConfig.gangs.missionCooldownMinutes = Math.max(1, Number(sharedCfg.gangs.missionCooldownMinutes || dashboardConfig.gangs.missionCooldownMinutes || 240));
+            // إبقاء الحقل القديم للتوافق مع النسخ القديمة، بدون إجبار المدة على ساعة كاملة.
+            dashboardConfig.gangs.missionCooldownHours = dashboardConfig.gangs.missionCooldownMinutes / 60;
             dashboardConfig.gangs.missionDurationMinutes = Number(sharedCfg.gangs.missionDurationMinutes || dashboardConfig.gangs.missionDurationMinutes);
             dashboardConfig.gangs.missionRewardMin = Number(sharedCfg.gangs.missionRewardMin ?? dashboardConfig.gangs.missionRewardMin);
             dashboardConfig.gangs.missionRewardMax = Number(sharedCfg.gangs.missionRewardMax ?? dashboardConfig.gangs.missionRewardMax);
@@ -457,9 +459,6 @@ async function syncHomePublicGameSettings(force = false) {
         if (sharedCfg?.robbery) {
             dashboardConfig.robbery.enabled = sharedCfg.features?.bankRobbery !== false && sharedCfg.robbery.enabled === true;
             dashboardConfig.robbery.bankChannelId = String(sharedCfg.channels?.centralBank || dashboardConfig.robbery.bankChannelId || '');
-            dashboardConfig.robbery.minParticipants = Number(sharedCfg.robbery.minParticipants || dashboardConfig.robbery.minParticipants || 5);
-            dashboardConfig.robbery.mentionMode = String(sharedCfg.robbery.mentionMode || dashboardConfig.robbery.mentionMode || 'everyone');
-            dashboardConfig.robbery.mentionRoleId = String(sharedCfg.robbery.mentionRoleId || '');
             dashboardConfig.robbery.lobbyMinutes = Number(sharedCfg.robbery.lobbyMinutes || dashboardConfig.robbery.lobbyMinutes);
             dashboardConfig.robbery.missionMinutes = Number(sharedCfg.robbery.missionMinutes || dashboardConfig.robbery.missionMinutes);
             dashboardConfig.robbery.reward = Number(sharedCfg.robbery.reward || dashboardConfig.robbery.reward);
@@ -934,10 +933,7 @@ require('./public/operations').install(client);
 require('./public/serverLogs').install(client);
 
 publicSystem.init(client, {
-    getHomeGuildId: () => ALLOWED_GUILD_ID,
-    // الروليت في سيرفر ZOMBI الأساسي تخصم من نفس محفظة ZOM المستخدمة في الستور القديم.
-    getHomeWalletUser: userId => getUser(userId),
-    saveHomeWallet: () => saveEconomy()
+    getHomeGuildId: () => ALLOWED_GUILD_ID
 });
 
 // ==========================================================
@@ -11336,8 +11332,7 @@ async function handleGamesCommand(interaction) {
     }
 
     if (game === 'roulette') {
-        // نفس محرك الروليت العام المستخدم في جميع السيرفرات.
-        await publicSystem.startUnifiedGame(interaction, 'roulette', false);
+        await createRoulette(interaction);
         return;
     }
 
@@ -11430,8 +11425,18 @@ client.on('messageCreate', async message => {
             console.error('❌ خطأ في أوامر شات ZOM:', error);
         }
 
-        // #روليت يتم تشغيلها أعلاه عبر publicSystem.handleHashGameCommand
-        // حتى تستخدم نفس نظام الروليت في جميع السيرفرات.
+        // ==================================================
+        // 🎰 تشغيل الروليت بأمر #روليت
+        // ==================================================
+
+        if (
+            content === '#روليت'
+        ) {
+            await createRouletteFromMessage(
+                message
+            );
+            return;
+        }
 
         // ==================================================
         // 🎙️ إعادة تسمية الرومات المؤقتة
@@ -13332,8 +13337,7 @@ client.on(
                 }
 
                 if (type === 'roulette') {
-                    // لوحة الألعاب القديمة في السيرفر الأساسي تشغّل نفس الروليت العام.
-                    await publicSystem.startUnifiedGame(interaction, 'roulette', true);
+                    await createRoulette(interaction);
                     return;
                 }
 

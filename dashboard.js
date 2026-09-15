@@ -11,11 +11,12 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
-    warnings: {label:'التحذيرات',icon:'⚠️',desc:'Premium+ • روم التحذيرات، IDs الرتب وإضافة مستويات التحذير.'},
+    warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
-    members: { label: 'الأعضاء', icon: '♟', desc: 'المستويات، أرصدة الأعضاء وأدوات الإدارة.' },
+    members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء وأدوات الإدارة.' },
+    xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإعدادات #p و#top.' },
     store: { label: 'المتجر', icon: '◆', desc: 'متجر الرتب، الأسعار، المميزات وشكل لوحة المتجر.' },
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
     'game-content': { label: 'محتوى الألعاب', icon: '▤', desc: 'الأسئلة والكلمات والمحتوى الذي تستخدمه الألعاب.' },
@@ -27,14 +28,15 @@
     roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
+    music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
   };
 
   const groups = [
-    ['التحكم', ['overview', 'economy', 'members', 'store']],
+    ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -141,9 +143,10 @@
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
-    if (text.includes('Levels')) return 'members';
+    if (text.includes('Levels')) return 'xp';
     if (text.includes('العصابات')) return 'gangs';
     if (text.includes('سرقة البنك')) return 'robbery';
+    if (text.includes('نظام الموسيقى')) return 'music';
     if (text.includes('الرومات الصوتية')) return 'voice';
     if (text.includes('Moderation')) return 'members';
     if (text.includes('عجلة الحظ')) return 'games';
@@ -214,7 +217,7 @@
   moveControl('ticketCategory', 'tickets', 'قنوات التذاكر');
   moveControl('storePanel', 'store', 'قناة لوحة المتجر');
   moveControl('rolePanel', 'roles', 'القناة التي تُرسل فيها لوحة رتب الإشعارات');
-  moveControl('levelUp', 'members', 'قناة إشعارات المستويات');
+  moveControl('levelUp', 'xp', 'قناة إشعارات المستويات');
   moveControl('bankPanel', 'city', 'قنوات ZOMBI City');
   moveControl('centralBank', 'robbery', 'قنوات ZOMBI City');
   moveControl('gangCategory', 'gangs', 'قنوات ZOMBI City');
@@ -228,20 +231,6 @@
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
-  // إظهار اختيار رتبة المنشن فقط عند اختيار "منشن رتبة محددة".
-  if (settingsForm) {
-    const mentionMode = settingsForm.querySelector('[name="robberyMentionMode"]');
-    const mentionRole = settingsForm.querySelector('[name="robberyMentionRoleId"]');
-    const mentionRoleLabel = mentionRole?.closest('[data-robbery-mention-role]') || mentionRole?.closest('label');
-    const syncRobberyMentionRole = () => {
-      const roleMode = mentionMode?.value === 'role';
-      if (mentionRoleLabel) mentionRoleLabel.style.display = roleMode ? '' : 'none';
-      if (mentionRole) mentionRole.disabled = !roleMode;
-    };
-    mentionMode?.addEventListener('change', syncRobberyMentionRole);
-    syncRobberyMentionRole();
-  }
-
   // Convert all plan-dependent numeric caps into explicit subscription caps.
   // Native HTML max validation can otherwise block a submit before our
   // Premium dialog has a chance to explain what happened.
@@ -253,7 +242,8 @@
       bankMaxTransaction: 'أقصى عملية بالبنك',
       gangMaxMembers: 'أقصى أعضاء العصابة',
       gangMaxDeputies: 'أقصى نواب العصابة',
-      robberyMinParticipants: 'عدد المشاركين بسرقة البنك'
+      robberyMinParticipants: 'عدد المشاركين بسرقة البنك',
+      musicDefaultVolume: 'مستوى صوت الموسيقى'
     };
     Object.entries(planLimitedFields).forEach(([name, label]) => {
       const field = settingsForm.querySelector(`[name="${name}"]`);
@@ -309,8 +299,7 @@
     games: actionFor('/send/games'),
     tickets: actionFor('/send/tickets'),
     store: actionFor('/send/store'),
-    roles: actionFor('/send/roles'),
-    voice: actionFor('/send/voice')
+    roles: actionFor('/send/roles')
   };
 
   const extraByPage = new Map();
@@ -332,34 +321,12 @@
     const clone = form.cloneNode(true);
     clone.classList.add('z-panel-send-form');
     const btn = clone.querySelector('button');
-    if (btn) btn.textContent = page === 'roles'
-      ? 'إعادة إرسال / تحديث اللوحة'
-      : page === 'city'
-        ? '🏦 إرسال / تحديث لوحة البنك'
-        : page === 'voice'
-          ? '🎙️ إرسال / تحديث لوحة الرومات المؤقتة'
-          : btn.textContent;
+    if (btn) btn.textContent = page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
     const bar = document.createElement('div');
     bar.className = 'z-section-actionbar';
     bar.appendChild(clone);
     ensureExtra(page).appendChild(bar);
   });
-
-
-  // Voice Rooms fallback send/update route button.
-  // إذا كان الباك إند يحتوي route /send/voice سيظهر الزر حتى لو لم تكن اللوحة القديمة تحتوي فورم جاهز.
-  if (settingsForm && !actionTargets.voice) {
-    const csrfValue = settingsForm.querySelector('input[name="_csrf"]')?.value || '';
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = `/dashboard/${guildId}/send/voice`;
-    form.className = 'z-panel-send-form';
-    form.innerHTML = `<input type="hidden" name="_csrf" value="${csrfValue}"><button class="btn">🎙️ إرسال / تحديث لوحة الرومات المؤقتة</button>`;
-    const bar = document.createElement('div');
-    bar.className = 'z-section-actionbar';
-    bar.appendChild(form);
-    ensureExtra('voice').appendChild(bar);
-  }
 
   // Name Change now has its own send/update route.
   if (settingsForm) {
