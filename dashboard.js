@@ -25,9 +25,11 @@
     heist: { label: 'النهب والحماية', icon: '🎯', desc: 'تحديات النهب، السجن، الكفالة وحماية الكاش.' },
     gangs: { label: 'العصابات والمهمات', icon: '🏴', desc: 'العصابات، الأعضاء، الخزنة وقوالب المهمات.' },
     robbery: { label: 'البنك المركزي', icon: '🚨', desc: 'فتح السرقة، المشاركون، التجهيزات والجوائز.' },
-    roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
+    director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
+    roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
+    guide: { label: 'دليل السيرفر', icon: '🧭', desc: 'لوحة اختصارات تنقل الأعضاء مباشرة إلى الرومات التي تختارها.' },
     music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
@@ -35,8 +37,8 @@
 
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director']],
+    ['الأنظمة', ['warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -141,6 +143,8 @@
     if (text.includes('سجل السيرفر Log')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
+    if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
+    if (text.includes('ZOMBI City Director')) return 'director';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
     if (text.includes('Levels')) return 'xp';
@@ -155,6 +159,7 @@
     if (text.includes('التذاكر')) return 'tickets';
     if (text.includes('متجر الرتب')) return 'store';
     if (text.includes('Self Roles')) return 'roles';
+    if (text.includes('الرتبة التلقائية')) return 'roles';
     return 'overview';
   };
 
@@ -227,6 +232,8 @@
   moveControl('voiceCategory', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('voiceChannelIds', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('nameChangePanel', 'name', 'قناة لوحة تغيير الاسم');
+  moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
+  moveControl('cityDirector', 'director', 'قناة أحداث City Director');
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
@@ -284,6 +291,8 @@
     if (title.includes('من القاتل')) return 'killer';
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
+    if (title.includes('أزرار دليل السيرفر')) return 'guide';
+    if (title.includes('قوالب City Director')) return 'director';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';
@@ -314,7 +323,8 @@
     games: actionFor('/send/games'),
     tickets: actionFor('/send/tickets'),
     store: actionFor('/send/store'),
-    roles: actionFor('/send/roles')
+    roles: actionFor('/send/roles'),
+    guide: actionFor('/send/guide')
   };
 
   const extraByPage = new Map();
@@ -336,7 +346,7 @@
     const clone = form.cloneNode(true);
     clone.classList.add('z-panel-send-form');
     const btn = clone.querySelector('button');
-    if (btn) btn.textContent = page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
+    if (btn) btn.textContent = page === 'guide' ? '🧭 إرسال / تحديث دليل السيرفر' : page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
     const bar = document.createElement('div');
     bar.className = 'z-section-actionbar';
     bar.appendChild(clone);
