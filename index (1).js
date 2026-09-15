@@ -1,3 +1,57 @@
+// === MONKEY NETWORK AUTO DEPENDENCY BOOTSTRAP ===
+// Monkey Network's generic startup can skip npm install when no Git repo is configured.
+// This block uses only Node built-ins, installs missing production dependencies once,
+// then continues into the normal ZOMBI bot entrypoint.
+(() => {
+  const fs = require('fs');
+  const path = require('path');
+  const { spawnSync } = require('child_process');
+  const root = __dirname;
+  const pkgPath = path.join(root, 'package.json');
+
+  if (!fs.existsSync(pkgPath)) {
+    console.error('❌ [Monkey Bootstrap] package.json not found next to index.js');
+    process.exit(1);
+  }
+
+  let pkg;
+  try {
+    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  } catch (err) {
+    console.error('❌ [Monkey Bootstrap] Invalid package.json:', err.message);
+    process.exit(1);
+  }
+
+  const dependencies = Object.keys(pkg.dependencies || {});
+  const missing = dependencies.filter((name) => {
+    try {
+      require.resolve(name, { paths: [root] });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+
+  if (missing.length) {
+    console.log(`📦 [Monkey Bootstrap] Missing ${missing.length} dependencies: ${missing.join(', ')}`);
+    console.log('📦 [Monkey Bootstrap] Installing production dependencies...');
+    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const result = spawnSync(npm, ['install', '--omit=dev', '--no-audit', '--no-fund'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: process.env,
+    });
+    if (result.error || result.status !== 0) {
+      console.error('❌ [Monkey Bootstrap] npm install failed.', result.error ? result.error.message : `exit ${result.status}`);
+      process.exit(result.status || 1);
+    }
+    console.log('✅ [Monkey Bootstrap] Dependencies installed. Starting ZOMBI...');
+  } else {
+    console.log('✅ [Monkey Bootstrap] Dependencies already installed.');
+  }
+})();
+// === END MONKEY NETWORK AUTO DEPENDENCY BOOTSTRAP ===
+
 // ==========================================================
 // ZOM BOT - PROFESSIONAL FULL INDEX.JS
 // Discord.js v14
@@ -54,14 +108,11 @@ const {
     handleVoiceRoomInteraction,
     handleVoiceRoomSelect,
     handleRenameMessage,
+    isVoiceRoomCustomId,
     refreshPanel: refreshVoiceRoomPanel
 } = require('./voiceRooms/voiceRooms');
 
-const {
-    initLevels,
-    handleLevelCommand,
-    handleLevelTop
-} = require('./levels/levels');
+const { initLevels } = require('./levels/levels');
 
 const {
     initBank,
@@ -83,8 +134,19 @@ const nameChangeSystem = require('./nameChangeSystem');
 const zomStore = require('./zomStore');
 const gameContentStore = require('./gameContent');
 const publicSystem = require('./public/publicSystem');
+const unifiedWarningSystem = require('./public/warningSystem');
 const publicSharedStore = require('./public/sharedStore');
+const cityDirector = require('./cityDirector');
 const { QUICK_RULE_GAME_IDS, HEIST_GAME_DEFS, heistGameAllowed } = require('./public/planPolicy');
+
+// ZOMBI Music is intentionally loaded safely so a missing/failed music file
+// can never stop the old bank/games/gangs/tickets/voice-room systems.
+let musicSystem = null;
+try {
+    musicSystem = require('./music/musicSystem');
+} catch (error) {
+    console.warn('⚠️ ZOMBI Music module unavailable; باقي الأنظمة ستعمل طبيعي:', error?.message || error);
+}
 
 const {
     handleWarningMessage,
@@ -934,11 +996,100 @@ require('./public/operations').install(client);
 require('./public/serverLogs').install(client);
 
 publicSystem.init(client, {
-    getHomeGuildId: () => ALLOWED_GUILD_ID,
-    // الروليت في سيرفر ZOMBI الأساسي تخصم من نفس محفظة ZOM المستخدمة في الستور القديم.
-    getHomeWalletUser: userId => getUser(userId),
-    saveHomeWallet: () => saveEconomy()
+    getHomeGuildId: () => ALLOWED_GUILD_ID
 });
+
+
+// ==========================================================
+// ⚡ AUTO ROLE — رتبة تلقائية للعضو الجديد
+// الإعدادات تأتي من Dashboard لكل سيرفر عبر sharedStore.
+// ==========================================================
+client.on('guildMemberAdd', async (member) => {
+    try {
+        const cfg = await publicSharedStore.getConfig(String(member.guild.id));
+        const autoRole = cfg?.autoRole || {};
+        if (!autoRole.enabled || !autoRole.roleId) return;
+        if (member.user?.bot && autoRole.includeBots !== true) return;
+
+        const roleId = String(autoRole.roleId);
+        let role = member.guild.roles.cache.get(roleId);
+        if (!role) role = await member.guild.roles.fetch(roleId).catch(() => null);
+        if (!role) {
+            console.warn(`⚠️ Auto Role: الرتبة ${roleId} غير موجودة في ${member.guild.name}`);
+            return;
+        }
+        if (role.managed) {
+            console.warn(`⚠️ Auto Role: الرتبة ${role.name} Managed ولا يمكن إعطاؤها يدويًا.`);
+            return;
+        }
+
+        let me = member.guild.members.me;
+        if (!me) me = await member.guild.members.fetchMe().catch(() => null);
+        if (!me?.permissions?.has(PermissionFlagsBits.ManageRoles)) {
+            console.warn(`⚠️ Auto Role: البوت لا يملك Manage Roles في ${member.guild.name}`);
+            return;
+        }
+        if (role.position >= me.roles.highest.position) {
+            console.warn(`⚠️ Auto Role: ارفع رتبة ZOMBI BOT فوق ${role.name} في ${member.guild.name}`);
+            return;
+        }
+
+        if (!member.roles.cache.has(role.id)) {
+            await member.roles.add(role, 'ZOMBI Auto Role — عضو جديد');
+            console.log(`✅ Auto Role: ${member.user.tag} أخذ رتبة ${role.name} في ${member.guild.name}`);
+        }
+    } catch (error) {
+        console.warn('⚠️ Auto Role failed:', error?.message || error);
+    }
+});
+
+try {
+    cityDirector.init(client, {
+        getHomeGuildId: () => ALLOWED_GUILD_ID,
+        rewardUser: async (guildId, userId, amount) => {
+            if (String(guildId) === String(ALLOWED_GUILD_ID || '')) {
+                const user = getUser(String(userId));
+                user.balance = Number(user.balance || 0) + Math.max(0, Math.round(Number(amount) || 0));
+                saveEconomy();
+                return;
+            }
+            await publicSharedStore.updateUser(String(guildId), String(userId), user => {
+                user.balance = Number(user.balance || 0) + Math.max(0, Math.round(Number(amount) || 0));
+            });
+        },
+        adjustBalances: async (guildId, userId, changes = {}) => {
+            const cashDelta = Number(changes.cashDelta || 0);
+            const bankDelta = Number(changes.bankDelta || 0);
+            const cashPercent = Math.max(0, Number(changes.cashPercent || 0));
+            const bankPercent = Math.max(0, Number(changes.bankPercent || 0));
+            if (String(guildId) === String(ALLOWED_GUILD_ID || '')) {
+                const cashUser = getUser(String(userId));
+                const bankUser = getBankUser(String(userId));
+                const cashBefore = Math.max(0, Number(cashUser.balance || 0));
+                const bankBefore = Math.max(0, Number(bankUser.bank || 0));
+                cashUser.balance = Math.max(0, Math.round(cashBefore + cashDelta - Math.floor(cashBefore * cashPercent / 100)));
+                bankUser.bank = Math.max(0, Math.round(bankBefore + bankDelta - Math.floor(bankBefore * bankPercent / 100)));
+                saveEconomy();
+                saveBank();
+                return { balance: cashUser.balance, bankBalance: bankUser.bank };
+            }
+            return publicSharedStore.updateUser(String(guildId), String(userId), user => {
+                const cashBefore = Math.max(0, Number(user.balance || 0));
+                const bankBefore = Math.max(0, Number(user.bankBalance || 0));
+                user.balance = Math.max(0, Math.round(cashBefore + cashDelta - Math.floor(cashBefore * cashPercent / 100)));
+                user.bankBalance = Math.max(0, Math.round(bankBefore + bankDelta - Math.floor(bankBefore * bankPercent / 100)));
+            });
+        }
+    });
+} catch (error) {
+    console.warn('⚠️ تعذر تهيئة ZOMBI City Director؛ باقي الأنظمة ستعمل طبيعي:', error?.message || error);
+}
+
+try {
+    musicSystem?.init?.(client);
+} catch (error) {
+    console.warn('⚠️ تعذر تهيئة ZOMBI Music؛ تم تجاهل النظام بدون التأثير على البوت:', error?.message || error);
+}
 
 // ==========================================================
 // INIT SYSTEMS
@@ -11371,10 +11522,50 @@ client.on('messageCreate', async message => {
             return;
         }
 
+        // ==================================================
+        // 🌆 ZOMBI CITY DIRECTOR — LIVE MISSIONS IN ALL OPEN CHATS
+        // الحل يُكتب مباشرة في الشات الذي تظهر فيه المهمة.
+        // إذا لم تكن الرسالة حلًا صحيحًا لا يتم إيقاف أي نظام آخر.
+        // ==================================================
+        try {
+            if (await cityDirector.handleMessage(message)) {
+                return;
+            }
+        } catch (error) {
+            console.warn('⚠️ City Director message hook:', error?.message || error);
+        }
+
+        // ==================================================
+        // 🎵 ZOMBI MUSIC — ALL GUILDS, VOICE-CHAT ONLY
+        // يعمل قبل بوابة السيرفر الأساسي حتى يدعم كل السيرفرات،
+        // لكنه لا يتفاعل إلا مع كلمة "فويس" داخل شات نفس الروم الصوتي.
+        // ==================================================
+        if (musicSystem?.handleMessage) {
+            try {
+                if (await musicSystem.handleMessage(message)) {
+                    return;
+                }
+            } catch (error) {
+                console.warn('⚠️ ZOMBI Music message hook:', error?.message || error);
+            }
+        }
+
         if (!isAllowedGuild(message.guild)) {
             return;
         }
 
+        // ==================================================
+        // ⚠️ UNIFIED WARNINGS — HOME GUILD
+        // استخدم نفس نظام التحذيرات/قاعدة البيانات الذي تستخدمه
+        // أوامر /warn و /unwarn والداشبورد، حتى لا يتم حفظ التحذير
+        // في مكان ومحاولة حذفه من warnings.json القديم في مكان آخر.
+        // ==================================================
+        if (await unifiedWarningSystem.handleMessage(message)) {
+            return;
+        }
+
+        // Legacy handlers kept only as a fallback for old non-unified flows.
+        // Unified warning commands above consume: تحذير / تحذيرات / إزالة تحذير.
         if (await handleRemoveWarningMessage(message)) {
             return;
         }
@@ -11524,39 +11715,6 @@ client.on('messageCreate', async message => {
                 '❌ خطأ في نظام ZOMBI City:',
                 error
             );
-        }
-
-        // ==================================================
-        // 🏆 نظام Levels
-        // ==================================================
-
-        try {
-
-            if (
-                await handleLevelCommand(
-                    message
-                )
-            ) {
-                return;
-            }
-
-            if (
-                await handleLevelTop(
-                    message
-                )
-            ) {
-                return;
-            }
-
-        } catch (
-            error
-        ) {
-
-            console.error(
-                '❌ خطأ في نظام Levels:',
-                error
-            );
-
         }
 
         // ==================================================
@@ -12916,12 +13074,13 @@ client.on(
     ) => {
 
         const voiceGuild = newState.guild || oldState.guild;
-        if (!voiceGuild || voiceGuild.id !== ALLOWED_GUILD_ID) {
+        if (!voiceGuild) {
             return;
         }
 
         // ==================================================
-        // نظام الرومات الصوتية الموجود
+        // نظام الرومات الصوتية المؤقتة - يعمل بكل السيرفرات
+        // ملاحظة: باقي أنظمة ZOMBI القديمة تبقى محصورة بالسيرفر الأساسي فقط.
         // ==================================================
 
         try {
@@ -12946,6 +13105,10 @@ client.on(
 
             );
 
+        }
+
+        if (voiceGuild.id !== ALLOWED_GUILD_ID) {
+            return;
         }
 
         // ==================================================
@@ -13056,6 +13219,53 @@ client.on(
     'interactionCreate',
     async interaction => {
         try {
+
+            // ==========================================
+            // 🎵 ZOMBI MUSIC must run before the public router.
+            // Custom IDs are isolated under zmusic:* and cannot collide with voice_*.
+            // ==========================================
+            if (
+                musicSystem?.handleInteraction &&
+                String(interaction.customId || '').startsWith(musicSystem.CUSTOM_ID_PREFIX || 'zmusic:')
+            ) {
+                try {
+                    if (await musicSystem.handleInteraction(interaction)) {
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ ZOMBI Music interaction hook:', error?.message || error);
+                }
+            }
+
+            // ==========================================
+            // Temporary Voice Rooms must run before the public router
+            // حتى لا تلتقط أي أنظمة ثانية أزرار voice_* قبل نظام الرومات.
+            // ==========================================
+
+            if (
+                (interaction.isButton?.() || interaction.isModalSubmit?.() || interaction.isStringSelectMenu?.()) &&
+                isVoiceRoomCustomId?.(interaction.customId || '')
+            ) {
+                const handledVoice = interaction.isStringSelectMenu?.()
+                    ? await handleVoiceRoomSelect(interaction)
+                    : await handleVoiceRoomInteraction(interaction);
+
+                if (handledVoice) {
+                    return;
+                }
+            }
+
+            // ==========================================
+            // 🌆 ZOMBI CITY DIRECTOR
+            // ==========================================
+            if (
+                interaction.isButton?.() &&
+                String(interaction.customId || '').startsWith(cityDirector.CUSTOM_ID_PREFIX)
+            ) {
+                if (await cityDirector.handleInteraction(interaction)) {
+                    return;
+                }
+            }
 
             // ==========================================
             // PUBLIC MULTI-SERVER ROUTER
@@ -13570,14 +13780,7 @@ client.on(
                 interaction.isButton() ||
                 interaction.isModalSubmit()
             ) {
-                await handleVoiceRoomInteraction(
-                    interaction
-                );
-
-                if (
-                    interaction.replied ||
-                    interaction.deferred
-                ) {
+                if (await handleVoiceRoomInteraction(interaction)) {
                     return;
                 }
             }
@@ -13585,14 +13788,7 @@ client.on(
             if (
                 interaction.isStringSelectMenu()
             ) {
-                await handleVoiceRoomSelect(
-                    interaction
-                );
-
-                if (
-                    interaction.replied ||
-                    interaction.deferred
-                ) {
+                if (await handleVoiceRoomSelect(interaction)) {
                     return;
                 }
             }
@@ -13699,6 +13895,19 @@ client.once('clientReady', async () => {
     console.log(
         '=========================================='
     );
+
+    // Database preflight: most Dashboard-linked systems (XP/public bank/store/etc.)
+    // use this shared PostgreSQL connection. Log one clear status at startup.
+    try {
+        const dbHealth = await publicSharedStore.health();
+        if (dbHealth?.ok) {
+            console.log(`🗄️ ZOMBI Database: ${dbHealth.mode === 'postgres' ? 'PostgreSQL connected' : 'Local JSON mode'}`);
+        } else {
+            console.warn(`⚠️ ZOMBI Database unavailable: ${dbHealth?.error || 'unknown error'}`);
+        }
+    } catch (error) {
+        console.warn('⚠️ ZOMBI Database preflight:', error?.message || error);
+    }
 
     try {
         client.user.setPresence({
@@ -13820,6 +14029,11 @@ function gracefulShutdown(signal) {
         saveShop();
         gangSystem.stop();
         bankRobbery.stopBankRobbery();
+        cityDirector.stop();
+    } catch {}
+
+    try {
+        musicSystem?.shutdown?.().catch?.(() => {});
     } catch {}
 
     try {
