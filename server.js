@@ -70,59 +70,16 @@ function paymentStatusLabel(status){return({pending:'⏳ بانتظار المر
 function paymentDate(ts){try{return new Date(Number(ts)||Date.now()).toLocaleString('ar-JO',{timeZone:'Asia/Amman'});}catch{return'';}}
 async function appendHomeAdminOp(gid,name,op){if(!isHomeGuild(gid))return;const file=String(name||'').trim();if(!file)return;const list=await store.data(gid,file,[]);const next=(Array.isArray(list)?list:[]).filter(x=>!x?.appliedAt).slice(-99);next.push({id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`,...op,createdAt:Date.now(),appliedAt:0});await store.saveData(gid,file,next);}
 
-let botApiBackendCache={mode:'',until:0};
-function botToken(){return String(process.env.BOT_TOKEN||process.env.TOKEN||process.env.DISCORD_BOT_TOKEN||'').trim();}
-function botProxyConfig(){
-  const oauthProxy=String(process.env.OAUTH_PROXY_URL||'').trim(),secret=String(process.env.OAUTH_PROXY_SECRET||'').trim();
-  if(!oauthProxy||!secret)return null;
-  try{const u=new URL(oauthProxy);return{url:`${u.origin}/bot/request`,secret};}catch{return null;}
-}
-async function directBotRequest(route,options={}){
-  const token=botToken();
-  if(!token){const e=new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');e.code='BOT_TOKEN_MISSING';throw e;}
+async function botFetch(route,options={}){
+  // Bot API requests must use the current BOT_TOKEN from Render directly.
+  // OAUTH_PROXY_URL remains available only for Discord OAuth login below.
+  const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();
+  if(!token)throw new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');
   const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',...(options.headers||{})}});
   if(res.status===204)return null;
   const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text;}
   if(!res.ok){const e=new Error(data?.message||`Discord API ${res.status}`);e.status=res.status;e.discord=data;throw e;}
   return data;
-}
-async function proxyBotRequest(route,options={}){
-  const proxy=botProxyConfig();
-  if(!proxy){const e=new Error('OAUTH_PROXY_URL / OAUTH_PROXY_SECRET غير مكتملة.');e.code='BOT_PROXY_MISSING';throw e;}
-  const method=String(options.method||'GET').toUpperCase();let bodyValue=null;
-  if(options.body!==undefined&&options.body!==null){if(typeof options.body==='string'){try{bodyValue=JSON.parse(options.body);}catch{bodyValue=options.body;}}else bodyValue=options.body;}
-  const res=await fetch(proxy.url,{method:'POST',headers:{Authorization:`Bearer ${proxy.secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
-  const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
-  if(!res.ok||payload?.ok===false){const e=new Error(payload?.error||`Discord API ${res.status}`);e.status=Number(payload?.status||res.status);e.discord=payload?.data||payload;e.retryAfter=Number(payload?.retry_after||res.headers.get('retry-after')||0);throw e;}
-  return payload?.data??null;
-}
-async function resolveBotApiBackend(force=false){
-  const now=Date.now();
-  if(!force&&botApiBackendCache.mode&&botApiBackendCache.until>now)return botApiBackendCache.mode;
-  const candidates=[];
-  if(botToken())candidates.push('direct');
-  if(botProxyConfig())candidates.push('proxy');
-  if(!candidates.length)throw new Error('لا يوجد اتصال Discord Bot API. أضف BOT_TOKEN أو إعدادات OAUTH_PROXY_URL و OAUTH_PROXY_SECRET.');
-  let lastError=null;
-  for(const mode of candidates){
-    try{
-      if(mode==='direct')await directBotRequest('/users/@me');else await proxyBotRequest('/users/@me');
-      botApiBackendCache={mode,until:now+5*60*1000};return mode;
-    }catch(e){lastError=e;}
-  }
-  throw lastError||new Error('تعذر الاتصال بحساب ZOMBI Bot.');
-}
-async function botFetch(route,options={}){
-  let mode=await resolveBotApiBackend();
-  try{return mode==='direct'?await directBotRequest(route,options):await proxyBotRequest(route,options);}
-  catch(e){
-    // إذا تغيّر/انتهى Token في أحد الطرفين، أعد اختيار قناة الاتصال مرة واحدة.
-    if([401,403].includes(Number(e?.status||0))){
-      const previous=mode;botApiBackendCache={mode:'',until:0};mode=await resolveBotApiBackend(true);
-      if(mode!==previous)return mode==='direct'?directBotRequest(route,options):proxyBotRequest(route,options);
-    }
-    throw e;
-  }
 }
 function detectDiscordImageMime(buf){
   if(!Buffer.isBuffer(buf)||buf.length<4)return '';
