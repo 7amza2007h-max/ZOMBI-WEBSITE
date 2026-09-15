@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.15.5",
-  "description": "ZOMBI V9.15.5 — Premium+ subscription detection compatibility fix",
+  "version": "9.15.6",
+  "description": "ZOMBI V9.15.6 — Premium+ plan matrix migration and detection self-heal",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

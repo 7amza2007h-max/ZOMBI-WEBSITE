@@ -144,9 +144,11 @@ function parseExpiryMs(value){
   return Number.isFinite(parsed)&&parsed>0?parsed:0;
 }
 function configuredPlanForConfig(cfg={}){
-  if(cfg?.isPremiumPlus===true||cfg?.premiumPlus===true||cfg?.premium?.plus===true)return 'premium_plus';
-  const candidates=[cfg?.plan,cfg?.premiumPlan,cfg?.subscriptionPlan,cfg?.membershipPlan,cfg?.subscription?.plan,cfg?.premium?.plan,cfg?.membership?.plan];
-  for(const value of candidates){const plan=normalizePlanId(value);if(plan!=='free')return plan;}
+  if(cfg?.isPremiumPlus===true||cfg?.premiumPlus===true||cfg?.premium?.plus===true||cfg?.subscription?.isPremiumPlus===true)return 'premium_plus';
+  const candidates=[cfg?.plan,cfg?.premiumPlan,cfg?.subscriptionPlan,cfg?.membershipPlan,cfg?.tier,cfg?.subscription?.plan,cfg?.subscription?.tier,cfg?.premium?.plan,cfg?.membership?.plan];
+  const normalized=candidates.map(normalizePlanId);
+  if(normalized.includes('premium_plus'))return 'premium_plus';
+  if(normalized.includes('premium'))return 'premium';
   if(cfg?.isPremium===true||cfg?.premium===true||cfg?.subscription?.active===true)return 'premium';
   return 'free';
 }
