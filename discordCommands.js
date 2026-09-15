@@ -9,6 +9,10 @@ const gamesChoices=[
 ].map(([name,value])=>({name,value}));
 const commands=[
   ...['warn','warnings','unwarn'].map(name=>({name,description:'نظام التحذيرات',default_member_permissions:'8192',options:[{type:6,name:'user',description:'العضو',required:true},...(name==='warn'?[{type:3,name:'reason',description:'سبب التحذير',required:true,max_length:500}]:name==='unwarn'?[{type:3,name:'id',description:'رقم التحذير أو اتركه لإزالة الأخير',required:false}]:[])]})),
+  {name:'timeout',description:'عمل Timeout لعضو — الصلاحية من Dashboard فقط',options:[{type:6,name:'user',description:'العضو',required:true},{type:3,name:'duration',description:'المدة مثل 10m أو 2h أو 1d',required:true},{type:3,name:'reason',description:'السبب',required:false,max_length:500}]},
+  {name:'untimeout',description:'فك Timeout عن عضو — الصلاحية من Dashboard فقط',options:[{type:6,name:'user',description:'العضو',required:true},{type:3,name:'reason',description:'السبب',required:false,max_length:500}]},
+  {name:'roleban',description:'إعطاء رتبة ban 💥 وحفظ رتب العضو',options:[{type:6,name:'user',description:'العضو',required:true},{type:3,name:'reason',description:'السبب',required:false,max_length:500}]},
+  {name:'unroleban',description:'فك رتبة ban 💥 واسترجاع رتب العضو',options:[{type:6,name:'user',description:'العضو',required:true},{type:3,name:'reason',description:'السبب',required:false,max_length:500}]},
   {name:'داشبورد',description:'فتح لوحة تحكم ZOMBI الخاصة بهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'setup',description:'إعداد ZOMBI لهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'balance',description:'عرض رصيدك أو رصيد عضو',options:[{type:6,name:'user',description:'العضو',required:false}]},

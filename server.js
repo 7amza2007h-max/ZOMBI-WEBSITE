@@ -198,6 +198,27 @@ function voiceChannels(channels,value){return `<option value="">— غير مح�
 function multiChannelOptions(channels,selected=[],types=[0,5]){const set=new Set(selected||[]);return channels.filter(c=>types.includes(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${set.has(c.id)?'selected':''}>${types.includes(2)?'🔊':'#'} ${esc(c.name)}</option>`).join('');}
 function checkbox(name,checked,label,disabledAttr=''){return `<label><input type="checkbox" name="${name}" ${checked?'checked':''} ${disabledAttr}> ${label}</label>`;}
 function roleOptions(roles,guildId,selected=[]){const set=new Set(selected||[]);return roles.filter(r=>r.id!==guildId&&!r.managed).sort((a,b)=>(b.position||0)-(a.position||0)).map(r=>`<option value="${r.id}" ${set.has(r.id)?'selected':''}>${esc(r.name)}</option>`).join('');}
+
+const RB_PERM={VIEW:1n<<10n,SEND:1n<<11n,HISTORY:1n<<16n,CONNECT:1n<<20n};
+function setBitPair(allow,deny,bit,mode){allow&=~bit;deny&=~bit;if(mode==='allow')allow|=bit;else if(mode==='deny')deny|=bit;return[allow,deny];}
+async function syncRoleBanPermissionsViaApi(guildId,bundle,moderation={}){
+  const roleId=String(moderation.roleBanRoleId||'');if(!roleId||!/^\d{15,25}$/.test(roleId))return {changed:0,failed:0};
+  const selected=new Set((moderation.roleBanVisibleChannelIds||[]).map(String)),enabled=moderation.roleBanEnabled!==false,allowSend=moderation.roleBanAllowSendMessages!==false,hideVoice=moderation.roleBanHideVoice!==false;
+  const textTypes=new Set([0,5,15,16]),voiceTypes=new Set([2,13]);let changed=0,failed=0;
+  for(const ch of bundle.channels||[]){
+    const type=Number(ch.type);if(!textTypes.has(type)&&!voiceTypes.has(type))continue;
+    const existing=(ch.permission_overwrites||[]).find(o=>String(o.id)===roleId&&Number(o.type)===0);let allow=BigInt(existing?.allow||0),deny=BigInt(existing?.deny||0);
+    if(textTypes.has(type)){
+      if(!enabled){[allow,deny]=setBitPair(allow,deny,RB_PERM.VIEW,'clear');[allow,deny]=setBitPair(allow,deny,RB_PERM.SEND,'clear');[allow,deny]=setBitPair(allow,deny,RB_PERM.HISTORY,'clear');}
+      else if(selected.has(String(ch.id))){[allow,deny]=setBitPair(allow,deny,RB_PERM.VIEW,'allow');[allow,deny]=setBitPair(allow,deny,RB_PERM.HISTORY,'allow');[allow,deny]=setBitPair(allow,deny,RB_PERM.SEND,allowSend?'allow':'deny');}
+      else{[allow,deny]=setBitPair(allow,deny,RB_PERM.VIEW,'deny');[allow,deny]=setBitPair(allow,deny,RB_PERM.SEND,'clear');[allow,deny]=setBitPair(allow,deny,RB_PERM.HISTORY,'clear');}
+    }else{
+      const mode=enabled&&hideVoice?'deny':'clear';[allow,deny]=setBitPair(allow,deny,RB_PERM.VIEW,mode);[allow,deny]=setBitPair(allow,deny,RB_PERM.CONNECT,mode);
+    }
+    try{await botFetch(`/channels/${ch.id}/permissions/${roleId}`,{method:'PUT',body:JSON.stringify({type:0,allow:String(allow),deny:String(deny)})});changed++;}catch(e){failed++;console.warn(`⚠️ ban role overwrite ${ch.id}:`,e?.message||e);}
+  }
+  return {changed,failed};
+}
 function lockedNote(ok,text='هذه الخاصية غير متاحة في خطتك الحالية.'){return ok?'':`<span class="lock-note">🔒 ${esc(text)}</span>`;}
 function qaText(items){return (items||[]).map(x=>`${x.question} | ${x.answer}`).join('\n');}
 function wordsText(items){return (items||[]).map(x=>`${x.scrambled} | ${x.answer}`).join('\n');}
@@ -401,7 +422,26 @@ async function guildPage(req){
       <label>⚙️ لوق النظام / أخطاء<select name="logSystem">${textChannels(channels,cfg.channels.logSystem)}</select></label>
     </div>
     <p class="hint">البوت يحتاج في كل روم لوق: View Channel + Send Messages + Embed Links. لوق الإدارة الكامل يستفيد أيضًا من View Audit Log.</p>
-    <h3>🛡️ Moderation</h3><div class="checks"><label><input type="checkbox" name="modClearEnabled" ${cfg.moderation?.clearEnabled!==false?'checked':''}> Clear</label><label><input type="checkbox" name="modKickEnabled" ${cfg.moderation?.kickEnabled!==false?'checked':''}> Kick</label><label><input type="checkbox" name="modBanEnabled" ${cfg.moderation?.banEnabled!==false?'checked':''}> Ban</label><label><input type="checkbox" name="modLockEnabled" ${cfg.moderation?.lockEnabled!==false?'checked':''}> Lock</label></div><h3>⚠️ التحذيرات</h3><p class="hint">التحذيرات داخل الروم المحدد فقط، وإتاحتها حسب إعدادات الأونر: <code>/warn</code>، <code>/warnings</code>، <code>/unwarn</code> أو <code>تحذير @العضو السبب</code>. أضف مستويات التحذير واكتب ID رتبة كل مستوى لتطبيقها تلقائيًا.</p><div class="form-grid"><label>روم التحذيرات<select name="warningChannelId" ${disabled(featureAllowed(site,cfg,'warnings'))}>${textChannels(channels,cfg.warnings?.channelId)}</select><small>كل أوامر التحذيرات تعمل في هذا الروم فقط. إتاحة النظام يحددها الأونر لكل خطة.</small></label><label class="wide">مستويات التحذيرات — ID الرتبة لكل مستوى</label><div class="wide" id="warning-levels">${(Array.isArray(cfg.warnings?.roleIds)?cfg.warnings.roleIds:[cfg.warnings?.role1Id||'',cfg.warnings?.role2Id||'',cfg.warnings?.role3Id||'']).map((id,n)=>`<div class="form-grid warning-level-row"><label>التحذير ${n+1} — ID الرتبة<input name="warningRoleIds" value="${esc(id||'')}" inputmode="numeric" pattern="[0-9]{15,25}" placeholder="ID الرتبة" ${disabled(featureAllowed(site,cfg,'warnings'))}></label><button type="button" class="btn warning-remove-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>حذف المستوى</button></div>`).join('')}</div><button type="button" class="btn" id="warning-add-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>＋ إضافة مستوى تحذير</button><p class="hint">الترتيب يحدد التحذير الأول والثاني وما بعدهما. لا يوجد حد ثابت لعدد المستويات. حقل فارغ يعني عدم تعيين رتبة لهذا المستوى؛ بعد آخر مستوى تُستخدم رتبته. لنسخ ID فعّل Developer Mode في ديسكورد ثم اضغط على الرتبة بالزر الأيمن واختر Copy Role ID.</p></div>
+    <h3>🛡️ Moderation</h3><div class="checks"><label><input type="checkbox" name="modClearEnabled" ${cfg.moderation?.clearEnabled!==false?'checked':''}> Clear</label><label><input type="checkbox" name="modKickEnabled" ${cfg.moderation?.kickEnabled!==false?'checked':''}> Kick</label><label><input type="checkbox" name="modBanEnabled" ${cfg.moderation?.banEnabled!==false?'checked':''}> Discord Ban</label><label><input type="checkbox" name="modLockEnabled" ${cfg.moderation?.lockEnabled!==false?'checked':''}> Lock</label></div>
+    <div class="config-card"><h3>⏱️ Timeout مخصص بالرتب</h3><p class="hint">حتى Administrator لا يستطيع استخدام <code>/timeout</code> إلا إذا كانت رتبته ضمن القائمة أدناه. مالك السيرفر فقط يمكن استثناؤه من الخيار.</p><div class="form-grid">
+      <label><input type="checkbox" name="timeoutEnabled" ${cfg.moderation?.timeoutEnabled!==false?'checked':''}> تفعيل /timeout و /untimeout</label>
+      <label><input type="checkbox" name="timeoutOwnerBypass" ${cfg.moderation?.timeoutOwnerBypass!==false?'checked':''}> السماح لمالك السيرفر دائمًا</label>
+      <label><input type="checkbox" name="timeoutRespectHierarchy" ${cfg.moderation?.timeoutRespectHierarchy!==false?'checked':''}> منع معاقبة رتبة مساوية/أعلى</label>
+      <label><input type="checkbox" name="timeoutRequireReason" ${cfg.moderation?.timeoutRequireReason===true?'checked':''}> السبب إجباري</label>
+      <label>أقصى مدة Timeout بالدقائق<input type="number" name="timeoutMaxMinutes" value="${Number(cfg.moderation?.timeoutMaxMinutes||10080)}" min="1" max="40320"><small>10080 = 7 أيام، والحد الأقصى من Discord هو 28 يومًا.</small></label>
+      <label class="wide">الرتب المسموح لها باستخدام Timeout<select multiple name="timeoutAllowedRoleIds">${roleOptions(roles,guild.id,cfg.moderation?.timeoutAllowedRoleIds||[])}</select><small>Administrator لا يتجاوز هذه القائمة.</small></label>
+    </div></div>
+    <div class="config-card"><h3>💥 رتبة ban</h3><p class="hint">الأمر النصي: <code>ban @member السبب</code> — الإلغاء: <code>unban @member</code>. ويوجد أيضًا <code>/roleban</code> و <code>/unroleban</code>. عند التطبيق تُحفظ رتب العضو ثم تُزال الرتب القابلة للإزالة وتُعطى رتبة ban 💥.</p><div class="form-grid">
+      <label><input type="checkbox" name="roleBanEnabled" ${cfg.moderation?.roleBanEnabled===true?'checked':''}> تفعيل ban 💥</label>
+      <label>رتبة العقوبة<select name="roleBanRoleId"><option value="">— إنشاء ban 💥 تلقائيًا / أو اختر رتبة —</option>${roleOptions(roles,guild.id,cfg.moderation?.roleBanRoleId?[cfg.moderation.roleBanRoleId]:[])}</select></label>
+      <label><input type="checkbox" name="roleBanOwnerBypass" ${cfg.moderation?.roleBanOwnerBypass!==false?'checked':''}> السماح لمالك السيرفر دائمًا</label>
+      <label><input type="checkbox" name="roleBanRespectHierarchy" ${cfg.moderation?.roleBanRespectHierarchy!==false?'checked':''}> منع معاقبة رتبة مساوية/أعلى</label>
+      <label><input type="checkbox" name="roleBanAllowSendMessages" ${cfg.moderation?.roleBanAllowSendMessages!==false?'checked':''}> السماح بالكتابة في الشاتات المسموحة</label>
+      <label><input type="checkbox" name="roleBanHideVoice" ${cfg.moderation?.roleBanHideVoice!==false?'checked':''}> إخفاء الفويسات عن رتبة ban</label>
+      <label class="wide">الرتب المسموح لها بإعطاء/فك ban 💥<select multiple name="roleBanAllowedRoleIds">${roleOptions(roles,guild.id,cfg.moderation?.roleBanAllowedRoleIds||[])}</select><small>حتى Administrator لا يستطيع تنفيذ الأمر إذا لم تكن رتبته هنا.</small></label>
+      <label class="wide">الشاتات التي تبقى ظاهرة لرتبة ban 💥<select multiple name="roleBanVisibleChannelIds">${textChannelMultiOptions(channels,cfg.moderation?.roleBanVisibleChannelIds||[])}</select><small>كل الشاتات النصية الأخرى تُخفى عن رتبة ban 💥 تلقائيًا. إذا لم تختر رتبة، ينشئ البوت رتبة ban 💥 بدون صلاحيات إدارية.</small></label>
+    </div><div class="warn small">⚠️ لازم رتبة ZOMBI BOT تكون أعلى من رتبة ban 💥 وأعلى من الرتب التي تريد إزالتها، ومعه Manage Roles. Timeout يحتاج Moderate Members.</div></div>
+    <h3>⚠️ التحذيرات</h3><p class="hint">التحذيرات داخل الروم المحدد فقط، وإتاحتها حسب إعدادات الأونر: <code>/warn</code>، <code>/warnings</code>، <code>/unwarn</code> أو <code>تحذير @العضو السبب</code>. أضف مستويات التحذير واكتب ID رتبة كل مستوى لتطبيقها تلقائيًا.</p><div class="form-grid"><label>روم التحذيرات<select name="warningChannelId" ${disabled(featureAllowed(site,cfg,'warnings'))}>${textChannels(channels,cfg.warnings?.channelId)}</select><small>كل أوامر التحذيرات تعمل في هذا الروم فقط. إتاحة النظام يحددها الأونر لكل خطة.</small></label><label class="wide">مستويات التحذيرات — ID الرتبة لكل مستوى</label><div class="wide" id="warning-levels">${(Array.isArray(cfg.warnings?.roleIds)?cfg.warnings.roleIds:[cfg.warnings?.role1Id||'',cfg.warnings?.role2Id||'',cfg.warnings?.role3Id||'']).map((id,n)=>`<div class="form-grid warning-level-row"><label>التحذير ${n+1} — ID الرتبة<input name="warningRoleIds" value="${esc(id||'')}" inputmode="numeric" pattern="[0-9]{15,25}" placeholder="ID الرتبة" ${disabled(featureAllowed(site,cfg,'warnings'))}></label><button type="button" class="btn warning-remove-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>حذف المستوى</button></div>`).join('')}</div><button type="button" class="btn" id="warning-add-level" ${disabled(featureAllowed(site,cfg,'warnings'))}>＋ إضافة مستوى تحذير</button><p class="hint">الترتيب يحدد التحذير الأول والثاني وما بعدهما. لا يوجد حد ثابت لعدد المستويات. حقل فارغ يعني عدم تعيين رتبة لهذا المستوى؛ بعد آخر مستوى تُستخدم رتبته. لنسخ ID فعّل Developer Mode في ديسكورد ثم اضغط على الرتبة بالزر الأيمن واختر Copy Role ID.</p></div>
     <h3>🎡 عجلة الحظ / الروليت / الكراسي</h3><div class="form-grid"><label class="wide">جوائز عجلة الحظ — افصل بفاصلة<input name="wheelRewards" value="${esc((cfg.games.wheelRewards||[]).join(', '))}"></label><label><input type="checkbox" name="rouletteEnabled" ${cfg.games.rouletteEnabled!==false?'checked':''}> تشغيل الروليت</label><label>وقت دور الروليت ثانية<input type="number" name="rouletteTurnSeconds" value="${cfg.games.rouletteTurnSeconds||25}" min="10" max="120"></label><label>Revive<input type="number" name="rouletteCostRevive" value="${cfg.games.rouletteActionCosts?.revive||0}" min="0"></label><label>Link<input type="number" name="rouletteCostLink" value="${cfg.games.rouletteActionCosts?.link||0}" min="0"></label><label>Protect<input type="number" name="rouletteCostProtect" value="${cfg.games.rouletteActionCosts?.protect||0}" min="0"></label><label>Freeze<input type="number" name="rouletteCostFreeze" value="${cfg.games.rouletteActionCosts?.freeze||0}" min="0"></label><label>Double<input type="number" name="rouletteCostDouble" value="${cfg.games.rouletteActionCosts?.double||0}" min="0"></label><label>Curse<input type="number" name="rouletteCostCurse" value="${cfg.games.rouletteActionCosts?.curse||0}" min="0"></label><label>Unlink<input type="number" name="rouletteCostUnlink" value="${cfg.games.rouletteActionCosts?.unlink||0}" min="0"></label><label>Add<input type="number" name="rouletteCostAdd" value="${cfg.games.rouletteActionCosts?.add||0}" min="0"></label><label>عداد بدء الكراسي<input type="number" name="chairsStartCountdownSeconds" value="${cfg.games.chairs?.startCountdownSeconds||5}" min="1" max="60"></label><label>فاصل الجولات ms<input type="number" name="chairsBetweenRoundsMs" value="${cfg.games.chairs?.betweenRoundsMs||2500}" min="250"></label></div>
     <h3>🎮 الألعاب</h3>${lockedNote(canGameSettings,'تعديل إعدادات الألعاب غير متاح في خطتك.')}<div class="z-game-command-guide"><b>⌨️ طريقة تشغيل الألعاب من الشات</b><p>اكتب <code>#</code> ثم اسم اللعبة: <code>#اسئلة</code> <code>#تخمين</code> <code>#سرعة</code> <code>#ترتيب</code> <code>#صح-خطأ</code> <code>#حساب</code> <code>#الاقرب</code> <code>#كلمة</code> <code>#عجلة</code> <code>#يومي</code> <code>#مافيا</code> <code>#روليت</code> <code>#كراسي</code> <code>#من-القاتل</code>.</p><small>إذا تجاوزت قيمة الحد الذي حدده Owner لخطتك، لن يتم الحفظ وستظهر رسالة ترقية الاشتراك.</small></div><div class="form-grid"><label class="wide">الرتب المسموح لها ببدء الألعاب<select multiple name="gameStartRoleIds">${roleOptions(roles,guild.id,cfg.games?.startRoleIds)}</select><small class="hint">الأدمن وManage Server مسموح لهم دائمًا. إذا لم تختَر رتبة إضافية، تبقى الألعاب للإدارة فقط.</small></label></div><div class="table-wrap game-table"><table><thead><tr><th>اللعبة</th><th>تشغيل</th><th>الجولات</th><th>الوقت</th><th>الجائزة</th></tr></thead><tbody>${gameRows}</tbody></table></div><div class="form-grid"><label>Roulette Min<input type="number" name="rouletteMinPlayers" value="${cfg.games.lobby?.roulette?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Roulette Max<input type="number" name="rouletteMaxPlayers" value="${cfg.games.lobby?.roulette?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Chairs Min<input type="number" name="chairsMinPlayers" value="${cfg.games.lobby?.chairs?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Chairs Max<input type="number" name="chairsMaxPlayers" value="${cfg.games.lobby?.chairs?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Mafia Min<input type="number" name="mafiaMinPlayers" value="${cfg.games.lobby?.mafia?.minPlayers||4}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label><label>Mafia Max<input type="number" name="mafiaMaxPlayers" value="${cfg.games.lobby?.mafia?.maxPlayers||20}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label></div>
     <h3>✏️ تغيير الاسم</h3><div class="form-grid"><label><input type="checkbox" name="nameChangeEnabled" ${cfg.nameChange?.enabled===true?'checked':''}> تشغيل النظام</label><label>عنوان اللوحة<input name="nameChangeTitle" value="${esc(cfg.nameChange?.title||'')}"></label><label>اسم الزر<input name="nameChangeButtonLabel" value="${esc(cfg.nameChange?.buttonLabel||'تغيير اسمي')}"></label><label>Emoji<input name="nameChangeButtonEmoji" value="${esc(cfg.nameChange?.buttonEmoji||'✏️')}"></label><label>عنوان Modal<input name="nameChangeModalTitle" value="${esc(cfg.nameChange?.modalTitle||'')}"></label><label>اسم الحقل<input name="nameChangeInputLabel" value="${esc(cfg.nameChange?.inputLabel||'')}"></label><label>Placeholder<input name="nameChangeInputPlaceholder" value="${esc(cfg.nameChange?.inputPlaceholder||'')}"></label><label>Cooldown ثانية<input type="number" name="nameChangeCooldownSeconds" value="${cfg.nameChange?.cooldownSeconds||30}" min="0"></label><label>لون<input name="nameChangeColor" value="${esc(cfg.nameChange?.color||'#8B5CF6')}"></label><label class="wide">الوصف<textarea name="nameChangeDescription">${esc(cfg.nameChange?.description||'')}</textarea></label><label class="wide">رسالة النجاح<textarea name="nameChangeSuccessMessage">${esc(cfg.nameChange?.successMessage||'')}</textarea></label><label class="wide">Banner<input name="nameChangeBannerUrl" value="${esc(cfg.nameChange?.bannerUrl||'')}"></label></div>
@@ -865,13 +905,45 @@ async function start(){
         baseXp:int(req.body.baseXp,cfg.levels.baseXp,10,1000000),
         growth:int(req.body.levelGrowth,cfg.levels.growth,0,1000000)
       };
+      const validRoleIds=new Set(req.bundle.roles.filter(r=>!r.managed&&String(r.id)!==String(req.params.guildId)).map(r=>String(r.id)));
+      const validTextChannelIds=new Set(req.bundle.channels.filter(c=>[0,5,15,16].includes(Number(c.type))).map(c=>String(c.id)));
+      const timeoutRoles=arr(req.body.timeoutAllowedRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50);
+      let roleBanAllowedRoles=arr(req.body.roleBanAllowedRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50);
+      let roleBanRoleId=String(req.body.roleBanRoleId||'').trim();
+      const roleBanVisibleChannels=arr(req.body.roleBanVisibleChannelIds).map(String).filter(id=>validTextChannelIds.has(id)).slice(0,100);
+      if(roleBanRoleId&&!validRoleIds.has(roleBanRoleId))return res.status(400).send('رتبة ban 💥 غير صالحة لهذا السيرفر.');
+      const requestedRoleBanEnabled=Boolean(req.body.roleBanEnabled);
+      if(requestedRoleBanEnabled&&!roleBanRoleId){
+        try{
+          const made=await botFetch(`/guilds/${req.params.guildId}/roles`,{method:'POST',body:JSON.stringify({name:'ban 💥',permissions:'0',hoist:false,mentionable:false})});
+          roleBanRoleId=String(made?.id||'');
+          if(!/^\d{15,25}$/.test(roleBanRoleId))throw new Error('Discord لم يرجع ID للرتبة الجديدة.');
+        }catch(e){
+          return res.status(400).send(`تعذر إنشاء رتبة ban 💥 تلقائيًا. تأكد أن البوت معه Manage Roles ثم أعد الحفظ. (${esc(e?.message||'Discord API error')})`);
+        }
+      }
+      roleBanAllowedRoles=roleBanAllowedRoles.filter(id=>id!==roleBanRoleId);
       cfg.moderation={
         ...cfg.moderation,
         clearEnabled:Boolean(req.body.modClearEnabled),
         kickEnabled:Boolean(req.body.modKickEnabled),
         banEnabled:Boolean(req.body.modBanEnabled),
         lockEnabled:Boolean(req.body.modLockEnabled),
-        logActions:cfg.moderation?.logActions!==false
+        logActions:cfg.moderation?.logActions!==false,
+        timeoutEnabled:Boolean(req.body.timeoutEnabled),
+        timeoutAllowedRoleIds:timeoutRoles,
+        timeoutMaxMinutes:int(req.body.timeoutMaxMinutes,cfg.moderation?.timeoutMaxMinutes||10080,1,40320),
+        timeoutRequireReason:Boolean(req.body.timeoutRequireReason),
+        timeoutOwnerBypass:Boolean(req.body.timeoutOwnerBypass),
+        timeoutRespectHierarchy:Boolean(req.body.timeoutRespectHierarchy),
+        roleBanEnabled:requestedRoleBanEnabled,
+        roleBanRoleId,
+        roleBanAllowedRoleIds:roleBanAllowedRoles,
+        roleBanVisibleChannelIds:roleBanVisibleChannels,
+        roleBanOwnerBypass:Boolean(req.body.roleBanOwnerBypass),
+        roleBanRespectHierarchy:Boolean(req.body.roleBanRespectHierarchy),
+        roleBanAllowSendMessages:Boolean(req.body.roleBanAllowSendMessages),
+        roleBanHideVoice:Boolean(req.body.roleBanHideVoice)
       };
     }
 
@@ -1063,6 +1135,17 @@ async function start(){
     access.restoreLocked(beforeSettings,cfg,site);
     cfg.setupComplete=true;
     const saved=await store.saveConfig(req.params.guildId,cfg);
+
+    if(saves('members')){
+      // إذا تغيّرت رتبة العقوبة، امسح فقط البتّات التي يديرها ZOMBI من الرتبة القديمة.
+      const oldRoleBanId=String(beforeSettings?.moderation?.roleBanRoleId||'');
+      const newRoleBanId=String(saved?.moderation?.roleBanRoleId||'');
+      if(oldRoleBanId&&oldRoleBanId!==newRoleBanId){
+        await syncRoleBanPermissionsViaApi(req.params.guildId,req.bundle,{...saved.moderation,roleBanRoleId:oldRoleBanId,roleBanEnabled:false}).catch(()=>{});
+      }
+      // طبّق صلاحيات رتبة ban فورًا قدر الإمكان؛ البوت يعيد المحاولة دوريًا أيضًا.
+      await syncRoleBanPermissionsViaApi(req.params.guildId,req.bundle,saved.moderation).catch(e=>console.warn('⚠️ role ban dashboard sync:',e?.message||e));
+    }
 
     if(saves('overview')&&isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')){
       const forceProfile=String(req.body.forceBotProfile||'')==='1';
