@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.15.6",
-  "description": "ZOMBI V9.15.6 — Premium+ plan matrix migration and detection self-heal",
+  "version": "9.15.8",
+  "description": "ZOMBI V9.15.8 — final Premium+ sync, bot detection, robbery dashboard controls, system stability",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

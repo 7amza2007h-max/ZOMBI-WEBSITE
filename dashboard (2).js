@@ -238,6 +238,21 @@
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
+
+  // سرقة البنك: اختيار الرتبة يظهر فقط عند استخدام منشن رتبة.
+  if (settingsForm) {
+    const robberyMentionMode = settingsForm.querySelector('[name="robberyMentionMode"]');
+    const robberyMentionRole = settingsForm.querySelector('[name="robberyMentionRoleId"]');
+    const robberyMentionRoleLabel = robberyMentionRole?.closest('[data-robbery-mention-role]') || robberyMentionRole?.closest('label');
+    const syncRobberyMentionRole = () => {
+      const roleMode = robberyMentionMode?.value === 'role';
+      if (robberyMentionRoleLabel) robberyMentionRoleLabel.style.display = roleMode ? '' : 'none';
+      if (robberyMentionRole) robberyMentionRole.disabled = !roleMode;
+    };
+    robberyMentionMode?.addEventListener('change', syncRobberyMentionRole);
+    syncRobberyMentionRole();
+  }
+
   // Convert all plan-dependent numeric caps into explicit subscription caps.
   // Native HTML max validation can otherwise block a submit before our
   // Premium dialog has a chance to explain what happened.

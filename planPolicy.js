@@ -134,10 +134,9 @@ function normalizePlanId(value){
 function parseExpiryMs(value){
   if(value===null||value===undefined||value==='')return 0;
   if(typeof value==='string'&&/^(lifetime|forever|never)$/i.test(value.trim()))return Number.MAX_SAFE_INTEGER;
-  const n=Number(value);
-  if(Number.isFinite(n)&&n>0)return n<1e12?n*1000:n;
-  const parsed=Date.parse(String(value));
-  return Number.isFinite(parsed)&&parsed>0?parsed:0;
+  const raw=String(value).trim(),n=Number(raw);
+  if(Number.isFinite(n))return n>0?(n<1e11?n*1000:n):0;
+  const parsed=Date.parse(raw);return Number.isFinite(parsed)&&parsed>0?parsed:0;
 }
 function configuredPlanForConfig(cfg={}){
   if(cfg?.isPremiumPlus===true||cfg?.premiumPlus===true||cfg?.premium?.plus===true||cfg?.subscription?.isPremiumPlus===true)return 'premium_plus';
@@ -159,7 +158,7 @@ function applySubscription(cfg,days=30,plan='premium'){
  const active=planNameForConfig(cfg);
  const currentUntil=premiumUntilForConfig(cfg);
  const base=active===plan?Math.max(Date.now(),currentUntil):Date.now();
- return {...cfg,plan,premiumUntil:base+integer(days,30,1,3650)*86400000};
+ return {...cfg,plan,premiumUntil:base+integer(days,30,1,3650)*86400000,subscriptionUpdatedAt:Date.now()};
 }
 function clone(v){ return JSON.parse(JSON.stringify(v)); }
 function bool(v,fallback){ return typeof v==='boolean'?v:fallback; }
@@ -182,7 +181,18 @@ function normalizePlans(input={}){
   for(const d of LIMIT_DEFS)out.premium_plus.limits[d.key]=Math.max(Number(out.premium_plus.limits[d.key]||0),Number(out.premium.limits[d.key]||0));
   return out;
 }
-function planNameForConfig(cfg){const plan=configuredPlanForConfig(cfg);return plan!=='free'&&premiumUntilForConfig(cfg)>Date.now()?plan:'free';}
+function planNameForConfig(cfg){
+  const plan=configuredPlanForConfig(cfg);
+  if(plan==='free')return 'free';
+  const until=premiumUntilForConfig(cfg);
+  // Legacy subscriptions sometimes stored only the plan with no expiry.
+  // Treat an explicit paid plan with a missing expiry as lifetime instead of silently downgrading it.
+  if(!until){
+    const explicit=normalizePlanId(cfg?.plan)!=='free'||normalizePlanId(cfg?.premiumPlan)!=='free'||normalizePlanId(cfg?.subscriptionPlan)!=='free'||normalizePlanId(cfg?.subscription?.plan)!=='free'||cfg?.isPremium===true||cfg?.isPremiumPlus===true||cfg?.premiumPlus===true;
+    return explicit?plan:'free';
+  }
+  return until>Date.now()?plan:'free';
+}
 function planForConfig(site,cfg){ return normalizePlans(site?.plans||{})[planNameForConfig(cfg)]; }
 function featureAllowed(site,cfg,key){ if(site?.emergency?.[key]?.disabled)return false; const plan=planNameForConfig(cfg); if(key==='customBotProfile'&&plan==='free')return false; return Boolean(planForConfig(site,cfg)?.features?.[key]); }
 function gameAllowed(site,cfg,gameId){ return Boolean(featureAllowed(site,cfg,'games')&&planForConfig(site,cfg)?.games?.[gameId]); }
