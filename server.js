@@ -443,6 +443,13 @@ async function guildPage(req){
       <label>أقصى مدة Timeout بالدقائق<input type="number" name="timeoutMaxMinutes" value="${Number(cfg.moderation?.timeoutMaxMinutes||10080)}" min="1" max="40320"><small>10080 = 7 أيام، والحد الأقصى من Discord هو 28 يومًا.</small></label>
       <label class="wide">الرتب المسموح لها باستخدام Timeout<select multiple name="timeoutAllowedRoleIds">${roleOptions(roles,guild.id,cfg.moderation?.timeoutAllowedRoleIds||[])}</select><small>Administrator لا يتجاوز هذه القائمة.</small></label>
     </div></div>
+    <div class="config-card"><h3>🔊 أمر move — سحب عضو إلى رومك</h3><p class="hint">اكتب <code>move @member</code>، أو اعمل Reply على رسالة العضو واكتب <code>move</code>. لازم منفذ الأمر يكون داخل Voice، والعضو المطلوب يكون داخل Voice آخر. حتى Administrator لا يتجاوز قائمة الرتب أدناه.</p><div class="form-grid">
+      <label><input type="checkbox" name="moveEnabled" ${cfg.moderation?.moveEnabled!==false?'checked':''}> تفعيل أمر move</label>
+      <label><input type="checkbox" name="moveOwnerBypass" ${cfg.moderation?.moveOwnerBypass!==false?'checked':''}> السماح لمالك السيرفر دائمًا</label>
+      <label class="wide">الرتب المسموح لها باستخدام move<select multiple name="moveAllowedRoleIds">${roleOptions(roles,guild.id,cfg.moderation?.moveAllowedRoleIds||[])}</select><small>اختيار الرتبة هنا هو الذي يسمح باستخدام الأمر؛ صلاحية Administrator وحدها لا تكفي.</small></label>
+      <label class="wide">رومات الفويس المسموح سحب الأعضاء منها<select multiple name="moveSourceChannelIds">${multiChannelOptions(channels,cfg.moderation?.moveSourceChannelIds||[],[2,13])}</select><small>اتركها فارغة للسماح بالسحب من أي روم صوتي.</small></label>
+      <label class="wide">رومات الفويس المسموح السحب إليها<select multiple name="moveDestinationChannelIds">${multiChannelOptions(channels,cfg.moderation?.moveDestinationChannelIds||[],[2,13])}</select><small>الروم المقصود هو الروم الموجود فيه منفذ أمر move. اتركها فارغة للسماح بأي روم.</small></label>
+    </div><div class="warn small">⚠️ ZOMBI BOT يحتاج View Channel + Connect + Move Members في رومات الفويس حتى يقدر ينقل العضو.</div></div>
     <div class="config-card"><h3>💥 رتبة ban</h3><p class="hint">الأمر النصي: <code>ban @member السبب</code> — الإلغاء: <code>unban @member</code>. ويوجد أيضًا <code>/roleban</code> و <code>/unroleban</code>. عند التطبيق تُحفظ رتب العضو ثم تُزال الرتب القابلة للإزالة وتُعطى رتبة ban 💥.</p><div class="form-grid">
       <label><input type="checkbox" name="roleBanEnabled" ${cfg.moderation?.roleBanEnabled===true?'checked':''}> تفعيل ban 💥</label>
       <label>رتبة العقوبة<select name="roleBanRoleId"><option value="">— اختر رتبة موجودة —</option>${roleOptions(roles,guild.id,cfg.moderation?.roleBanRoleId?[cfg.moderation.roleBanRoleId]:[])}</select><small>البوت سيستخدم هذه الرتبة نفسها ولن ينشئ رتبة جديدة تلقائيًا.</small></label>
@@ -963,7 +970,11 @@ async function start(){
     if(saves('members')){
       const validRoleIds=new Set(req.bundle.roles.filter(r=>!r.managed&&String(r.id)!==String(req.params.guildId)).map(r=>String(r.id)));
       const validTextChannelIds=new Set(req.bundle.channels.filter(c=>[0,5,15,16].includes(Number(c.type))).map(c=>String(c.id)));
+      const validVoiceChannelIds=new Set(req.bundle.channels.filter(c=>[2,13].includes(Number(c.type))).map(c=>String(c.id)));
       const timeoutRoles=arr(req.body.timeoutAllowedRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50);
+      const moveRoles=arr(req.body.moveAllowedRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50);
+      const moveSourceChannels=arr(req.body.moveSourceChannelIds).map(String).filter(id=>validVoiceChannelIds.has(id)).slice(0,100);
+      const moveDestinationChannels=arr(req.body.moveDestinationChannelIds).map(String).filter(id=>validVoiceChannelIds.has(id)).slice(0,100);
       let roleBanAllowedRoles=arr(req.body.roleBanAllowedRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50);
       const previousRoleBanRoleId=String(cfg.moderation?.roleBanRoleId||'').trim();
       let roleBanRoleId=String(req.body.roleBanRoleId||'').trim();
@@ -990,6 +1001,11 @@ async function start(){
         timeoutRequireReason:Boolean(req.body.timeoutRequireReason),
         timeoutOwnerBypass:Boolean(req.body.timeoutOwnerBypass),
         timeoutRespectHierarchy:Boolean(req.body.timeoutRespectHierarchy),
+        moveEnabled:Boolean(req.body.moveEnabled),
+        moveAllowedRoleIds:moveRoles,
+        moveOwnerBypass:Boolean(req.body.moveOwnerBypass),
+        moveSourceChannelIds:moveSourceChannels,
+        moveDestinationChannelIds:moveDestinationChannels,
         roleBanEnabled:requestedRoleBanEnabled,
         roleBanRoleId,
         roleBanAllowedRoleIds:roleBanAllowedRoles,
