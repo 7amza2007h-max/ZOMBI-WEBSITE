@@ -304,8 +304,8 @@ async function guildPage(req){
     store.data(guild.id,'city-director-state.json',{active:null,lastEventAt:0,history:[]})
   ]);
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
-  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
-  const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates');
+  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
+  const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates'),musicQueueLimit=maxFor(req,cfg,site,'musicQueueSize'),musicVolumeLimit=maxFor(req,cfg,site,'musicMaxVolume'),musicTrackLimit=maxFor(req,cfg,site,'musicMaxTrackMinutes');
   const products=cfg.store.products||[],items=cfg.rolePanel.items||[],ticketTypes=cfg.tickets.types||[],guideItems=cfg.serverGuide?.items||[],directorTemplates=cfg.cityDirector?.templates||[];
   const featureChecks=CORE_FEATURES.map(k=>{const def=FEATURE_DEFS.find(x=>x.key===k),allowed=featureAllowed(site,cfg,k);return `<label class="${allowed?'':'locked'}"><input type="checkbox" name="feature_${k}" ${cfg.features[k]&&allowed?'checked':''} ${allowed?'':'disabled'}> ${def?.emoji||''} ${esc(def?.label||k)}${allowed?'':' 🔒'}</label>`;}).join('');
   const gameRows=GAME_DEFS.map(g=>{const allowed=gameAllowed(site,cfg,g.id),r=cfg.games.quickGameSettings?.[g.id]||{rounds:5,roundTimeSeconds:25,winnerReward:300},roundMax=maxFor(req,cfg,site,'maxRounds'),timeMax=maxFor(req,cfg,site,'maxRoundTimeSeconds'),rewardMax=maxFor(req,cfg,site,'maxWinnerReward');return `<tr><td>${g.emoji} ${esc(g.label)}</td><td><input type="checkbox" name="game_enabled_${g.id}" ${cfg.games.enabled?.[g.id]!==false&&allowed?'checked':''} ${allowed?'':'disabled'}></td><td><input type="number" name="game_rounds_${g.id}" value="${r.rounds}" min="1" max="${roundMax}" data-plan-max="${roundMax}" data-limit-label="عدد الجولات" ${canGameSettings&&allowed?'':'disabled'}></td><td><input type="number" name="game_time_${g.id}" value="${r.roundTimeSeconds}" min="5" max="${timeMax}" data-plan-max="${timeMax}" data-limit-label="وقت الجولة" ${canGameSettings&&allowed?'':'disabled'}></td><td><input type="number" name="game_reward_${g.id}" value="${r.winnerReward}" min="0" max="${rewardMax}" data-plan-max="${rewardMax}" data-limit-label="جائزة الفائز" ${canGameSettings&&allowed?'':'disabled'}></td></tr>`;}).join('');
@@ -403,6 +403,16 @@ async function guildPage(req){
       <label>مثقاب<input type="number" name="robberyDrill" value="${cfg.robbery?.equipment?.drill||0}" min="0"></label>
       <label>جهاز اتصال<input type="number" name="robberyRadio" value="${cfg.robbery?.equipment?.radio||0}" min="0"></label>
       <label>سيارة هروب<input type="number" name="robberyCar" value="${cfg.robbery?.equipment?.car||0}" min="0"></label>
+    </div>
+    <h3>🎵 نظام الموسيقى</h3>
+    <div class="warn small">${canMusic?'✅ النظام متاح في خطتك الحالية.':'🔒 نظام الموسيقى غير متاح في خطتك الحالية حسب إعدادات Owner.'} • الطابور: <b>${canMusicQueue?'مفعّل':'مقفل'}</b> • التكرار: <b>${canMusicLoop?'مفعّل':'مقفل'}</b> • البحث بالاسم: <b>${canMusicSearch?'مفعّل':'مقفل'}</b> • حد الطابور: <b>${musicQueueLimit}</b> • أقصى صوت: <b>${musicVolumeLimit}%</b> • أقصى مدة: <b>${musicTrackLimit} دقيقة</b>.</div>
+    <div class="form-grid">
+      <label><input type="checkbox" name="musicEnabled" ${cfg.music?.enabled!==false?'checked':''} ${canMusic?'':'disabled'}> تشغيل الموسيقى في هذا السيرفر</label>
+      <label><input type="checkbox" name="musicAllowEveryone" ${cfg.music?.allowEveryone!==false?'checked':''} ${canMusic?'':'disabled'}> السماح لكل عضو داخل نفس الفويس بالتحكم</label>
+      <label class="wide">رتب DJ / التحكم<select multiple size="6" name="musicControllerRoleIds" ${canMusic?'':'disabled'}>${roleOptions(roles,guild.id,cfg.music?.controllerRoleIds||[])}</select><small>إذا أوقفت السماح للجميع، الإدارة أو الرتب المحددة هنا فقط تقدر تتحكم.</small></label>
+      <label>الصوت الافتراضي %<input type="number" name="musicDefaultVolume" value="${Number(cfg.music?.defaultVolume??60)}" min="1" max="${musicVolumeLimit}" data-plan-max="${musicVolumeLimit}" data-limit-label="مستوى صوت الموسيقى" ${canMusic?'':'disabled'}></label>
+      <label>مغادرة تلقائية بعد ثوانٍ<input type="number" name="musicAutoLeaveSeconds" value="${Number(cfg.music?.autoLeaveSeconds??180)}" min="30" max="3600" ${canMusic?'':'disabled'}></label>
+      <label><input type="checkbox" name="musicAnnounceNowPlaying" ${cfg.music?.announceNowPlaying!==false?'checked':''} ${canMusic?'':'disabled'}> إرسال رسالة الآن يتم التشغيل</label>
     </div>
     <h3>🔊 الرومات الصوتية المؤقتة</h3><div class="form-grid"><label><input type="checkbox" name="voiceRoomsEnabled" ${cfg.voiceRooms?.enabled===true?'checked':''}> تشغيل النظام</label><label>اسم الروم<input name="voiceRoomName" value="${esc(cfg.voiceRooms?.roomName||'🎙️・{username}')}"></label><label>User Limit<input type="number" name="voiceUserLimit" value="${cfg.voiceRooms?.userLimit||0}" min="0" max="99"></label><label>Bitrate<input type="number" name="voiceBitrate" value="${cfg.voiceRooms?.bitrate||64000}" min="8000" max="384000"></label></div>
     <h3>📋 مركز لوقات ZOMBI — روم منفصل لكل نظام</h3>
@@ -826,6 +836,7 @@ async function start(){
       if(rejectOverLimit(req.body.gangMaxDeputies,'gangDeputies','أقصى نواب العصابة'))return;
     }
     if(saves('robbery')&&rejectOverLimit(req.body.robberyMinParticipants,'robberyParticipants','عدد المشاركين بسرقة البنك'))return;
+    if(saves('music')&&rejectOverLimit(req.body.musicDefaultVolume,'musicMaxVolume','مستوى صوت الموسيقى'))return;
 
     if(saves('games')){
       const checks=[];
@@ -1083,6 +1094,26 @@ async function start(){
       };
     }
 
+    if(saves('music')){
+      const musicAllowed=featureAllowed(site,cfg,'music');
+      if(has('musicEnabled')&&!musicAllowed&&Boolean(req.body.musicEnabled))return sendUpgradeRequired(req,res,site,cfg,'نظام الموسيقى غير متاح في خطتك الحالية.');
+      const availableRoles=Array.isArray(req.bundle?.roles)?req.bundle.roles:[];
+      const validRoleIds=new Set(availableRoles.filter(r=>!r.managed&&String(r.id)!==String(req.params.guildId)).map(r=>String(r.id)));
+      const previousMusic=cfg.music||{};
+      cfg.music={
+        ...previousMusic,
+        // Checkboxes and an empty multi-select are omitted by browsers when cleared.
+        // Because this block only runs while saving the Music section, omission means false/empty.
+        // Preserve the previous values only when the current plan does not allow editing Music.
+        enabled:musicAllowed?Boolean(req.body.musicEnabled):previousMusic.enabled!==false,
+        allowEveryone:musicAllowed?Boolean(req.body.musicAllowEveryone):previousMusic.allowEveryone!==false,
+        controllerRoleIds:musicAllowed?arr(req.body.musicControllerRoleIds).map(String).filter(id=>validRoleIds.has(id)).slice(0,50):(Array.isArray(previousMusic.controllerRoleIds)?previousMusic.controllerRoleIds:[]),
+        defaultVolume:musicAllowed?int(req.body.musicDefaultVolume,previousMusic.defaultVolume||60,1,maxFor(req,cfg,site,'musicMaxVolume')):Number(previousMusic.defaultVolume||60),
+        autoLeaveSeconds:musicAllowed?int(req.body.musicAutoLeaveSeconds,previousMusic.autoLeaveSeconds||180,30,3600):Number(previousMusic.autoLeaveSeconds||180),
+        announceNowPlaying:musicAllowed?Boolean(req.body.musicAnnounceNowPlaying):previousMusic.announceNowPlaying!==false
+      };
+    }
+
     if(saves('voice')){
       cfg.voiceRooms={
         ...cfg.voiceRooms,
@@ -1144,7 +1175,9 @@ async function start(){
         footer:String(req.body.rolePanelFooter||cfg.rolePanel.footer||'ZOMBI • ROLE CENTER').slice(0,160)
       };
       const autoRoleId=String(req.body.autoRoleRoleId||'').trim();
-      if(autoRoleId&&!req.bundle.roles.some(r=>r.id===autoRoleId&&r.id!==guild.id&&!r.managed)){
+      const currentGuildId=String(req.params.guildId||'').trim();
+      const availableRoles=Array.isArray(req.bundle?.roles)?req.bundle.roles:[];
+      if(autoRoleId&&!availableRoles.some(r=>String(r.id)===autoRoleId&&String(r.id)!==currentGuildId&&!r.managed)){
         return res.status(400).send('الرتبة التلقائية غير صالحة لهذا السيرفر.');
       }
       cfg.autoRole={

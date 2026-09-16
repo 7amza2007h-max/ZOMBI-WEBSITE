@@ -19,6 +19,7 @@ function requirements(name){
  if(/^gang/.test(name))return ['gangs'];
  if(/^(robbery|centralBank)/.test(name))return ['bankRobbery'];
  if(/^(bank|heist|cashProtection|company)/.test(name))return ['bank'];
+ if(/^music/.test(name))return ['music'];
  if(/^(voiceEvery|voiceReward|voiceChannel)/.test(name))return ['voiceRewards'];
  if(/^voice/.test(name))return ['voiceRooms'];
  if(/^(ticket|supportRole)/.test(name))return ['tickets'];
@@ -48,7 +49,7 @@ function routeRequirements(path){
 function restoreLocked(before,after,site){
  const loggingEnabled=after.moderation?.logActions;
  const restore=(feature,section)=>{if(!policy.featureAllowed(site,before,feature))after[section]=structuredClone(before[section]);};
- for(const [f,s] of Object.entries({bank:'bank',economy:'economy',levels:'levels',gangs:'gangs',bankRobbery:'robbery',voiceRooms:'voiceRooms',moderation:'moderation',tickets:'tickets',store:'store',rolePanel:'rolePanel',games:'games',serverGuide:'serverGuide',cityDirector:'cityDirector'}))restore(f,s);
+ for(const [f,s] of Object.entries({bank:'bank',economy:'economy',levels:'levels',gangs:'gangs',bankRobbery:'robbery',voiceRooms:'voiceRooms',music:'music',moderation:'moderation',tickets:'tickets',store:'store',rolePanel:'rolePanel',games:'games',serverGuide:'serverGuide',cityDirector:'cityDirector'}))restore(f,s);
  after.moderation.logActions=loggingEnabled;
  restore('customCurrency','currency');if(policy.planNameForConfig(before)!=='premium_plus')after.warnings=structuredClone(before.warnings);
  const copy=(feature,obj,keys)=>{if(!policy.featureAllowed(site,before,feature))for(const k of keys)after[obj][k]=before[obj][k];};
