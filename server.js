@@ -83,96 +83,140 @@ function paymentDate(ts){try{return new Date(Number(ts)||Date.now()).toLocaleStr
 async function appendHomeAdminOp(gid,name,op){if(!isHomeGuild(gid))return;const file=String(name||'').trim();if(!file)return;const list=await store.data(gid,file,[]);const next=(Array.isArray(list)?list:[]).filter(x=>!x?.appliedAt).slice(-99);next.push({id:`op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`,...op,createdAt:Date.now(),appliedAt:0});await store.saveData(gid,file,next);}
 
 let botApiBackendCache={mode:'',until:0};
+const botGetCache=new Map();
+const botInflight=new Map();
+const sleepMs=ms=>new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(ms)||0)));
 function botToken(){return String(process.env.BOT_TOKEN||process.env.TOKEN||process.env.DISCORD_BOT_TOKEN||'').trim();}
+function proxySecretCandidates(){
+  const list=[];
+  for(const key of ['OAUTH_PROXY_SECRET','BOT_API_PROXY_SECRET']){const v=String(process.env[key]||'').trim();if(v)list.push(v);}
+  const clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim();
+  if(clientSecret)list.push(crypto.createHash('sha256').update(`ZOMBI_PROXY:${clientSecret}`).digest('hex'));
+  return [...new Set(list)];
+}
+function oauthProxyUrl(){
+  const raw=String(process.env.OAUTH_PROXY_URL||'').trim();if(!raw)return '';
+  try{const u=new URL(raw);if(!u.pathname||u.pathname==='/'||u.pathname==='/bot/request')u.pathname='/oauth/exchange';return u.toString();}catch{return '';}
+}
 function botProxyConfig(){
-  const oauthProxy=String(process.env.OAUTH_PROXY_URL||'').trim(),secret=String(process.env.OAUTH_PROXY_SECRET||'').trim();
-  if(!oauthProxy||!secret)return null;
-  try{const u=new URL(oauthProxy);return{url:`${u.origin}/bot/request`,secret};}catch{return null;}
+  const raw=String(process.env.BOT_API_PROXY_URL||process.env.OAUTH_PROXY_URL||'').trim();if(!raw)return null;
+  const secrets=proxySecretCandidates();if(!secrets.length)return null;
+  try{const u=new URL(raw);return{url:`${u.origin}/bot/request`,secrets};}catch{return null;}
+}
+function retryAfterSeconds(response,data){
+  const raw=data?.retry_after??response?.headers?.get?.('retry-after')??0;const n=Number(raw||0);return Number.isFinite(n)&&n>0?n:0;
+}
+function makeDiscordError(response,data,label='Discord API'){
+  const e=new Error(data?.message||data?.error_description||data?.error||`${label} ${response?.status||'ERR'}`);
+  e.status=Number(response?.status||0);e.discord=data;e.retryAfter=retryAfterSeconds(response,data);return e;
 }
 async function directBotRequest(route,options={}){
   const token=botToken();
   if(!token){const e=new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');e.code='BOT_TOKEN_MISSING';throw e;}
-  const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',...(options.headers||{})}});
+  const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',Accept:'application/json',...(options.headers||{})}});
   if(res.status===204)return null;
-  const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text;}
-  if(!res.ok){const e=new Error(data?.message||`Discord API ${res.status}`);e.status=res.status;e.discord=data;throw e;}
+  const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text?{message:text}:null;}
+  if(!res.ok)throw makeDiscordError(res,data,'Discord API');
   return data;
 }
 async function proxyBotRequest(route,options={}){
   const proxy=botProxyConfig();
-  if(!proxy){const e=new Error('OAUTH_PROXY_URL / OAUTH_PROXY_SECRET غير مكتملة.');e.code='BOT_PROXY_MISSING';throw e;}
+  if(!proxy){const e=new Error('Discord Proxy غير مهيأ.');e.code='BOT_PROXY_MISSING';throw e;}
   const method=String(options.method||'GET').toUpperCase();let bodyValue=null;
   if(options.body!==undefined&&options.body!==null){if(typeof options.body==='string'){try{bodyValue=JSON.parse(options.body);}catch{bodyValue=options.body;}}else bodyValue=options.body;}
-  const res=await fetch(proxy.url,{method:'POST',headers:{Authorization:`Bearer ${proxy.secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
-  const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
-  if(!res.ok||payload?.ok===false){const e=new Error(payload?.error||`Discord API ${res.status}`);e.status=Number(payload?.status||res.status);e.discord=payload?.data||payload;e.retryAfter=Number(payload?.retry_after||res.headers.get('retry-after')||0);throw e;}
-  return payload?.data??null;
-}
-async function resolveBotApiBackend(force=false){
-  const now=Date.now();
-  if(!force&&botApiBackendCache.mode&&botApiBackendCache.until>now)return botApiBackendCache.mode;
-  const candidates=[];
-  if(botToken())candidates.push('direct');
-  if(botProxyConfig())candidates.push('proxy');
-  if(!candidates.length)throw new Error('لا يوجد اتصال Discord Bot API. أضف BOT_TOKEN أو إعدادات OAUTH_PROXY_URL و OAUTH_PROXY_SECRET.');
-  let lastError=null;
-  for(const mode of candidates){
-    try{
-      if(mode==='direct')await directBotRequest('/users/@me');else await proxyBotRequest('/users/@me');
-      botApiBackendCache={mode,until:now+5*60*1000};return mode;
-    }catch(e){lastError=e;}
+  let lastAuthError=null;
+  for(const secret of proxy.secrets){
+    const res=await fetch(proxy.url,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
+    const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
+    if([401,403].includes(res.status)){lastAuthError=makeDiscordError(res,payload,'ZOMBI Discord Proxy');continue;}
+    if(!res.ok||payload?.ok===false){const e=makeDiscordError(res,payload?.data||payload,'Discord API');e.status=Number(payload?.status||res.status);e.retryAfter=Number(payload?.retry_after||e.retryAfter||0);throw e;}
+    return payload?.data??null;
   }
-  throw lastError||new Error('تعذر الاتصال بحساب ZOMBI Bot.');
+  throw lastAuthError||new Error('تعذر توثيق Discord Proxy.');
 }
-async function botFetch(route,options={}){
-  let mode=await resolveBotApiBackend();
-  try{return mode==='direct'?await directBotRequest(route,options):await proxyBotRequest(route,options);}
+function preferredBotBackend(){
+  const now=Date.now();if(botApiBackendCache.mode&&botApiBackendCache.until>now)return botApiBackendCache.mode;
+  const mode=botProxyConfig()?'proxy':(botToken()?'direct':'');
+  if(!mode)throw new Error('لا يوجد اتصال Discord Bot API. أضف BOT_TOKEN أو OAUTH_PROXY_URL.');
+  botApiBackendCache={mode,until:now+10*60*1000};return mode;
+}
+function botCacheTtl(route){
+  if(route==='/users/@me')return 10*60*1000;
+  if(route.startsWith('/users/@me/guilds'))return 2*60*1000;
+  if(/\/guilds\/\d+\/(channels|roles)/.test(route))return 60*1000;
+  if(/\/guilds\/\d+/.test(route))return 60*1000;
+  return 20*1000;
+}
+function invalidateBotCaches(route=''){
+  const m=String(route).match(/\/guilds\/(\d{15,25})/);const gid=m?.[1]||'';
+  if(gid){for(const key of [...botGetCache.keys()])if(key.includes(`/guilds/${gid}`))botGetCache.delete(key);if(typeof invalidateGuildBundle==='function')invalidateGuildBundle(gid);}
+  if(String(route).includes('/users/@me/guilds')){for(const key of [...botGetCache.keys()])if(key.includes('/users/@me/guilds'))botGetCache.delete(key);botGuildListCache.until=0;}
+}
+async function performBotRequest(route,options={}){
+  let mode=preferredBotBackend();
+  const call=()=>mode==='proxy'?proxyBotRequest(route,options):directBotRequest(route,options);
+  try{return await call();}
   catch(e){
-    // إذا تغيّر/انتهى Token في أحد الطرفين، أعد اختيار قناة الاتصال مرة واحدة.
-    if([401,403].includes(Number(e?.status||0))){
-      const previous=mode;botApiBackendCache={mode:'',until:0};mode=await resolveBotApiBackend(true);
-      if(mode!==previous)return mode==='direct'?directBotRequest(route,options):proxyBotRequest(route,options);
+    if(Number(e?.status)===401){
+      const alt=mode==='proxy'&&botToken()?'direct':(mode==='direct'&&botProxyConfig()?'proxy':'');
+      if(alt){mode=alt;botApiBackendCache={mode,until:Date.now()+2*60*1000};return mode==='proxy'?proxyBotRequest(route,options):directBotRequest(route,options);}
     }
     throw e;
   }
 }
+async function botFetch(route,options={}){
+  const method=String(options.method||'GET').toUpperCase(),key=`${method}:${route}`;
+  if(method!=='GET'){
+    const result=await performBotRequest(route,options);invalidateBotCaches(route);return result;
+  }
+  const now=Date.now(),cached=botGetCache.get(key);
+  if(cached&&cached.until>now)return cached.data;
+  if(botInflight.has(key))return botInflight.get(key);
+  const task=(async()=>{
+    try{
+      let result;
+      try{result=await performBotRequest(route,options);}catch(e){
+        if(Number(e?.status)===429){
+          const waitMs=Math.ceil(Number(e.retryAfter||0)*1000);
+          if(waitMs>0&&waitMs<=4500){await sleepMs(waitMs+150);result=await performBotRequest(route,options);}
+          else if(cached&&cached.staleUntil>now)return cached.data;
+          else throw e;
+        }else throw e;
+      }
+      botGetCache.set(key,{data:result,until:Date.now()+botCacheTtl(route),staleUntil:Date.now()+10*60*1000});return result;
+    }finally{botInflight.delete(key);}
+  })();
+  botInflight.set(key,task);return task;
+}
 
-let botGuildListCache={ids:new Set(),bot:null,until:0};
+let botGuildListCache={ids:new Set(),guilds:new Map(),bot:null,until:0,staleUntil:0};
 async function getBotGuildIdSet(force=false){
   const now=Date.now();
   if(!force&&botGuildListCache.until>now&&botGuildListCache.ids instanceof Set)return botGuildListCache;
-  const [botUser,guilds]=await Promise.all([
-    botFetch('/users/@me'),
-    botFetch('/users/@me/guilds?with_counts=false')
-  ]);
-  if(!botUser?.id)throw new Error('Discord لم يرجع هوية البوت.');
-  if(!Array.isArray(guilds))throw new Error('Discord لم يرجع قائمة سيرفرات البوت.');
-  const expected=String(process.env.DISCORD_BOT_CLIENT_ID||'').trim();
-  if(expected&&String(botUser.id)!==expected){
-    const e=new Error(`BOT_TOKEN يعود لبوت مختلف عن DISCORD_BOT_CLIENT_ID (${botUser.id} != ${expected}).`);
-    e.code='BOT_ID_MISMATCH';throw e;
+  try{
+    const [botUser,guilds]=await Promise.all([botFetch('/users/@me'),botFetch('/users/@me/guilds?with_counts=true&limit=200')]);
+    if(!botUser?.id)throw new Error('Discord لم يرجع هوية البوت.');
+    if(!Array.isArray(guilds))throw new Error('Discord لم يرجع قائمة سيرفرات البوت.');
+    const expected=String(process.env.DISCORD_BOT_CLIENT_ID||'').trim();
+    if(expected&&String(botUser.id)!==expected){const e=new Error(`BOT_TOKEN يعود لبوت مختلف عن DISCORD_BOT_CLIENT_ID (${botUser.id} != ${expected}).`);e.code='BOT_ID_MISMATCH';throw e;}
+    botGuildListCache={ids:new Set(guilds.map(g=>String(g.id))),guilds:new Map(guilds.map(g=>[String(g.id),g])),bot:botUser,until:now+2*60*1000,staleUntil:now+20*60*1000};
+    return botGuildListCache;
+  }catch(e){
+    if(botGuildListCache.ids.size&&botGuildListCache.staleUntil>now&&Number(e?.status)===429)return botGuildListCache;
+    throw e;
   }
-  botGuildListCache={ids:new Set(guilds.map(g=>String(g.id))),bot:botUser,until:now+60_000};
-  return botGuildListCache;
 }
 async function getRecentBotHeartbeat(){
   try{
-    const hb=await store.data('site','heartbeat.json',{});
-    const at=Number(hb?.at||0);
-    if(!at||Date.now()-at>150_000)return null;
-    return{
-      ...hb,
-      guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]
-    };
+    const hb=await store.data('site','heartbeat.json',{});const at=Number(hb?.at||0);
+    if(!at||Date.now()-at>180_000)return null;
+    return{...hb,guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]};
   }catch{return null;}
 }
 async function getBotPresenceSnapshot(){
-  const heartbeat=await getRecentBotHeartbeat();
-  let api=null,error=null;
+  const heartbeat=await getRecentBotHeartbeat();let api=null,error=null;
   try{api=await getBotGuildIdSet();}catch(e){error=e;}
-  const ids=new Set();
-  if(api?.ids)for(const id of api.ids)ids.add(String(id));
-  if(heartbeat?.ready!==false)for(const id of heartbeat?.guildIds||[])ids.add(String(id));
+  const ids=new Set();if(api?.ids)for(const id of api.ids)ids.add(String(id));if(heartbeat?.ready!==false)for(const id of heartbeat?.guildIds||[])ids.add(String(id));
   return{ids,heartbeat,api,error};
 }
 function detectDiscordImageMime(buf){
@@ -214,9 +258,18 @@ async function profileImageData(urlValue,label='الصورة'){
   if(!['image/png','image/jpeg','image/gif'].includes(type))throw new Error(`${label}: نوع الصورة غير مدعوم. استخدم PNG أو JPG أو GIF فقط.`);
   return `data:${type};base64,${buf.toString('base64')}`;
 }
+const guildBundleCache=new Map();
+function invalidateGuildBundle(id){if(id)guildBundleCache.delete(String(id));}
 async function getBotGuild(id){try{return await botFetch(`/guilds/${id}?with_counts=true`);}catch(e){if(e.status===404)return null;throw e;}}
-async function getGuildBundle(id){const [guild,channels,roles]=await Promise.all([getBotGuild(id),botFetch(`/guilds/${id}/channels`).catch(()=>[]),botFetch(`/guilds/${id}/roles`).catch(()=>[])]);if(!guild)return null;return{guild,channels,roles};}
-async function requireGuildAccess(req,res,next){try{const ug=userGuild(req,req.params.guildId);if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');const bundle=await getGuildBundle(req.params.guildId);if(!bundle)return res.status(404).send(layout('Bot missing','<section class="login"><h1>🤖 البوت غير موجود في هذا السيرفر</h1><p>أضف ZOMBI أولًا ثم ارجع للـDashboard.</p></section>',req.user));req.discordGuild=ug||null;req.bundle=bundle;if(req.method==='POST'){const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);}next();}catch(e){if(Number(e?.status)===401){return res.status(503).send(layout('Discord Bot Login',`<section class="login"><h1>🔑 اتصال ZOMBI بـ Discord غير مصرح</h1><p>رمز البوت الموجود في استضافة الموقع غير صحيح أو انتهى، أو أن <b>OAUTH_PROXY_SECRET</b> لا يطابق الـWorker.</p><p class="hint">في Render ضع <b>BOT_TOKEN</b> بنفس Bot Token المستخدم على استضافة ZOMBI Bot، ثم اعمل Manual Deploy/Restart. إذا كنت تستخدم Cloudflare Proxy فتأكد أن OAUTH_PROXY_SECRET في Render يساوي PROXY_SECRET في Worker حرفيًا.</p><a class="btn primary" href="/dashboard">رجوع للسيرفرات</a></section>`,req.user));}next(e);}}
+async function getGuildBundle(id,force=false){
+  const gid=String(id),now=Date.now(),cached=guildBundleCache.get(gid);
+  if(!force&&cached&&cached.until>now)return cached.data;
+  try{
+    const [guild,channels,roles]=await Promise.all([getBotGuild(gid),botFetch(`/guilds/${gid}/channels`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.channels||[];throw e;}),botFetch(`/guilds/${gid}/roles`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.roles||[];throw e;})]);
+    if(!guild)return null;const data={guild,channels:Array.isArray(channels)?channels:[],roles:Array.isArray(roles)?roles:[]};guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+10*60_000});return data;
+  }catch(e){if(cached&&cached.staleUntil>now&&Number(e?.status)===429)return cached.data;throw e;}
+}
+async function requireGuildAccess(req,res,next){try{const ug=userGuild(req,req.params.guildId);if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');const bundle=await getGuildBundle(req.params.guildId);if(!bundle)return res.status(404).send(layout('Bot missing','<section class="login"><h1>🤖 البوت غير موجود في هذا السيرفر</h1><p>أضف ZOMBI أولًا ثم ارجع للـDashboard.</p></section>',req.user));req.discordGuild=ug||null;req.bundle=bundle;if(req.method==='POST'){const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);}next();}catch(e){if(Number(e?.status)===401){return res.status(503).send(layout('Discord Bot Login',`<section class="login"><h1>🔑 تعذر توثيق ZOMBI مع Discord</h1><p>تأكد أن <b>BOT_TOKEN</b> في Render هو نفس توكن البوت على Monkey. إذا كان Cloudflare Worker مفعّلًا، النسخة الجديدة تحاول المفتاح اليدوي ثم المفتاح المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع للسيرفرات</a></section>`,req.user));}next(e);}}
 
 function upgradeResponse(req,res,site,keys){
  const plans=access.availablePlans(site,keys),labels=plans.map(p=>PLAN_LABELS[p]);
@@ -760,19 +813,70 @@ async function start(){
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
   app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
   app.get('/terms',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('شروط الخدمة',`<section class="legal"><h1>شروط الخدمة</h1><p>باستخدام ZOMBI أو Dashboard فإنك توافق على استخدام الخدمة بشكل قانوني ووفق شروط Discord.</p><h2>صلاحيات السيرفر</h2><p>يجب أن تكون مخولًا لإضافة البوت أو تعديل إعدادات السيرفر. بعض الوظائف تحتاج صلاحيات Discord مثل Manage Channels وManage Roles، ويجب أن تكون رتبة البوت أعلى من الرتب التي يديرها.</p><h2>Free وPremium وPremium+</h2><p>الميزات والحدود المتاحة لكل خطة يحددها مالك ZOMBI وقد تتغير. مدة Premium تبدأ حسب الكود أو التفعيل الممنوح للسيرفر، ولا يمنح Premium حق تغيير حساب البوت العالمي لكل سيرفر؛ التخصيص لكل سيرفر يقتصر على الخيارات التي يوفرها Dashboard.</p><h2>الاستخدام المقبول</h2><p>لا تستخدم الخدمة للإساءة، التخريب، الاحتيال، انتهاك حقوق الآخرين أو مخالفة قواعد Discord. يجوز تعطيل الوصول عند إساءة الاستخدام.</p><h2>توفر الخدمة</h2><p>نسعى لاستمرار الخدمة لكن لا نضمن عدم الانقطاع أو فقدان البيانات بسبب أعطال خارجية. يُنصح بالاحتفاظ بنسخ احتياطية للإعدادات المهمة.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
-  app.get('/auth/discord',(req,res)=>{const state=crypto.randomBytes(24).toString('hex');req.session.oauthState=state;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
-  app.get('/auth/discord/callback',async(req,res,next)=>{try{if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);if(!req.query.code||!req.query.state||String(req.query.state)!==String(req.session.oauthState||''))return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));delete req.session.oauthState;const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
-    async function readJsonResponse(response,label){const raw=await response.text();let data=null;try{data=raw?JSON.parse(raw):{};}catch{throw new Error(`${label} رجّع رد غير متوقع (${response.status}): ${raw.replace(/\s+/g,' ').slice(0,180)}`);}if(!response.ok){const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||0);throw err;}return data;}
-    async function loginViaProxy(code){const proxyUrl=String(process.env.OAUTH_PROXY_URL||'').trim(),proxySecret=String(process.env.OAUTH_PROXY_SECRET||'').trim();if(!proxyUrl)return null;if(!proxySecret){console.warn('⚠️ OAUTH_PROXY_URL موجود لكن OAUTH_PROXY_SECRET مفقود؛ سيتم استخدام Discord OAuth المباشر.');return null;}try{const response=await fetch(proxyUrl,{method:'POST',headers:{Authorization:`Bearer ${proxySecret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:String(code),redirect_uri:redirect})});const data=await readJsonResponse(response,'ZOMBI OAuth Proxy');if(!data?.ok||!data?.user)throw new Error(data?.error||'OAuth Proxy لم يرجع بيانات المستخدم.');return{user:data.user,guilds:Array.isArray(data.guilds)?data.guilds:[]};}catch(e){if([401,403,404,500,502,503,504].includes(Number(e?.status||0))){console.warn(`⚠️ OAuth Proxy غير متاح (${e.status||'ERR'}): ${e.message}. سيتم استخدام Discord OAuth المباشر.`);return null;}throw e;}}
-    async function loginDirect(code){const clientId=String(process.env.DISCORD_CLIENT_ID||'').trim(),clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim(),auth=Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),body=new URLSearchParams({grant_type:'authorization_code',code:String(code),redirect_uri:redirect});const tr=await fetch(OAUTH_TOKEN_URL,{method:'POST',headers:{Authorization:`Basic ${auth}`,'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body});const td=await readJsonResponse(tr,'Discord OAuth token');if(!td?.access_token)throw new Error('Discord لم يرجع access token.');const headers={Authorization:`Bearer ${td.access_token}`,Accept:'application/json'},[ur,gr]=await Promise.all([fetch(`${API}/users/@me`,{headers}),fetch(`${API}/users/@me/guilds`,{headers})]);return{user:await readJsonResponse(ur,'Discord user profile'),guilds:await readJsonResponse(gr,'Discord guild list')};}
-    const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
-  }catch(e){if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord حدّد تسجيل الدخول مؤقتًا</h1><p>انتظر تقريبًا ${seconds} ثانية ثم جرّب مرة ثانية.</p><a class="btn" href="/">رجوع</a></section>`,req.user));}next(e);}});
+  app.get('/auth/discord',(req,res)=>{
+    const state=crypto.randomBytes(24).toString('hex'),now=Date.now();
+    const states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
+    req.session.oauthStates=[...states.filter(x=>x&&Number(x.at)>now-10*60*1000),{value:state,at:now}].slice(-5);
+    const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
+    const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});
+    res.redirect(`https://discord.com/oauth2/authorize?${q}`);
+  });
+  app.get('/auth/discord/callback',async(req,res,next)=>{try{
+    if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
+    const incomingState=String(req.query.state||''),states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
+    const stateIndex=states.findIndex(x=>String(x?.value||'')===incomingState&&Date.now()-Number(x?.at||0)<10*60*1000);
+    if(!req.query.code||!incomingState||stateIndex<0)return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));
+    req.session.oauthStates=states.filter((_,i)=>i!==stateIndex);
+    const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
+    async function requestJson(url,options,label,maxShortRetries=1){
+      for(let attempt=0;;attempt++){
+        const response=await fetch(url,options),raw=await response.text();let data=null;
+        try{data=raw?JSON.parse(raw):{};}catch{const err=new Error(`${label} رجّع رد غير متوقع (${response.status}): ${raw.replace(/\s+/g,' ').slice(0,180)}`);err.status=response.status;throw err;}
+        if(response.ok)return data;
+        const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||0);
+        const waitMs=Math.ceil(Number(err.retryAfter||0)*1000);
+        if(response.status===429&&attempt<maxShortRetries&&waitMs>0&&waitMs<=5000){await sleepMs(waitMs+150);continue;}
+        throw err;
+      }
+    }
+    async function loginViaProxy(code){
+      const proxyUrl=oauthProxyUrl();if(!proxyUrl)return null;
+      const secrets=proxySecretCandidates();if(!secrets.length){const e=new Error('OAUTH Proxy موجود لكن لا يوجد مفتاح توثيق متاح.');e.status=500;throw e;}
+      let authError=null;
+      for(const secret of secrets){
+        try{
+          const data=await requestJson(proxyUrl,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:String(code),redirect_uri:redirect})},'ZOMBI OAuth Proxy',1);
+          if(!data?.ok||!data?.user)throw new Error(data?.error||'OAuth Proxy لم يرجع بيانات المستخدم.');
+          return{user:data.user,guilds:Array.isArray(data.guilds)?data.guilds:[]};
+        }catch(e){if([401,403].includes(Number(e?.status||0))){authError=e;continue;}throw e;}
+      }
+      throw authError||new Error('تعذر توثيق OAuth Proxy.');
+    }
+    async function loginDirect(code){
+      const clientId=String(process.env.DISCORD_CLIENT_ID||'').trim(),clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim();
+      if(!clientId||!clientSecret)throw new Error('DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET غير مكتملة.');
+      const body=new URLSearchParams({client_id:clientId,client_secret:clientSecret,grant_type:'authorization_code',code:String(code),redirect_uri:redirect});
+      const td=await requestJson(OAUTH_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body},'Discord OAuth token',1);
+      if(!td?.access_token)throw new Error('Discord لم يرجع access token.');
+      const headers={Authorization:`Bearer ${td.access_token}`,Accept:'application/json'};
+      const user=await requestJson(`${API}/users/@me`,{headers},'Discord user profile',1);
+      await sleepMs(75);
+      const guilds=await requestJson(`${API}/users/@me/guilds`,{headers},'Discord guild list',1);
+      return{user,guilds:Array.isArray(guilds)?guilds:[]};
+    }
+    const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;
+    req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};
+    const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
+  }catch(e){
+    if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>تم إيقاف المحاولة بدل تكرار الطلبات. انتظر تقريبًا ${seconds} ثانية ثم اضغط تسجيل الدخول مرة واحدة.</p><a class="btn primary" href="/auth/discord">تسجيل الدخول من جديد</a><a class="btn" href="/">رجوع</a></section>`,req.user));}
+    next(e);
+  }});
   app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>req.session.destroy(()=>res.redirect('/')));
 
   app.get('/checkout',requireLogin,async(req,res,next)=>{try{
     const plan=paymentPlan(req.query.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);
     if(!zain.enabled)return res.status(503).send(layout('Zain Cash',`<section class="login"><h1>🟡 الدفع عبر Zain Cash غير مفعّل</h1><p>لم يتم إعداد رقم المحفظة بعد. تواصل مع مالك ZOMBI.</p><a class="btn" href="/premium">رجوع للاشتراكات</a></section>`,req.user));
-    const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed).map(x=>x.g);
+    const manageable=(req.user.guilds||[]).filter(canManage).slice(0,100),presence=await getBotPresenceSnapshot(),installed=manageable.filter(g=>presence.ids.has(String(g.id)));
     const amount=paymentAmount(zain,plan),days=paymentDays(zain,plan),token=csrf(req),planLabel=PLAN_LABELS[plan];
     const options=installed.map(g=>`<option value="${esc(g.id)}">${esc(g.name)} — ${esc(g.id)}</option>`).join('');
     const body=`<section class="z-pay-wrap"><div class="z-pay-head"><span class="badge">ZAIN CASH PAYMENT</span><h1>🟡 اشترك في ${esc(planLabel)}</h1><p>الدفع يدوي وآمن: حوّل المبلغ ثم ارفع صورة التحويل. التفعيل يتم بعد موافقة Owner.</p></div>
@@ -1507,9 +1611,12 @@ async function start(){
   app.get('/owner',requireLogin,requireOwner,async(req,res,next)=>{try{
     const token=csrf(req),ids=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse(),paymentItems=await payments.list({limit:100});
     const zain=resolvedZainCash(site),pendingPayments=paymentItems.filter(x=>x.status==='pending').length;
+    const presence=await getBotPresenceSnapshot(),userGuildMap=new Map((req.user?.guilds||[]).map(g=>[String(g.id),g]));
+    const apiGuilds=presence.api?.guilds instanceof Map?presence.api.guilds:new Map();
     const entries=await Promise.all(ids.slice(0,250).map(async id=>{
-      const [g,cfg]=await Promise.all([getBotGuild(id).catch(()=>null),store.getConfig(id)]);
-      return {id,g,cfg,plan:planNameForConfig(cfg)};
+      const sid=String(id),knownInstalled=presence.ids.has(sid),fallbackGuild=userGuildMap.get(sid)||null;
+      const g=apiGuilds.get(sid)||(knownInstalled&&fallbackGuild?fallbackGuild:(knownInstalled?{id:sid,name:`Server ${sid}`,icon:null,approximate_member_count:0}:null));
+      const cfg=await store.getConfig(sid);return{id:sid,g,cfg,plan:planNameForConfig(cfg)};
     }));
     const premiumCount=entries.filter(x=>x.plan==='premium').length,plusCount=entries.filter(x=>x.plan==='premium_plus').length,freeCount=entries.filter(x=>x.plan==='free').length;
     const availableCodes=codes.filter(c=>!c.usedAt).length;
@@ -1625,8 +1732,13 @@ async function start(){
   app.post('/owner/codes',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.createCode(Number(req.body.days||30),req.body.plan||'premium');res.redirect('/owner');});
   app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,zainCash:{enabled:Boolean(req.body.zainCashEnabled),walletNumber:String(req.body.zainWalletNumber||'').trim(),walletName:String(req.body.zainWalletName||'').trim(),premiumAmount:Number(req.body.zainPremiumAmount||4.99),premiumPlusAmount:Number(req.body.zainPremiumPlusAmount||7.99),premiumDays:int(req.body.zainPremiumDays,30,1,3650),premiumPlusDays:int(req.body.zainPremiumPlusDays,30,1,3650),instructions:req.body.zainInstructions},premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
 
-  app.get('/health',async(_req,res)=>res.json({ok:true,database:await store.health(),uptime:process.uptime()}));
-  app.use((err,req,res,_next)=>{console.error(err);if(Number(err?.status)===401)return res.status(503).send(layout('Discord Authorization',`<section class="login"><h1>🔑 فشل توثيق Discord</h1><p>بيانات الاتصال بـ Discord غير صحيحة في الاستضافة.</p><p class="hint">تحقق من BOT_TOKEN، وDISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET، وإذا كان OAUTH_PROXY_URL مفعّلًا فتحقق أن OAUTH_PROXY_SECRET يطابق PROXY_SECRET في الـWorker.</p><a class="btn primary" href="/dashboard">رجوع</a></section>`,req.user));res.status(500).send(layout('Error',`<section class="login"><h1>❌ حدث خطأ</h1><p>${esc(err.message)}</p></section>`,req.user));});
+  app.get('/health',async(_req,res)=>{const hb=await getRecentBotHeartbeat().catch(()=>null);res.json({ok:true,database:await store.health(),uptime:process.uptime(),discordProxy:Boolean(oauthProxyUrl()),botHeartbeat:hb?{ready:hb.ready!==false,guildCount:hb.guildCount||0,ageMs:Date.now()-Number(hb.at||0)}:null});});
+  app.use((err,req,res,_next)=>{
+    console.error(err);const status=Number(err?.status||0);
+    if(status===429){const seconds=Math.max(1,Math.ceil(Number(err?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>الداشبورد أوقف تكرار الطلبات تلقائيًا. انتظر تقريبًا ${seconds} ثانية ثم أعد فتح الصفحة مرة واحدة.</p><a class="btn primary" href="${esc(req.originalUrl||'/dashboard')}">إعادة المحاولة</a><a class="btn" href="/dashboard">السيرفرات</a></section>`,req.user));}
+    if(status===401)return res.status(503).send(layout('Discord Authorization',`<section class="login"><h1>🔑 فشل توثيق Discord</h1><p>تأكد من BOT_TOKEN وبيانات Discord OAuth. إذا كان OAUTH_PROXY_URL مفعّلًا فالنسخة الجديدة تدعم المفتاح اليدوي أو التوثيق المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع</a></section>`,req.user));
+    res.status(500).send(layout('Error',`<section class="login"><h1>❌ حدث خطأ</h1><p>${esc(err.message)}</p></section>`,req.user));
+  });
   const port=Number(process.env.PORT||3000),host=process.env.HOST||'0.0.0.0';app.listen(port,host,()=>console.log(`🌐 ZOMBI Website: ${baseUrl()} (${host}:${port})`));
 }
 module.exports={start,layout,landing,decorateDashboard,upgradeResponse};

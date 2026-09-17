@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.16.4",
-  "description": "ZOMBI V9.16.4 — reliable dashboard save flow + role permissions/content protection fixes",
+  "version": "9.16.5",
+  "description": "ZOMBI V9.16.5 — Discord OAuth 401/429 stability, API caching and Worker fallback fixes",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

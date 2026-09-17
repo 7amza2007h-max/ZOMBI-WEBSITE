@@ -1,0 +1,42 @@
+ZOMBI WEBSITE — FIX LOGIN / DISCORD 401 + 429
+=============================================
+
+تم إصلاح المشاكل التي كانت تظهر كالتالي:
+- Unauthorized 401 عند فتح السيرفر من الداشبورد.
+- Discord API 429 عند فتح الاقتصاد أو أقسام الداشبورد.
+- Discord Login 429 حتى بعد الانتظار ثم إعادة المحاولة.
+- الضغط المتكرر على Discord API من صفحة Owner وصفحة الدفع.
+- تكرار فحص نفس السيرفرات بشكل متوازي.
+
+أهم التغييرات:
+1) Cache لطلبات Discord GET + استخدام نسخة قديمة مؤقتًا عند Rate Limit بدل كسر الصفحة.
+2) Cache للرومات والرتب وبيانات السيرفر لمدة قصيرة بدل طلبها مع كل Refresh.
+3) Owner Panel لم يعد يرسل طلب Discord لكل سيرفر؛ يستخدم قائمة واحدة فقط.
+4) Checkout لم يعد يفحص كل سيرفر بطلب منفصل.
+5) تسجيل الدخول يقبل أكثر من OAuth state حتى لو انضغط زر الدخول مرتين بسرعة.
+6) طلبات OAuth صارت متسلسلة مع retry قصير فقط بدل burst متوازي.
+7) Cloudflare Worker يدعم توثيق تلقائي مشتق من DISCORD_CLIENT_SECRET، لذلك OAUTH_PROXY_SECRET لم يعد إلزاميًا.
+8) إذا بقي PROXY_SECRET القديم في Cloudflare فهو ما زال مدعومًا.
+9) /health يعرض حالة قاعدة البيانات + حالة heartbeat من البوت + هل Discord Proxy مفعّل.
+
+التركيب الموصى به على Render:
+- BOT_TOKEN = نفس توكن ZOMBI الموجود على Monkey Network.
+- DATABASE_URL = رابط Aiven الحالي.
+- DISCORD_CLIENT_ID = Application ID لنفس تطبيق Discord المستخدم للموقع.
+- DISCORD_CLIENT_SECRET = OAuth Client Secret لنفس التطبيق.
+- DISCORD_CALLBACK_URL = https://YOUR-DOMAIN/auth/discord/callback
+- PUBLIC_BASE_URL = https://YOUR-DOMAIN
+- SESSION_SECRET = قيمة عشوائية قوية.
+- OAUTH_PROXY_URL = https://YOUR-WORKER.workers.dev/oauth/exchange
+- OAUTH_PROXY_SECRET: اختياري. يمكنك حذفه مع Worker الجديد.
+
+Cloudflare Worker — Secrets المطلوبة:
+- DISCORD_CLIENT_ID
+- DISCORD_CLIENT_SECRET
+- BOT_TOKEN
+- DISCORD_REDIRECT_URI (اختياري لكن مفضل؛ نفس DISCORD_CALLBACK_URL)
+- PROXY_SECRET اختياري للـlegacy فقط.
+
+مهم:
+ارفع cloudflare-worker.js الجديد إلى Cloudflare Worker واعمل Deploy، ثم ارفع ملفات الموقع إلى Render/GitHub واعمل Deploy.
+لا تغيّر DATABASE_URL ولا تحذف Aiven.
