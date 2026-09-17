@@ -278,7 +278,7 @@ async function getGuildBundle(id,force=false){
   let stored=null;
   if(!force){
     stored=await readStoredGuildBundle(gid);
-    if(stored&&Number(stored.at||0)>now-5*60_000){
+    if(stored&&Number(stored.at||0)>now-15*60_000){
       const data={guild:stored.guild,channels:stored.channels,roles:stored.roles,_snapshot:true};
       guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+30*60_000});
       return data;
@@ -878,6 +878,17 @@ async function start(){
     };
     await store.saveData('site','heartbeat.json',payload);
     res.json({ok:true});
+  }catch(e){next(e);}});
+  app.put('/api/bot-sync/guild/:guildId/discord-bundle',requireBotSync,async(req,res,next)=>{try{
+    const gid=String(req.params.guildId||'').trim(),body=req.body&&typeof req.body==='object'?req.body:{};
+    if(!/^\d{15,25}$/.test(gid))return res.status(400).json({ok:false,error:'Guild ID invalid'});
+    const guild=body.guild&&typeof body.guild==='object'?body.guild:null;
+    const channels=Array.isArray(body.channels)?body.channels.slice(0,1000):[];
+    const roles=Array.isArray(body.roles)?body.roles.slice(0,500):[];
+    if(!guild||String(guild.id||'')!==gid)return res.status(400).json({ok:false,error:'Guild bundle invalid'});
+    const payload={guild,channels,roles,at:Number(body.at)||Date.now(),source:'bot-gateway-cache'};
+    await store.saveData(gid,GUILD_BUNDLE_SNAPSHOT,payload);invalidateGuildBundle(gid);
+    res.json({ok:true,channels:channels.length,roles:roles.length});
   }catch(e){next(e);}});
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
   app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
