@@ -261,15 +261,83 @@ async function profileImageData(urlValue,label='الصورة'){
 const guildBundleCache=new Map();
 function invalidateGuildBundle(id){if(id)guildBundleCache.delete(String(id));}
 async function getBotGuild(id){try{return await botFetch(`/guilds/${id}?with_counts=true`);}catch(e){if(e.status===404)return null;throw e;}}
+const GUILD_BUNDLE_SNAPSHOT='discord-dashboard-bundle.json';
+async function readStoredGuildBundle(gid){
+  try{
+    const snap=await store.data(String(gid),GUILD_BUNDLE_SNAPSHOT,null);
+    if(!snap||!snap.guild||!Array.isArray(snap.channels)||!Array.isArray(snap.roles))return null;
+    return snap;
+  }catch{return null;}
+}
+async function writeStoredGuildBundle(gid,data){
+  try{await store.saveData(String(gid),GUILD_BUNDLE_SNAPSHOT,{guild:data.guild,channels:data.channels,roles:data.roles,at:Date.now()});}catch{}
+}
 async function getGuildBundle(id,force=false){
   const gid=String(id),now=Date.now(),cached=guildBundleCache.get(gid);
   if(!force&&cached&&cached.until>now)return cached.data;
+  let stored=null;
+  if(!force){
+    stored=await readStoredGuildBundle(gid);
+    if(stored&&Number(stored.at||0)>now-5*60_000){
+      const data={guild:stored.guild,channels:stored.channels,roles:stored.roles,_snapshot:true};
+      guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+30*60_000});
+      return data;
+    }
+  }
   try{
-    const [guild,channels,roles]=await Promise.all([getBotGuild(gid),botFetch(`/guilds/${gid}/channels`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.channels||[];throw e;}),botFetch(`/guilds/${gid}/roles`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.roles||[];throw e;})]);
-    if(!guild)return null;const data={guild,channels:Array.isArray(channels)?channels:[],roles:Array.isArray(roles)?roles:[]};guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+10*60_000});return data;
-  }catch(e){if(cached&&cached.staleUntil>now&&Number(e?.status)===429)return cached.data;throw e;}
+    const [guild,channels,roles]=await Promise.all([
+      getBotGuild(gid),
+      botFetch(`/guilds/${gid}/channels`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.channels||[];throw e;}),
+      botFetch(`/guilds/${gid}/roles`).catch(e=>{if(Number(e?.status)===429&&cached)return cached.data?.roles||[];throw e;})
+    ]);
+    if(!guild)return null;
+    const data={guild,channels:Array.isArray(channels)?channels:[],roles:Array.isArray(roles)?roles:[]};
+    guildBundleCache.set(gid,{data,until:Date.now()+2*60_000,staleUntil:Date.now()+30*60_000});
+    writeStoredGuildBundle(gid,data).catch(()=>{});
+    return data;
+  }catch(e){
+    if(Number(e?.status)===429){
+      if(cached&&cached.staleUntil>now)return {...cached.data,_stale:true};
+      stored=stored||await readStoredGuildBundle(gid);
+      if(stored&&Number(stored.at||0)>now-24*60*60_000){
+        const data={guild:stored.guild,channels:stored.channels,roles:stored.roles,_stale:true};
+        guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+30*60_000});
+        return data;
+      }
+    }
+    throw e;
+  }
 }
-async function requireGuildAccess(req,res,next){try{const ug=userGuild(req,req.params.guildId);if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');const bundle=await getGuildBundle(req.params.guildId);if(!bundle)return res.status(404).send(layout('Bot missing','<section class="login"><h1>🤖 البوت غير موجود في هذا السيرفر</h1><p>أضف ZOMBI أولًا ثم ارجع للـDashboard.</p></section>',req.user));req.discordGuild=ug||null;req.bundle=bundle;if(req.method==='POST'){const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);}next();}catch(e){if(Number(e?.status)===401){return res.status(503).send(layout('Discord Bot Login',`<section class="login"><h1>🔑 تعذر توثيق ZOMBI مع Discord</h1><p>تأكد أن <b>BOT_TOKEN</b> في Render هو نفس توكن البوت على Monkey. إذا كان Cloudflare Worker مفعّلًا، النسخة الجديدة تحاول المفتاح اليدوي ثم المفتاح المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع للسيرفرات</a></section>`,req.user));}next(e);}}
+async function requireGuildAccess(req,res,next){
+  const ug=userGuild(req,req.params.guildId);
+  try{
+    if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');
+    let bundle;
+    try{bundle=await getGuildBundle(req.params.guildId);}catch(e){
+      if(Number(e?.status)!==429)throw e;
+      bundle={guild:{id:String(req.params.guildId),name:String(ug?.name||'ZOMBI Server'),owner_id:ug?.owner?String(req.user?.id||''):'',icon:ug?.icon||null},channels:[],roles:[],_degraded:true};
+    }
+    if(!bundle)return res.status(404).send(layout('Bot missing','<section class="login"><h1>🤖 البوت غير موجود في هذا السيرفر</h1><p>أضف ZOMBI أولًا ثم ارجع للـDashboard.</p></section>',req.user));
+    if(bundle?.guild&&ug){
+      if(!bundle.guild.name)bundle.guild.name=ug.name;
+      if(!bundle.guild.icon)bundle.guild.icon=ug.icon;
+      if(!bundle.guild.owner_id&&ug.owner)bundle.guild.owner_id=String(req.user?.id||'');
+    }
+    req.discordGuild=ug||null;req.bundle=bundle;
+    if(req.method==='POST'&&bundle?._degraded){
+      return res.status(503).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>فتحت الداشبورد للعرض، لكن أوقفت الحفظ مؤقتًا حتى لا تضيع إعدادات الرومات أو الرتب أثناء الـRate Limit.</p><a class="btn primary" href="${esc(req.get('referer')||`/dashboard/${req.params.guildId}`)}">رجوع</a></section>`,req.user));
+    }
+    if(req.method==='POST'){
+      const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
+      let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);
+      const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);
+    }
+    next();
+  }catch(e){
+    if(Number(e?.status)===401){return res.status(503).send(layout('Discord Bot Login',`<section class="login"><h1>🔑 تعذر توثيق ZOMBI مع Discord</h1><p>تأكد أن <b>BOT_TOKEN</b> في Render هو نفس توكن البوت على Monkey. إذا كان Cloudflare Worker مفعّلًا، النسخة الجديدة تحاول المفتاح اليدوي ثم المفتاح المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع للسيرفرات</a></section>`,req.user));}
+    next(e);
+  }
+}
 
 function upgradeResponse(req,res,site,keys){
  const plans=access.availablePlans(site,keys),labels=plans.map(p=>PLAN_LABELS[p]);
@@ -431,8 +499,9 @@ async function guildPage(req){
 
   const panelCards=[['bank','🏦','لوحة البنك'],['games','🎮','لوحة الألعاب'],['tickets','🎫','لوحة التذاكر'],['store','🛒','لوحة المتجر'],['roles','🔔','لوحة الرتب'],['name','✏️','لوحة تغيير الاسم'],['guide','🧭','دليل السيرفر']].map(([key,emoji,label])=>`<article class="config-card compact-card"><h3>${emoji} ${label}</h3><p>${key==='guide'?'🧭 العنوان والوصف واللون والبنر والأزرار تُدار من قسم دليل السيرفر.':canPanelDesign?'💎 تستطيع تخصيص العنوان والوصف واللون والـLogo والـBanner والـFooter والأزرار/القوائم لهذه اللوحة فقط.':'🔒 تخصيص تصميم هذه اللوحة متاح لـ Premium وPremium+.'}</p><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/send/${key}"><input type="hidden" name="_csrf" value="${token}"><button class="btn">📨 إرسال / تحديث</button></form>${key==='guide'?`<a class="btn primary" href="/dashboard/${guild.id}?section=guide">🧭 إعداد الدليل</a>`:canPanelDesign?`<a class="btn primary" href="/dashboard/${guild.id}/panels/${key}">💎 تخصيص اللوحة</a>`:`<a class="btn" href="/premium">🔒 Premium</a>`}</div></article>`).join('');
 
+  const discordCacheNotice=req.bundle?._degraded?`<div class="warn">⚠️ Discord عامل Rate Limit مؤقتًا. فتحت الداشبورد بوضع احتياطي حتى لا تتوقف الصفحة؛ قوائم الرومات والرتب قد تظهر فارغة مؤقتًا ثم ترجع تلقائيًا بعد انتهاء الحد.</div>`:req.bundle?._stale?`<div class="tabs-note">🧊 يتم عرض آخر نسخة محفوظة من رومات ورتب Discord مؤقتًا بسبب Rate Limit.</div>`:'';
   return decorateDashboard(`<section class="dash-head"><div><a href="/dashboard">← السيرفرات</a><h1>${esc(guild.name)}</h1><p><code>${guild.id}</code> • ${planBadge(cfg)} ${owner?'• 👑 Owner':''}</p></div>${iconUrl(guild)?`<img class="guild-icon" src="${iconUrl(guild)}">`:''}</section>
-  <div class="tabs-note">✅ كل إعداد هنا يخص هذا السيرفر فقط. الـOwner يحدد من لوحة Owner ما هو مجاني وما هو Premium.</div>${site.announcement?`<div class="warn">📢 ${esc(site.announcement)}</div>`:''}
+  ${discordCacheNotice}<div class="tabs-note">✅ كل إعداد هنا يخص هذا السيرفر فقط. الـOwner يحدد من لوحة Owner ما هو مجاني وما هو Premium.</div>${site.announcement?`<div class="warn">📢 ${esc(site.announcement)}</div>`:''}
   ${owner&&guild.id===homeId?`<section class="panel legacy-panel"><h2>🧰 إعدادات سيرفر ZOMBI الأصلي</h2><p>هذه الصفحة مرتبطة بنسخة السيرفر القديم. إذا أردت إعادة كل إعدادات النسخة الاحتياطية كما كانت اضغط الزر التالي.</p><form method="post" action="/dashboard/${guild.id}/restore-legacy" onsubmit="return confirm('إرجاع إعدادات النسخة الاحتياطية لسيرفرك فقط؟')"><input type="hidden" name="_csrf" value="${token}"><button class="btn danger">♻️ استرجاع إعدادات سيرفري القديمة</button></form></section>`:''}
 
   <form class="panel" method="post" action="/dashboard/${guild.id}/settings"><input type="hidden" name="_csrf" value="${token}">
