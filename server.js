@@ -136,6 +136,45 @@ async function botFetch(route,options={}){
     throw e;
   }
 }
+
+let botGuildListCache={ids:new Set(),bot:null,until:0};
+async function getBotGuildIdSet(force=false){
+  const now=Date.now();
+  if(!force&&botGuildListCache.until>now&&botGuildListCache.ids instanceof Set)return botGuildListCache;
+  const [botUser,guilds]=await Promise.all([
+    botFetch('/users/@me'),
+    botFetch('/users/@me/guilds?with_counts=false')
+  ]);
+  if(!botUser?.id)throw new Error('Discord لم يرجع هوية البوت.');
+  if(!Array.isArray(guilds))throw new Error('Discord لم يرجع قائمة سيرفرات البوت.');
+  const expected=String(process.env.DISCORD_BOT_CLIENT_ID||'').trim();
+  if(expected&&String(botUser.id)!==expected){
+    const e=new Error(`BOT_TOKEN يعود لبوت مختلف عن DISCORD_BOT_CLIENT_ID (${botUser.id} != ${expected}).`);
+    e.code='BOT_ID_MISMATCH';throw e;
+  }
+  botGuildListCache={ids:new Set(guilds.map(g=>String(g.id))),bot:botUser,until:now+60_000};
+  return botGuildListCache;
+}
+async function getRecentBotHeartbeat(){
+  try{
+    const hb=await store.data('site','heartbeat.json',{});
+    const at=Number(hb?.at||0);
+    if(!at||Date.now()-at>150_000)return null;
+    return{
+      ...hb,
+      guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]
+    };
+  }catch{return null;}
+}
+async function getBotPresenceSnapshot(){
+  const heartbeat=await getRecentBotHeartbeat();
+  let api=null,error=null;
+  try{api=await getBotGuildIdSet();}catch(e){error=e;}
+  const ids=new Set();
+  if(api?.ids)for(const id of api.ids)ids.add(String(id));
+  if(heartbeat?.ready!==false)for(const id of heartbeat?.guildIds||[])ids.add(String(id));
+  return{ids,heartbeat,api,error};
+}
 function detectDiscordImageMime(buf){
   if(!Buffer.isBuffer(buf)||buf.length<4)return '';
   if(buf.length>=8&&buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47&&buf[4]===0x0D&&buf[5]===0x0A&&buf[6]===0x1A&&buf[7]===0x0A)return 'image/png';
@@ -200,7 +239,7 @@ function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=9.16.4"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=9.16.4"></script><script defer src="/site/role-manager.js?v=9.16.4"></script><script defer src="/site/upgrade.js?v=9.16.4"></script><script defer src="/site/operations-ui.js?v=9.16.4"></script></body></html>`;
 }
-function inviteUrl(gid=''){const id=String(process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
+function inviteUrl(gid=''){const id=String(process.env.DISCORD_BOT_CLIENT_ID||process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-logo.png" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
 function iconUrl(g){return g?.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:'';}
 function textChannels(channels,value){const allowed=new Set([0,5]);return `<option value="">— غير محدد —</option>`+channels.filter(c=>allowed.has(c.type)).sort((a,b)=>(a.position||0)-(b.position||0)).map(c=>`<option value="${c.id}" ${c.id===value?'selected':''}># ${esc(c.name)}</option>`).join('');}
@@ -703,6 +742,21 @@ async function start(){
   app.get('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{res.json({ok:true,config:await store.getConfig(req.params.guildId),source:(await store.health()).mode});}catch(e){next(e);}});
   app.put('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{const input=req.body?.config||req.body||{};const config=await store.saveConfig(req.params.guildId,input);res.json({ok:true,config});}catch(e){next(e);}});
   app.post('/api/bot-sync/redeem',requireBotSync,async(req,res)=>{try{const guildId=String(req.body?.guildId||'').trim(),code=String(req.body?.code||'').trim();if(!/^\d{15,25}$/.test(guildId)||!code)return res.status(400).json({ok:false,error:'بيانات التفعيل غير صالحة.'});const result=await store.redeemCode(guildId,code);res.json({ok:true,result});}catch(e){res.status(400).json({ok:false,error:e?.message||'تعذر تفعيل الاشتراك.'});}});
+  app.post('/api/bot-sync/heartbeat',requireBotSync,async(req,res,next)=>{try{
+    const body=req.body&&typeof req.body==='object'?req.body:{};
+    const payload={
+      at:Number(body.at)||Date.now(),
+      ready:body.ready!==false,
+      ping:Math.max(0,Math.min(120000,Number(body.ping)||0)),
+      version:String(body.version||'').slice(0,40),
+      botId:String(body.botId||'').slice(0,30),
+      botTag:String(body.botTag||'').slice(0,100),
+      guildCount:Math.max(0,Math.min(5000,Number(body.guildCount)||0)),
+      guildIds:Array.isArray(body.guildIds)?body.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]
+    };
+    await store.saveData('site','heartbeat.json',payload);
+    res.json({ok:true});
+  }catch(e){next(e);}});
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
   app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
   app.get('/terms',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('شروط الخدمة',`<section class="legal"><h1>شروط الخدمة</h1><p>باستخدام ZOMBI أو Dashboard فإنك توافق على استخدام الخدمة بشكل قانوني ووفق شروط Discord.</p><h2>صلاحيات السيرفر</h2><p>يجب أن تكون مخولًا لإضافة البوت أو تعديل إعدادات السيرفر. بعض الوظائف تحتاج صلاحيات Discord مثل Manage Channels وManage Roles، ويجب أن تكون رتبة البوت أعلى من الرتب التي يديرها.</p><h2>Free وPremium وPremium+</h2><p>الميزات والحدود المتاحة لكل خطة يحددها مالك ZOMBI وقد تتغير. مدة Premium تبدأ حسب الكود أو التفعيل الممنوح للسيرفر، ولا يمنح Premium حق تغيير حساب البوت العالمي لكل سيرفر؛ التخصيص لكل سيرفر يقتصر على الخيارات التي يوفرها Dashboard.</p><h2>الاستخدام المقبول</h2><p>لا تستخدم الخدمة للإساءة، التخريب، الاحتيال، انتهاك حقوق الآخرين أو مخالفة قواعد Discord. يجوز تعطيل الوصول عند إساءة الاستخدام.</p><h2>توفر الخدمة</h2><p>نسعى لاستمرار الخدمة لكن لا نضمن عدم الانقطاع أو فقدان البيانات بسبب أعطال خارجية. يُنصح بالاحتفاظ بنسخ احتياطية للإعدادات المهمة.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
@@ -745,7 +799,18 @@ async function start(){
     res.send(layout('دفعاتي',`<section class="dash-head"><div><h1>💳 دفعاتي</h1><p>تابع حالة طلبات Zain Cash الخاصة بك.</p></div><a class="btn primary" href="/premium">اشتراك جديد</a></section><section class="panel"><div class="table-wrap"><table><thead><tr><th>الطلب</th><th>السيرفر</th><th>الخطة</th><th>الحالة</th></tr></thead><tbody>${rows||'<tr><td colspan="4">لا توجد طلبات دفع بعد.</td></tr>'}</tbody></table></div></section>`,req.user));
   }catch(e){next(e);}});
 
-  app.get('/dashboard',requireLogin,async(req,res,next)=>{try{const manageable=(req.user.guilds||[]).filter(canManage),statuses=await Promise.all(manageable.slice(0,60).map(async g=>({g,installed:Boolean(await getBotGuild(g.id).catch(()=>null))}))),installed=statuses.filter(x=>x.installed),missing=statuses.filter(x=>!x.installed);const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${planBadge(cfg)}</span></div><em>إدارة ←</em></a>`;}))).join(''),add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section><div class="servers">${cards||'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>'}</div>${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));}catch(e){next(e);}});
+  app.get('/dashboard',requireLogin,async(req,res,next)=>{try{
+    const manageable=(req.user.guilds||[]).filter(canManage).slice(0,100);
+    const presence=await getBotPresenceSnapshot();
+    const reliable=Boolean(presence.api||presence.heartbeat?.guildIds?.length||presence.heartbeat?.guildCount===0);
+    const statuses=manageable.map(g=>({g,installed:presence.ids.has(String(g.id))?true:(reliable?false:null)}));
+    const installed=statuses.filter(x=>x.installed===true),missing=statuses.filter(x=>x.installed===false),unknown=statuses.filter(x=>x.installed===null);
+    const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${planBadge(cfg)}</span></div><em>إدارة ←</em></a>`;}))).join('');
+    const add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');
+    const unknownCards=unknown.map(({g})=>`<div class="server muted"><div class="server-icon">⚠️</div><div><b>${esc(g.name)}</b><span>تعذر التحقق من وجود البوت الآن</span></div><em>تحقق من BOT_TOKEN</em></div>`).join('');
+    const apiWarning=presence.error&&!presence.heartbeat?`<section class="panel"><b>⚠️ تعذر فحص ZOMBI Bot من Discord.</b><p class="hint">${esc(presence.error?.message||'تحقق من BOT_TOKEN / OAUTH Proxy في إعدادات الاستضافة.')}</p></section>`:'';
+    res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section>${apiWarning}<div class="servers">${cards||(!unknownCards?'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>':'')}</div>${unknownCards?`<h2>حالة غير مؤكدة</h2><div class="servers">${unknownCards}</div>`:''}${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));
+  }catch(e){next(e);}});
   app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/role-manager/state',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
