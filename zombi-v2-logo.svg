@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ZOMBI V2">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff315f"/><stop offset="1" stop-color="#8a0c2d"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <path d="M256 24 438 92v132c0 121-70 211-182 264C144 435 74 345 74 224V92Z" fill="#0b0c10" stroke="url(#g)" stroke-width="16"/>
+  <path d="M163 137h202l-25 53-124 142h137l-26 58H139l24-52 126-143H139Z" fill="url(#g)" filter="url(#glow)"/>
+  <path d="M202 102h108l-14 28h-80Z" fill="#f6f7fb" opacity=".92"/>
+  <circle cx="151" cy="116" r="8" fill="#ff315f"/><circle cx="361" cy="116" r="8" fill="#ff315f"/>
+  <text x="256" y="454" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="40" font-weight="800" letter-spacing="8" fill="#f6f7fb">ZOMBI</text>
+</svg>

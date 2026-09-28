@@ -1,7 +1,7 @@
 {
   "name": "zombi-dashboard-website",
-  "version": "9.16.5",
-  "description": "ZOMBI V9.16.5 — Discord OAuth 401/429 stability, API caching and Worker fallback fixes",
+  "version": "10.0.0",
+  "description": "ZOMBI V2 Professional Dashboard — Crimson Command Center, suggestions, bank and game controls",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
