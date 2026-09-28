@@ -5,7 +5,8 @@ const MANAGE_GUILD='32';
 const gamesChoices=[
   ['🧠 أسئلة','quiz'],['🔢 تخمين','guess'],['✂️ حجر ورق مقص','rps'],['⚡ سرعة','speed'],
   ['🔤 ترتيب','scramble'],['✅ صح / خطأ','truefalse'],['➗ حساب','math'],['🎯 الأقرب','closest'],
-  ['🔎 الكلمة','word'],['🎡 عجلة الحظ','wheel'],['🏆 اليومي','daily'],['🎭 مافيا','mafia'],['🎰 روليت','roulette'],['🪑 الكراسي','chairs'],['🔪 من القاتل','killer']
+  ['🔎 الكلمة','word'],['🎡 عجلة الحظ','wheel'],['🏆 اليومي','daily'],['🎭 مافيا','mafia'],['🎰 روليت','roulette'],['🪑 الكراسي','chairs'],['🔪 من القاتل','killer'],
+  ['🧠 ذاكرة الألوان','memorycolors'],['⚡ ردة الفعل','reaction'],['🔎 المختلف','different'],['🔢 ترتيب الأرقام','sequence'],['🛡️ الزر الآمن','safebutton'],['➗ حساب سريع','mathrush'],['🎭 خمن الإيموجي','emojiquiz'],['📈 أعلى أو أقل','higherlower'],['💎 صيد الكنز','treasure'],['🔐 فك الكود','codebreaker']
 ].map(([name,value])=>({name,value}));
 const commands=[
   ...['warn','warnings','unwarn'].map(name=>({name,description:'نظام التحذيرات',default_member_permissions:'8192',options:[{type:6,name:'user',description:'العضو',required:true},...(name==='warn'?[{type:3,name:'reason',description:'سبب التحذير',required:true,max_length:500}]:name==='unwarn'?[{type:3,name:'id',description:'رقم التحذير أو اتركه لإزالة الأخير',required:false}]:[])]})),
