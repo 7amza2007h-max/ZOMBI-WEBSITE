@@ -28,7 +28,7 @@
     roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
-    event: { label: 'الإيفنت', icon: '🎉', desc: 'نقاط الإيفنت، الرتب المسموحة، الشاتات وحد الترقية وإشعارات المسؤول.' },
+    applications: { label: 'التقديمات', icon: '📝', desc: 'إنشاء نماذج تقديم متعددة، تحديد الشاتات والأسئلة ورتب المراجعة.' },
     music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
@@ -37,7 +37,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'event', 'music', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'applications', 'music', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -154,6 +154,7 @@
     if (text.includes('🎮 الألعاب')) return 'games';
     if (text.includes('تغيير الاسم')) return 'name';
     if (text.includes('التذاكر')) return 'tickets';
+    if (text.includes('نظام التقديمات')) return 'applications';
     if (text.includes('متجر الرتب')) return 'store';
     if (text.includes('Self Roles')) return 'roles';
     return 'overview';
@@ -288,7 +289,7 @@
     if (title.includes('من القاتل')) return 'killer';
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
-    if (title.includes('Event / ايفنت') || title.includes('نظام الأيفنت')) return 'event';
+    if (title.includes('نظام التقديمات')) return 'applications';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';
