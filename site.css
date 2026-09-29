@@ -309,3 +309,58 @@ input[type=color]{background:#0c0f14!important;border:1px solid rgba(255,255,255
 .ops,.ops-editor-section,.z-rm-card,.z-rm-perm-group,.z-rm-channel,.z-rm-security-global,.z-rm-per-channel-content{border-color:rgba(225,29,72,.16)!important}.ops-panel-tab:hover,.ops-panel-tab.active,.z-rm-tabs button.active{border-color:rgba(225,29,72,.45)!important;background:rgba(225,29,72,.12)!important}.ops-discord-embed{border-inline-start-color:#e11d48!important}.z-rm-save{border-top-color:rgba(225,29,72,.24)!important}
 footer{border-top:1px solid rgba(225,29,72,.12)!important;background:rgba(6,7,9,.65)}
 @media(max-width:760px){.suggestion-channel-row{grid-template-columns:1fr 1fr}.v2-feature-card{align-items:flex-start;flex-direction:column}.hero{border-radius:18px}}
+
+/* =========================================================
+   ZOMBI V2.1 — CRIMSON FORTRESS DASHBOARD REDESIGN
+   Strong visual separation for dashboard background/sections
+   ========================================================= */
+body.zombi-dashboard{
+  background:
+    radial-gradient(circle at 82% 8%,rgba(244,63,94,.19),transparent 25%),
+    radial-gradient(circle at 8% 64%,rgba(127,29,29,.16),transparent 28%),
+    linear-gradient(125deg,rgba(4,5,8,.97),rgba(10,11,16,.96)),
+    url('/assets/zombi-site-background.png') center/cover fixed!important;
+  min-height:100vh;
+}
+body.zombi-dashboard::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
+  background:linear-gradient(180deg,rgba(3,4,7,.52),rgba(3,4,7,.88));
+  backdrop-filter:saturate(.72) brightness(.76);
+}
+.zombi-dashboard .z-dashboard-sidebar{
+  background:linear-gradient(180deg,rgba(12,13,18,.97),rgba(7,8,12,.96))!important;
+  border:1px solid rgba(244,63,94,.16)!important;
+  box-shadow:0 24px 80px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.025)!important;
+  border-radius:22px 0 0 22px;
+}
+.zombi-dashboard .z-side-brand{padding:24px 18px!important;background:linear-gradient(135deg,rgba(225,29,72,.09),transparent);border-radius:18px}
+.zombi-dashboard .z-side-logo{width:48px!important;height:48px!important;border-radius:15px!important;background:linear-gradient(145deg,#ff315f,#7f102a)!important;box-shadow:0 0 34px rgba(225,29,72,.28)!important}
+.zombi-dashboard .z-nav-group{padding:10px 8px;border-top:1px solid rgba(255,255,255,.04)}
+.zombi-dashboard .z-side-nav a{position:relative;overflow:hidden;border:1px solid transparent!important;padding:11px 12px!important}
+.zombi-dashboard .z-side-nav a::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:#f43f5e;opacity:0;transition:.18s}
+.zombi-dashboard .z-side-nav a.active::before{opacity:1}
+.zombi-dashboard .z-side-nav a.active{background:linear-gradient(90deg,rgba(244,63,94,.18),rgba(244,63,94,.025))!important;border-color:rgba(244,63,94,.22)!important;box-shadow:0 10px 34px rgba(225,29,72,.08)!important}
+.zombi-dashboard .z-dashboard-content{position:relative}
+.zombi-dashboard .z-page-heading{
+  padding:28px 30px!important;border:1px solid rgba(244,63,94,.18)!important;border-radius:22px!important;
+  background:linear-gradient(135deg,rgba(24,26,34,.95),rgba(12,13,18,.91))!important;
+  box-shadow:0 22px 65px rgba(0,0,0,.28)!important;
+}
+.zombi-dashboard .z-page-heading::before{content:"ZOMBI V2";display:inline-flex;padding:5px 10px;border-radius:999px;background:rgba(225,29,72,.12);border:1px solid rgba(244,63,94,.2);color:#ff6a86;font-size:11px;font-weight:900;letter-spacing:.12em;margin-bottom:8px}
+.zombi-dashboard .z-settings-page{
+  position:relative;padding:24px!important;margin-bottom:22px!important;border:1px solid rgba(255,255,255,.075)!important;border-radius:22px!important;
+  background:linear-gradient(155deg,rgba(18,20,27,.96),rgba(8,10,14,.95))!important;
+  box-shadow:0 22px 70px rgba(0,0,0,.27)!important;
+  overflow:hidden;
+}
+.zombi-dashboard .z-settings-page::after{content:"";position:absolute;top:0;right:0;width:150px;height:3px;background:linear-gradient(90deg,transparent,#f43f5e)}
+.zombi-dashboard .z-settings-page>h3{display:flex;align-items:center;gap:10px;font-size:21px!important;margin:4px 0 18px!important;padding:0 0 13px!important;border-bottom:1px solid rgba(244,63,94,.13)!important}
+.zombi-dashboard .form-grid>label,.zombi-dashboard .config-card{
+  border-radius:14px;
+}
+.zombi-dashboard .form-grid>label{padding:10px 11px;background:rgba(255,255,255,.018);border:1px solid rgba(255,255,255,.035)}
+.zombi-dashboard .form-grid>label:focus-within{background:rgba(225,29,72,.035);border-color:rgba(244,63,94,.13)}
+.zombi-dashboard .suggestion-channel-row{background:linear-gradient(145deg,rgba(21,23,31,.95),rgba(10,12,16,.96))!important;border-color:rgba(244,63,94,.15)!important;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.zombi-dashboard .game-table tbody td{background:rgba(12,14,19,.84)!important}
+.zombi-dashboard .z-save-bar{border-color:rgba(244,63,94,.28)!important;background:rgba(10,11,15,.94)!important;box-shadow:0 18px 50px rgba(0,0,0,.44)!important}
+@media(max-width:900px){body.zombi-dashboard{background-attachment:scroll!important}.zombi-dashboard .z-dashboard-sidebar{border-radius:0!important}.zombi-dashboard .z-settings-page{padding:16px!important}}

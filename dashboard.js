@@ -27,6 +27,7 @@
     gangs: { label: 'العصابات والمهمات', icon: '🏴', desc: 'العصابات، الأعضاء، الخزنة وقوالب المهمات.' },
     robbery: { label: 'البنك المركزي', icon: '🚨', desc: 'فتح السرقة، المشاركون، التجهيزات والجوائز.' },
     director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
+    suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
@@ -38,7 +39,7 @@
 
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director']],
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions']],
     ['الأنظمة', ['permissions', 'warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
@@ -147,6 +148,7 @@
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
     if (text.includes('ZOMBI City Director')) return 'director';
+    if (text.includes('ZOMBI Suggestions Center')) return 'suggestions';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
     if (text.includes('Levels')) return 'xp';
