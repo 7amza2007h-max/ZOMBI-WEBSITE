@@ -113,6 +113,7 @@ function defaults(guildId){return{
   welcome:{enabled:false,channelId:'',rulesChannelId:''},
   suggestions:{enabled:true,color:'#E11D48',channels:[]},
   serverGuide:defaultServerGuide(),
+  rules:defaultRules(),
   cityDirector:defaultCityDirector()
 };}
 function guildDir(gid){return path.join(ROOT,String(gid));}
