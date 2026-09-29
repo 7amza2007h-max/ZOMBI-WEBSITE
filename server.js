@@ -451,6 +451,7 @@ function eventConfig(cfg){
     enabled:raw.enabled===true,channelIds,channelId:channelIds[0]||legacy,staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
     publicLeaderboard:raw.publicLeaderboard!==false,leaderboardLimit:int(raw.leaderboardLimit,20,3,25),pointLabel:String(raw.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
     leaderboardCommand:String(raw.leaderboardCommand||'نقاط').trim().slice(0,40)||'نقاط',resetCommand:String(raw.resetCommand||'ترسيت').trim().slice(0,40)||'ترسيت',directPointsEnabled:raw.directPointsEnabled!==false,
+    eventCommand:String(raw.eventCommand||'ايفنت').trim().replace(/\s+/g,' ').slice(0,40)||'ايفنت',eventPoints:int(raw.eventPoints,10,1,1000000),promotionThreshold:int(raw.promotionThreshold,200,1,1000000000),promotionChannelId:String(raw.promotionChannelId||'').trim(),promotionRoleId:String(raw.promotionRoleId||'').trim(),
     quickCommands:normalizeEventQuickCommands(raw.quickCommands?.length?raw.quickCommands:[{id:'create',command:'-انشاء',label:'إنشاء',points:1,zom:0,targetMode:'mention',response:'',enabled:true}])
   };
 }
@@ -706,6 +707,11 @@ async function guildPage(req){
       <label>اسم النقطة<input name="pointLabel" value="${esc(evt.pointLabel)}" placeholder="نقطة"></label>
       <label>أمر عرض الترتيب<input name="leaderboardCommand" value="${esc(evt.leaderboardCommand)}" placeholder="نقاط"></label>
       <label>أمر الترسيت<input name="resetCommand" value="${esc(evt.resetCommand)}" placeholder="ترسيت"></label>
+      <label>أمر تسجيل الإيفنت<input name="eventCommand" value="${esc(evt.eventCommand)}" placeholder="ايفنت"></label>
+      <label>نقاط كل إيفنت<input type="number" name="eventPoints" value="${evt.eventPoints}" min="1" max="1000000"></label>
+      <label>حد الترقية<input type="number" name="promotionThreshold" value="${evt.promotionThreshold}" min="1" max="1000000000"></label>
+      <label>شات إشعار الترقية<select name="promotionChannelId">${textChannels(channels,evt.promotionChannelId||'')}</select></label>
+      <label>رتبة مسؤول الترقية<select name="promotionRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,evt.promotionRoleId?[evt.promotionRoleId]:[])}</select></label>
       <label>عدد الأشخاص بالترتيب<input type="number" name="leaderboardLimit" value="${evt.leaderboardLimit}" min="3" max="25"></label>
       <label><input type="checkbox" name="publicLeaderboard" ${evt.publicLeaderboard?'checked':''}> أي عضو يقدر يكتب «${esc(evt.leaderboardCommand)}»</label>
       <label><input type="checkbox" name="directPointsEnabled" ${evt.directPointsEnabled?'checked':''}> تفعيل إضافة/خصم النقاط بصيغة 1+ و1-</label>
@@ -717,6 +723,7 @@ async function guildPage(req){
       <article class="config-card compact-card"><h3>➖ خصم نقاط</h3><code>1- @العضو نقاط</code><p>يخصم نقطة من الشخص.</p></article>
       <article class="config-card compact-card"><h3>🏆 الترتيب</h3><code>${esc(evt.leaderboardCommand)}</code><p>يعرض النقاط من الأعلى إلى الأقل. ومع منشن يعرض نقاط عضو واحد.</p></article>
       <article class="config-card compact-card"><h3>♻️ الترسيت</h3><code>${esc(evt.resetCommand)}</code><p>يصفّر الكل ويبدأ موسم جديد. ومع منشن يصفّر شخصًا واحدًا.</p></article>
+      <article class="config-card compact-card"><h3>🎟️ تسجيل إيفنت</h3><code>${esc(evt.eventCommand)} @العضو</code><p>يضيف تلقائيًا <b>${evt.eventPoints}</b> ${esc(evt.pointLabel)}. عند <b>${evt.promotionThreshold}</b> يرسل إشعار الترقية للمسؤول.</p></article>
     </div>
 
     <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شاتات الأيفنت المحددة وللرتب المحددة.</p>
@@ -1694,6 +1701,10 @@ async function start(){
     const staffRoleIds=arr(req.body.staffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
     const logEvent=String(req.body.logEvent||'').trim();
     if(logEvent&&!req.bundle.channels.some(c=>String(c.id)===logEvent&&[0,5].includes(Number(c.type))))return res.status(400).send('شات لوق الأيفنت غير صحيح.');
+    const promotionChannelId=String(req.body.promotionChannelId||'').trim();
+    if(promotionChannelId&&!req.bundle.channels.some(c=>String(c.id)===promotionChannelId&&[0,5].includes(Number(c.type))))return res.status(400).send('شات إشعار الترقية غير صحيح.');
+    const promotionRoleId=String(req.body.promotionRoleId||'').trim();
+    if(promotionRoleId&&!roleIds.has(promotionRoleId))return res.status(400).send('رتبة مسؤول الترقية غير صحيحة.');
     cfg.event={...current,
       enabled:Boolean(req.body.enabled),
       channelIds:requestedChannels,
@@ -1705,6 +1716,11 @@ async function start(){
       leaderboardCommand:String(req.body.leaderboardCommand||'نقاط').trim().replace(/\s+/g,' ').slice(0,40)||'نقاط',
       resetCommand:String(req.body.resetCommand||'ترسيت').trim().replace(/\s+/g,' ').slice(0,40)||'ترسيت',
       directPointsEnabled:Boolean(req.body.directPointsEnabled),
+      eventCommand:String(req.body.eventCommand||'ايفنت').trim().replace(/\s+/g,' ').slice(0,40)||'ايفنت',
+      eventPoints:int(req.body.eventPoints,current.eventPoints||10,1,1000000),
+      promotionThreshold:int(req.body.promotionThreshold,current.promotionThreshold||200,1,1000000000),
+      promotionChannelId,
+      promotionRoleId,
       quickCommands:normalizeEventQuickCommands(current.quickCommands)
     };
     cfg.channels=cfg.channels||{};cfg.channels.logEvent=logEvent;
@@ -1742,7 +1758,7 @@ async function start(){
     const before=Number(state.users[userId]?.points||0);let after=before;
     if(action==='add')after=before+amount;else if(action==='remove')after=before-amount;else if(action==='set')after=amount;else after=0;
     const old=state.users[userId]||{points:0,added:0,removed:0,zomAwarded:0};
-    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard')};
+    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard'),promotionNotified:after>=eventConfig(await store.getConfig(req.params.guildId)).promotionThreshold?Boolean(old.promotionNotified):false};
     state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:userId,type:`dashboard-${action}`,delta:after-before,zom:0,command:'Dashboard',note:`${action}: ${before} -> ${after}`});state.history=state.history.slice(0,500);
     await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
   }catch(e){next(e);}});
