@@ -360,6 +360,15 @@
     return extraByPage.get(page);
   };
 
+  // HARD FIX: Rules Center is rendered as a standalone panel by server.js.
+  // Force it into the Rules page extra container so it cannot be lost/hidden
+  // by legacy settings grouping or DOM order changes.
+  const rulesPanel = content.querySelector('.rules-system-panel');
+  if (rulesPanel) {
+    rulesPanel.dataset.zPage = 'rules';
+    ensureExtra('rules').appendChild(rulesPanel);
+  }
+
   Object.entries(actionTargets).forEach(([page, form]) => {
     if (!form) return;
     const clone = form.cloneNode(true);
