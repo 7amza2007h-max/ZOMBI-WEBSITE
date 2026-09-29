@@ -178,6 +178,13 @@
     let page = 'overview';
     for (const node of nodes) {
       if (node.tagName === 'H3') page = headingPage(node.textContent);
+      // Standalone system panels inside the legacy settings form must switch
+      // the active dashboard page themselves. Without this, Rules Center can
+      // be appended to the section that appeared before it and the Rules page
+      // shows only the cloned Send/Update action bar.
+      if (node.classList?.contains('rules-system-panel')) page = 'rules';
+      else if (node.classList?.contains('city-director-panel')) page = 'director';
+      else if (node.classList?.contains('event-system-panel')) page = 'overview';
       ensureSettingsGroup(page).appendChild(node);
     }
     settingsGroups.forEach((w, pageId) => {
