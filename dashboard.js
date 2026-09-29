@@ -27,6 +27,7 @@
     gangs: { label: 'العصابات والمهمات', icon: '🏴', desc: 'العصابات، الأعضاء، الخزنة وقوالب المهمات.' },
     robbery: { label: 'البنك المركزي', icon: '🚨', desc: 'فتح السرقة، المشاركون، التجهيزات والجوائز.' },
     director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
+    rules: { label: 'القوانين', icon: '📜', desc: 'لوحة قوانين تفاعلية؛ كل نوع يعرض قوانينه برسالة خاصة للعضو فقط.' },
     suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
@@ -40,7 +41,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions']],
-    ['الأنظمة', ['permissions', 'warnings', 'logs', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
+    ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
   const currentFromUrl = () => {
@@ -149,6 +150,7 @@
     if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
     if (text.includes('ZOMBI City Director')) return 'director';
     if (text.includes('ZOMBI Suggestions Center')) return 'suggestions';
+    if (text.includes('ZOMBI Rules Center')) return 'rules';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
     if (text.includes('Levels')) return 'xp';
@@ -300,6 +302,7 @@
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
     if (title.includes('أزرار دليل السيرفر')) return 'guide';
+    if (title.includes('ZOMBI Rules Center')) return 'rules';
     if (title.includes('قوالب City Director')) return 'director';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
@@ -332,7 +335,8 @@
     tickets: actionFor('/send/tickets'),
     store: actionFor('/send/store'),
     roles: actionFor('/send/roles'),
-    guide: actionFor('/send/guide')
+    guide: actionFor('/send/guide'),
+    rules: actionFor('/send/rules')
   };
 
   const extraByPage = new Map();
