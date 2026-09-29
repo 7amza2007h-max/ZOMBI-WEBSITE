@@ -715,7 +715,7 @@ async function guildPage(req){
       <label>عدد الأشخاص بالترتيب<input type="number" name="leaderboardLimit" value="${evt.leaderboardLimit}" min="3" max="25"></label>
       <label><input type="checkbox" name="publicLeaderboard" ${evt.publicLeaderboard?'checked':''}> أي عضو يقدر يكتب «${esc(evt.leaderboardCommand)}»</label>
       <label><input type="checkbox" name="directPointsEnabled" ${evt.directPointsEnabled?'checked':''}> تفعيل إضافة/خصم النقاط بصيغة 1+ و1-</label>
-      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
+      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple size="8" name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>تقدر تحدد أكثر من رتبة. استخدم Ctrl/⌘ لاختيار عدة رتب. Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
     </div><button class="btn primary">💾 حفظ إعدادات الأيفنت</button></form>
 
     <div class="event-help-grid">
@@ -901,26 +901,8 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
     if(options.preview){const e=new Error('PREVIEW');e.previewPayload=payload;throw e;}
     return sendPanelMessage(channelId,messageId,payload);
   };
-  const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
-  if(String(guildId)===homeId){
-    if(which==='bank'){const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,legacyHomeBankPanelPayload(cfg));cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
-    if(which==='games'){const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,legacyHomeGamesPanelPayload(cfg));cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
-    if(which==='tickets'){const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets?.panelMessageId,legacyHomeTicketPanelPayload(cfg));cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
-    if(which==='rules'){
-    if(!cfg.rules?.channelId)throw new Error('حدد شات لوحة القوانين أولًا.');
-    const types=(cfg.rules.types||[]).filter(x=>x.enabled!==false).slice(0,25);if(!types.length)throw new Error('أضف نوع قوانين واحدًا على الأقل.');
-    const banner=cfg.rules.bannerUrl||`${baseUrl()}/panel-assets/zombi-rules-banner.gif`;
-    const logo=cfg.rules.logoUrl||cfg.branding?.panelLogoUrl||cfg.branding?.avatarUrl||`${baseUrl()}/assets/zombi-logo.png`;
-    const hex=parseInt(String(cfg.rules.color||'#E11D48').replace('#',''),16);
-    const embed={color:Number.isFinite(hex)?hex:0xE11D48,title:cfg.rules.title||'📜 ZOMBI • قوانين السيرفر',description:cfg.rules.description||'اختر نوع القوانين من القائمة بالأسفل.',footer:{text:cfg.rules.footer||'ZOMBI • RULES CENTER'}};
-    if(logo)embed.thumbnail={url:logo};if(banner)embed.image={url:banner};
-    const options=types.map(t=>({label:String(t.label||'قوانين').slice(0,100),value:String(t.id).slice(0,100),description:String(t.description||'اضغط لعرض القوانين').slice(0,100),...(t.emoji?{emoji:{name:String(t.emoji)}}:{})}));
-    const payload={embeds:[embed],components:[{type:1,components:[{type:3,custom_id:'zombi_rules_select',placeholder:'📜 اختر نوع القوانين...',min_values:1,max_values:1,options}]}],allowed_mentions:{parse:[]}};
-    const m=await sendOrUpdate(cfg.rules.channelId,cfg.rules.panelMessageId,payload);cfg.rules.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;
-  }
-  if(which==='store'){const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store?.panelMessageId,legacyHomeStorePanelPayload(cfg));cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
-    if(which==='roles'){const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel?.panelMessageId,legacyHomeRolePanelPayload(cfg,bundle));cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
-  }
+  // Always use the current panel builders for every guild, including HOME_GUILD_ID.
+
   if(which==='bank'){const payload=rawBankPanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,payload);cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='games'){if(!featureAllowed(site,cfg,'games'))throw new Error('Games غير متاحة لهذه الخطة.');const payload=rawGamesPanelPayload(cfg);const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,payload);cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='tickets'){if(!featureAllowed(site,cfg,'tickets'))throw new Error('Tickets غير متاحة لهذه الخطة.');const types=(cfg.tickets.types||[]).filter(t=>t.enabled!==false).slice(0,limitFor(site,cfg,'ticketTypes'));if(!types.length)throw new Error('أضف نوع تذكرة أولًا.');const rows=[];for(let i=0;i<types.length;i+=5)rows.push({type:1,components:types.slice(i,i+5).map(t=>({type:2,style:1,custom_id:`pub:ticket:open:${t.id}`,label:String(t.label||'تذكرة').slice(0,80),...(t.emoji?{emoji:{name:t.emoji}}:{})}))});const footer=featureAllowed(site,cfg,'customBranding')?(cfg.branding.customFooter||cfg.branding.footer):'Powered by ZOMBI';const payload={embeds:[{color:color(cfg),title:cfg.tickets.title,description:cfg.tickets.description,footer:{text:footer}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets.panelMessageId,payload);cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
@@ -1131,7 +1113,7 @@ async function start(){
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
     const beforeSettings=structuredClone(cfg);
     const requestedSection=String(req.body?._settingsSection||'all').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'all';
-    const knownSections=new Set(['all','permissions','warnings','logs','overview','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium']);
+    const knownSections=new Set(['all','permissions','warnings','logs','overview','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
     const settingsSection=knownSections.has(requestedSection)?requestedSection:'all';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
