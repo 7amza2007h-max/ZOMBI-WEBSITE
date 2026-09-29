@@ -451,7 +451,8 @@ function eventConfig(cfg){
     enabled:raw.enabled===true,channelIds,channelId:channelIds[0]||legacy,staffRoleIds:arr(raw.staffRoleIds).map(String).filter(Boolean).slice(0,50),
     publicLeaderboard:raw.publicLeaderboard!==false,leaderboardLimit:int(raw.leaderboardLimit,20,3,25),pointLabel:String(raw.pointLabel||'نقطة').trim().slice(0,30)||'نقطة',
     leaderboardCommand:String(raw.leaderboardCommand||'نقاط').trim().slice(0,40)||'نقاط',resetCommand:String(raw.resetCommand||'ترسيت').trim().slice(0,40)||'ترسيت',directPointsEnabled:raw.directPointsEnabled!==false,
-    eventCommand:String(raw.eventCommand||'ايفنت').trim().replace(/\s+/g,' ').slice(0,40)||'ايفنت',eventPoints:int(raw.eventPoints,10,1,1000000),promotionThreshold:int(raw.promotionThreshold,200,1,1000000000),promotionChannelId:String(raw.promotionChannelId||'').trim(),promotionRoleId:String(raw.promotionRoleId||'').trim(),
+    eventCommand:String(raw.eventCommand||'ايفنت').trim().replace(/\s+/g,' ').slice(0,40)||'ايفنت',eventPoints:int(raw.eventPoints,10,1,1000000),
+    promotionEnabled:raw.promotionEnabled===true,promotionCommand:String(raw.promotionCommand||'ترقية').trim().replace(/\s+/g,' ').slice(0,40)||'ترقية',promotionPoints:int(raw.promotionPoints,10,1,1000000),promotionCommandChannelId:String(raw.promotionCommandChannelId||'').trim(),promotionStaffRoleIds:arr(raw.promotionStaffRoleIds).map(String).filter(Boolean).slice(0,50),promotionThreshold:int(raw.promotionThreshold,200,1,1000000000),promotionNotifyChannelId:String(raw.promotionNotifyChannelId||raw.promotionChannelId||'').trim(),promotionNotifyRoleId:String(raw.promotionNotifyRoleId||raw.promotionRoleId||'').trim(),
     quickCommands:normalizeEventQuickCommands(raw.quickCommands?.length?raw.quickCommands:[{id:'create',command:'-انشاء',label:'إنشاء',points:1,zom:0,targetMode:'mention',response:'',enabled:true}])
   };
 }
@@ -461,13 +462,14 @@ function eventState(raw){
 
 async function guildPage(req){
   const {guild,channels,roles}=req.bundle;
-  const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog,eventData,directorState]=await Promise.all([
+  const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog,eventData,promotionData,directorState]=await Promise.all([
     store.getConfig(guild.id),store.getGlobalConfig(),store.getGameContent(guild.id),store.getEconomy(guild.id),
     store.data(guild.id,'gangs-public.json',{gangs:{},membership:{}}),
     store.data(guild.id,'killer-cases.json',DEFAULT_KILLER_CASES),
     store.data(guild.id,'gang-missions.json',[]),
     store.data(guild.id,'bank-catalog.json',{jobs:{},companies:{},stocks:{}}),
     store.data(guild.id,'event-system.json',{season:1,users:{},history:[]}),
+    store.data(guild.id,'promotion-system.json',{users:{},history:[]}),
     store.data(guild.id,'city-director-state.json',{active:null,lastEventAt:0,history:[]})
   ]);
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
@@ -504,10 +506,14 @@ async function guildPage(req){
   const directorTemplateOptions=[...builtinDirectorEvents,...directorTemplates.filter(x=>x.enabled!==false)].map(x=>`<option value="${esc(x.id)}">${esc((x.emoji||'🌆')+' '+(x.name||x.id)+(x.builtin?' • مدمج':''))}</option>`).join('');
 
   const evt=eventConfig(cfg),evtState=eventState(eventData);
+  const promoState=promotionData&&typeof promotionData==='object'?promotionData:{users:{},history:[]};
+  const promoUsers=promoState.users&&typeof promoState.users==='object'?promoState.users:{};
   const eventChannelsMax=eventChannelLimit(cfg),eventPlan=PLAN_LABELS[planNameForConfig(cfg)]||'Free';
   const eventTop=Object.entries(evtState.users||{}).sort((a,b)=>Number(b[1]?.points||0)-Number(a[1]?.points||0)||Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,25);
   const eventTopRows=eventTop.length?eventTop.map(([uid,u],i)=>`<tr><td>${i+1}</td><td><code>${esc(uid)}</code></td><td><b>${Number(u?.points||0).toLocaleString()}</b></td><td>${Number(u?.added||0).toLocaleString()}</td><td>${Number(u?.removed||0).toLocaleString()}</td><td>${Number(u?.zomAwarded||0).toLocaleString()}</td></tr>`).join(''):'<tr><td colspan="6">لا توجد نقاط مسجلة حتى الآن.</td></tr>';
   const eventHistoryRows=(evtState.history||[]).slice(0,25).map(h=>`<tr><td>${h.at?esc(new Date(Number(h.at)).toLocaleString('ar-JO')):'-'}</td><td>${esc(h.type||'-')}</td><td><code>${esc(h.actorId||'-')}</code></td><td><code>${esc(h.targetId||'-')}</code></td><td>${Number(h.delta||0)>0?'+':''}${Number(h.delta||0)}</td><td>${Number(h.zom||0).toLocaleString()}</td><td>${esc(h.command||h.note||'')}</td></tr>`).join('')||'<tr><td colspan="7">لا يوجد سجل أيفنت بعد.</td></tr>';
+  const promotionTopRows=Object.entries(promoUsers).sort((a,b)=>Number(b[1]?.points||0)-Number(a[1]?.points||0)||Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,25).map(([uid,u],i)=>`<tr><td>${i+1}</td><td><code>${esc(uid)}</code></td><td>${Number(u?.points||0).toLocaleString()}</td><td>${Number(u?.added||0).toLocaleString()}</td><td>${Number(u?.removed||0).toLocaleString()}</td><td>${u?.notified?'✅':'—'}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد نقاط ترقية حتى الآن.</td></tr>';
+  const promotionHistoryRows=(Array.isArray(promoState.history)?promoState.history:[]).slice(0,30).map(h=>`<tr><td>${new Date(Number(h.at||Date.now())).toLocaleString('ar-JO')}</td><td>${esc(h.type||'')}</td><td><code>${esc(h.actorId||'')}</code></td><td><code>${esc(h.targetId||'')}</code></td><td>${Number(h.delta||0)}</td><td>${esc(h.command||'')}</td></tr>`).join('')||'<tr><td colspan="6">لا يوجد سجل ترقية حتى الآن.</td></tr>';
   const eventActionRows=evt.quickCommands.map(a=>`<form class="config-card event-action-card" method="post" action="/dashboard/${guild.id}/event/actions/update"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input type="hidden" name="actionId" value="${esc(a.id)}"><div class="form-grid"><label>الأمر<input name="command" value="${esc(a.command)}" placeholder="-انشاء" required></label><label>اسم الإجراء<input name="label" value="${esc(a.label)}" placeholder="إنشاء"></label><label>نقاط الأيفنت<input type="number" name="points" value="${Number(a.points||0)}" min="-1000000" max="1000000"></label><label>ZOM يضاف<input type="number" name="zom" value="${Number(a.zom||0)}" min="0" max="1000000000"></label><label>المستهدف<select name="targetMode"><option value="mention" ${a.targetMode==='mention'?'selected':''}>لازم منشن عضو</option><option value="self" ${a.targetMode==='self'?'selected':''}>صاحب الأمر نفسه</option><option value="either" ${a.targetMode==='either'?'selected':''}>المنشن أو صاحب الأمر</option></select></label><label><input type="checkbox" name="enabled" ${a.enabled!==false?'checked':''}> مفعّل</label><label class="wide">رد إضافي اختياري<textarea name="response" placeholder="مثال: ✅ تم تسجيل {user} • نقاطه الآن {points}">${esc(a.response||'')}</textarea><small>المتغيرات: {user} {points} {amount} {zom} {command}</small></label></div><div class="card-actions"><button class="btn primary">💾 حفظ الأمر</button><button class="btn danger" formaction="/dashboard/${guild.id}/event/actions/delete" name="actionId" value="${esc(a.id)}" onclick="return confirm('حذف أمر الأيفنت؟')">حذف</button></div></form>`).join('')||'<p>لا توجد أوامر إضافية.</p>';
 
   const panelCards=[['bank','🏦','لوحة البنك'],['games','🎮','لوحة الألعاب'],['tickets','🎫','لوحة التذاكر'],['store','🛒','لوحة المتجر'],['roles','🔔','لوحة الرتب'],['name','✏️','لوحة تغيير الاسم'],['guide','🧭','دليل السيرفر'],['rules','📜','لوحة القوانين']].map(([key,emoji,label])=>`<article class="config-card compact-card"><h3>${emoji} ${label}</h3><p>${key==='guide'?'🧭 العنوان والوصف واللون والبنر والأزرار تُدار من قسم دليل السيرفر.':canPanelDesign?'💎 تستطيع تخصيص العنوان والوصف واللون والـLogo والـBanner والـFooter والأزرار/القوائم لهذه اللوحة فقط.':'🔒 تخصيص تصميم هذه اللوحة متاح لـ Premium وPremium+.'}</p><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/send/${key}"><input type="hidden" name="_csrf" value="${token}"><button class="btn">📨 إرسال / تحديث</button></form>${key==='guide'?`<a class="btn primary" href="/dashboard/${guild.id}?section=guide">🧭 إعداد الدليل</a>`:key==='rules'?`<a class="btn primary" href="/dashboard/${guild.id}?section=rules">📜 إعداد القوانين</a>`:canPanelDesign?`<a class="btn primary" href="/dashboard/${guild.id}/panels/${key}">💎 تخصيص اللوحة</a>`:`<a class="btn" href="/premium">🔒 Premium</a>`}</div></article>`).join('');
@@ -709,21 +715,32 @@ async function guildPage(req){
       <label>أمر الترسيت<input name="resetCommand" value="${esc(evt.resetCommand)}" placeholder="ترسيت"></label>
       <label>أمر تسجيل الإيفنت<input name="eventCommand" value="${esc(evt.eventCommand)}" placeholder="ايفنت"></label>
       <label>نقاط كل إيفنت<input type="number" name="eventPoints" value="${evt.eventPoints}" min="1" max="1000000"></label>
-      <label>حد الترقية<input type="number" name="promotionThreshold" value="${evt.promotionThreshold}" min="1" max="1000000000"></label>
-      <label>شات إشعار الترقية<select name="promotionChannelId">${textChannels(channels,evt.promotionChannelId||'')}</select></label>
-      <label>رتبة مسؤول الترقية<select name="promotionRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,evt.promotionRoleId?[evt.promotionRoleId]:[])}</select></label>
       <label>عدد الأشخاص بالترتيب<input type="number" name="leaderboardLimit" value="${evt.leaderboardLimit}" min="3" max="25"></label>
       <label><input type="checkbox" name="publicLeaderboard" ${evt.publicLeaderboard?'checked':''}> أي عضو يقدر يكتب «${esc(evt.leaderboardCommand)}»</label>
       <label><input type="checkbox" name="directPointsEnabled" ${evt.directPointsEnabled?'checked':''}> تفعيل إضافة/خصم النقاط بصيغة 1+ و1-</label>
-      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple size="8" name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>تقدر تحدد أكثر من رتبة. استخدم Ctrl/⌘ لاختيار عدة رتب. Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
+      <label class="wide">الرتب المسموح لها إضافة/خصم/ترسيت واستخدام أوامر الأيفنت<select multiple size="8" name="staffRoleIds">${roleOptions(roles,guild.id,evt.staffRoleIds)}</select><small>تقدر تحدد أكثر من رتبة. Administrator وManage Server مسموح لهم تلقائيًا أيضًا.</small></label>
     </div><button class="btn primary">💾 حفظ إعدادات الأيفنت</button></form>
+
+    <form class="config-card" style="margin-top:18px" method="post" action="/dashboard/${guild.id}/event/promotion-settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><h3>📈 نقاط الترقية — نظام منفصل عن نقاط الإيفنت</h3><p class="hint">هذه النقاط مستقلة 100% عن نقاط الإيفنت وXP وZOM. أمر <code>${esc(evt.promotionCommand)}</code> يضيف نقاط الترقية فقط.</p>
+      <div class="form-grid">
+        <label><input type="checkbox" name="promotionEnabled" ${evt.promotionEnabled?'checked':''}> تفعيل نظام نقاط الترقية</label>
+        <label>أمر الترقية<input name="promotionCommand" value="${esc(evt.promotionCommand)}" placeholder="ترقية"></label>
+        <label>نقاط كل استخدام<input type="number" name="promotionPoints" value="${evt.promotionPoints}" min="1" max="1000000"></label>
+        <label>حد الترقية<input type="number" name="promotionThreshold" value="${evt.promotionThreshold}" min="1" max="1000000000"></label>
+        <label>شات أمر الترقية<select name="promotionCommandChannelId">${textChannels(channels,evt.promotionCommandChannelId||'')}</select></label>
+        <label>شات إشعار الوصول للترقية<select name="promotionNotifyChannelId">${textChannels(channels,evt.promotionNotifyChannelId||'')}</select></label>
+        <label>رتبة مسؤول الترقية<select name="promotionNotifyRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,evt.promotionNotifyRoleId?[evt.promotionNotifyRoleId]:[])}</select></label>
+        <label class="wide">الرتب المسموح لها باستخدام أمر الترقية<select multiple size="8" name="promotionStaffRoleIds">${roleOptions(roles,guild.id,evt.promotionStaffRoleIds)}</select><small>يمكن تحديد أكثر من رتبة. Administrator وManage Server مسموح لهم تلقائيًا.</small></label>
+      </div><button class="btn primary">💾 حفظ إعدادات الترقية</button>
+    </form>
+
 
     <div class="event-help-grid">
       <article class="config-card compact-card"><h3>➕ إضافة نقاط</h3><code>1+ @العضو نقاط</code><p>يضيف نقطة. تقدر تغيّر الرقم لأي كمية.</p></article>
       <article class="config-card compact-card"><h3>➖ خصم نقاط</h3><code>1- @العضو نقاط</code><p>يخصم نقطة من الشخص.</p></article>
       <article class="config-card compact-card"><h3>🏆 الترتيب</h3><code>${esc(evt.leaderboardCommand)}</code><p>يعرض النقاط من الأعلى إلى الأقل. ومع منشن يعرض نقاط عضو واحد.</p></article>
       <article class="config-card compact-card"><h3>♻️ الترسيت</h3><code>${esc(evt.resetCommand)}</code><p>يصفّر الكل ويبدأ موسم جديد. ومع منشن يصفّر شخصًا واحدًا.</p></article>
-      <article class="config-card compact-card"><h3>🎟️ تسجيل إيفنت</h3><code>${esc(evt.eventCommand)} @العضو</code><p>يضيف تلقائيًا <b>${evt.eventPoints}</b> ${esc(evt.pointLabel)}. عند <b>${evt.promotionThreshold}</b> يرسل إشعار الترقية للمسؤول.</p></article>
+      <article class="config-card compact-card"><h3>🎟️ تسجيل إيفنت</h3><code>${esc(evt.eventCommand)} @العضو</code><p>يضيف تلقائيًا <b>${evt.eventPoints}</b> ${esc(evt.pointLabel)} إلى نقاط الإيفنت فقط.</p></article><article class="config-card compact-card"><h3>📈 نقاط الترقية</h3><code>${esc(evt.promotionCommand)} @العضو</code><p>يضيف <b>${evt.promotionPoints}</b> نقطة ترقية مستقلة ويعرض الرصيد الحالي من <b>${evt.promotionThreshold}</b>.</p></article>
     </div>
 
     <h3>⚡ أوامر الأيفنت المخصصة</h3><p class="hint">مثال: اعمل أمر <code>-انشاء</code> وخليه يضيف +1 نقطة و250 ZOM للشخص اللي تعمل له منشن. كل الأوامر تعمل فقط داخل شاتات الأيفنت المحددة وللرتب المحددة.</p>
@@ -732,6 +749,10 @@ async function guildPage(req){
 
     <h3>🧾 تعديل نقاط عضو من الداشبورد</h3><form class="inline-form event-member-form" method="post" action="/dashboard/${guild.id}/event/member"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input name="userId" placeholder="User ID" required><select name="action"><option value="add">إضافة</option><option value="remove">خصم</option><option value="set">تعيين</option><option value="reset">تصفير الشخص</option></select><input type="number" name="amount" value="1" min="0" max="1000000000"><button class="btn">تنفيذ</button></form>
     <form method="post" action="/dashboard/${guild.id}/event/reset" onsubmit="return confirm('تصفير جميع نقاط الأيفنت وبدء موسم جديد؟')"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><button class="btn danger">♻️ ترسيت جميع النقاط</button></form>
+
+    <h3>📈 إدارة نقاط الترقية لشخص واحد</h3><form class="inline-form event-member-form" method="post" action="/dashboard/${guild.id}/event/promotion-member"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="event"><input name="userId" placeholder="User ID" required><select name="action"><option value="add">إضافة</option><option value="remove">خصم</option><option value="set">تعيين</option><option value="reset">تصفير هذا الشخص فقط</option></select><input type="number" name="amount" value="1" min="0" max="1000000000"><button class="btn">تنفيذ</button></form>
+    <h3>📊 نقاط الترقية الحالية</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>User ID</th><th>نقاط الترقية</th><th>المضاف</th><th>المخصوم</th><th>تم إشعار الحد</th></tr></thead><tbody>${promotionTopRows}</tbody></table></div>
+    <h3>📜 آخر عمليات نقاط الترقية</h3><div class="table-wrap"><table><thead><tr><th>الوقت</th><th>النوع</th><th>المنفّذ</th><th>المستهدف</th><th>التغيير</th><th>الأمر</th></tr></thead><tbody>${promotionHistoryRows}</tbody></table></div>
 
     <h3>🏆 الترتيب الحالي — الموسم ${evtState.season}</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>User ID</th><th>النقاط</th><th>المضاف</th><th>المخصوم</th><th>ZOM من الأيفنت</th></tr></thead><tbody>${eventTopRows}</tbody></table></div>
     <h3>📜 آخر عمليات الأيفنت</h3><div class="table-wrap"><table><thead><tr><th>الوقت</th><th>النوع</th><th>المنفّذ</th><th>المستهدف</th><th>النقاط</th><th>ZOM</th><th>الأمر</th></tr></thead><tbody>${eventHistoryRows}</tbody></table></div>
@@ -901,8 +922,26 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
     if(options.preview){const e=new Error('PREVIEW');e.previewPayload=payload;throw e;}
     return sendPanelMessage(channelId,messageId,payload);
   };
-  // Always use the current panel builders for every guild, including HOME_GUILD_ID.
-
+  const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
+  if(String(guildId)===homeId){
+    if(which==='bank'){const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,legacyHomeBankPanelPayload(cfg));cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='games'){const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,legacyHomeGamesPanelPayload(cfg));cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='tickets'){const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets?.panelMessageId,legacyHomeTicketPanelPayload(cfg));cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+    if(which==='rules'){
+    if(!cfg.rules?.channelId)throw new Error('حدد شات لوحة القوانين أولًا.');
+    const types=(cfg.rules.types||[]).filter(x=>x.enabled!==false).slice(0,25);if(!types.length)throw new Error('أضف نوع قوانين واحدًا على الأقل.');
+    const banner=cfg.rules.bannerUrl||`${baseUrl()}/panel-assets/zombi-rules-banner.gif`;
+    const logo=cfg.rules.logoUrl||cfg.branding?.panelLogoUrl||cfg.branding?.avatarUrl||`${baseUrl()}/assets/zombi-logo.png`;
+    const hex=parseInt(String(cfg.rules.color||'#E11D48').replace('#',''),16);
+    const embed={color:Number.isFinite(hex)?hex:0xE11D48,title:cfg.rules.title||'📜 ZOMBI • قوانين السيرفر',description:cfg.rules.description||'اختر نوع القوانين من القائمة بالأسفل.',footer:{text:cfg.rules.footer||'ZOMBI • RULES CENTER'}};
+    if(logo)embed.thumbnail={url:logo};if(banner)embed.image={url:banner};
+    const options=types.map(t=>({label:String(t.label||'قوانين').slice(0,100),value:String(t.id).slice(0,100),description:String(t.description||'اضغط لعرض القوانين').slice(0,100),...(t.emoji?{emoji:{name:String(t.emoji)}}:{})}));
+    const payload={embeds:[embed],components:[{type:1,components:[{type:3,custom_id:'zombi_rules_select',placeholder:'📜 اختر نوع القوانين...',min_values:1,max_values:1,options}]}],allowed_mentions:{parse:[]}};
+    const m=await sendOrUpdate(cfg.rules.channelId,cfg.rules.panelMessageId,payload);cfg.rules.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;
+  }
+  if(which==='store'){const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store?.panelMessageId,legacyHomeStorePanelPayload(cfg));cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
+    if(which==='roles'){const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel?.panelMessageId,legacyHomeRolePanelPayload(cfg,bundle));cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
+  }
   if(which==='bank'){const payload=rawBankPanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,payload);cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='games'){if(!featureAllowed(site,cfg,'games'))throw new Error('Games غير متاحة لهذه الخطة.');const payload=rawGamesPanelPayload(cfg);const m=await sendOrUpdate(cfg.channels.gamePanel,cfg.games?.panelMessageId,payload);cfg.games.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='tickets'){if(!featureAllowed(site,cfg,'tickets'))throw new Error('Tickets غير متاحة لهذه الخطة.');const types=(cfg.tickets.types||[]).filter(t=>t.enabled!==false).slice(0,limitFor(site,cfg,'ticketTypes'));if(!types.length)throw new Error('أضف نوع تذكرة أولًا.');const rows=[];for(let i=0;i<types.length;i+=5)rows.push({type:1,components:types.slice(i,i+5).map(t=>({type:2,style:1,custom_id:`pub:ticket:open:${t.id}`,label:String(t.label||'تذكرة').slice(0,80),...(t.emoji?{emoji:{name:t.emoji}}:{})}))});const footer=featureAllowed(site,cfg,'customBranding')?(cfg.branding.customFooter||cfg.branding.footer):'Powered by ZOMBI';const payload={embeds:[{color:color(cfg),title:cfg.tickets.title,description:cfg.tickets.description,footer:{text:footer}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.ticketPanel,cfg.tickets.panelMessageId,payload);cfg.tickets.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
@@ -1683,10 +1722,6 @@ async function start(){
     const staffRoleIds=arr(req.body.staffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
     const logEvent=String(req.body.logEvent||'').trim();
     if(logEvent&&!req.bundle.channels.some(c=>String(c.id)===logEvent&&[0,5].includes(Number(c.type))))return res.status(400).send('شات لوق الأيفنت غير صحيح.');
-    const promotionChannelId=String(req.body.promotionChannelId||'').trim();
-    if(promotionChannelId&&!req.bundle.channels.some(c=>String(c.id)===promotionChannelId&&[0,5].includes(Number(c.type))))return res.status(400).send('شات إشعار الترقية غير صحيح.');
-    const promotionRoleId=String(req.body.promotionRoleId||'').trim();
-    if(promotionRoleId&&!roleIds.has(promotionRoleId))return res.status(400).send('رتبة مسؤول الترقية غير صحيحة.');
     cfg.event={...current,
       enabled:Boolean(req.body.enabled),
       channelIds:requestedChannels,
@@ -1700,12 +1735,32 @@ async function start(){
       directPointsEnabled:Boolean(req.body.directPointsEnabled),
       eventCommand:String(req.body.eventCommand||'ايفنت').trim().replace(/\s+/g,' ').slice(0,40)||'ايفنت',
       eventPoints:int(req.body.eventPoints,current.eventPoints||10,1,1000000),
-      promotionThreshold:int(req.body.promotionThreshold,current.promotionThreshold||200,1,1000000000),
-      promotionChannelId,
-      promotionRoleId,
       quickCommands:normalizeEventQuickCommands(current.quickCommands)
     };
     cfg.channels=cfg.channels||{};cfg.channels.logEvent=logEvent;
+    await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/promotion-settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),current=eventConfig(cfg);
+    const roleIds=new Set(req.bundle.roles.map(r=>String(r.id)));
+    const promotionCommandChannelId=String(req.body.promotionCommandChannelId||'').trim();
+    if(promotionCommandChannelId&&!req.bundle.channels.some(c=>String(c.id)===promotionCommandChannelId&&[0,5].includes(Number(c.type))))return res.status(400).send('شات أمر الترقية غير صحيح.');
+    const promotionNotifyChannelId=String(req.body.promotionNotifyChannelId||'').trim();
+    if(promotionNotifyChannelId&&!req.bundle.channels.some(c=>String(c.id)===promotionNotifyChannelId&&[0,5].includes(Number(c.type))))return res.status(400).send('شات إشعار الترقية غير صحيح.');
+    const promotionNotifyRoleId=String(req.body.promotionNotifyRoleId||'').trim();
+    if(promotionNotifyRoleId&&!roleIds.has(promotionNotifyRoleId))return res.status(400).send('رتبة مسؤول الترقية غير صحيحة.');
+    const promotionStaffRoleIds=arr(req.body.promotionStaffRoleIds).map(String).filter(x=>roleIds.has(x)&&x!==String(req.params.guildId)).slice(0,50);
+    cfg.event={...current,
+      promotionEnabled:Boolean(req.body.promotionEnabled),
+      promotionCommand:String(req.body.promotionCommand||'ترقية').trim().replace(/\s+/g,' ').slice(0,40)||'ترقية',
+      promotionPoints:int(req.body.promotionPoints,current.promotionPoints||10,1,1000000),
+      promotionCommandChannelId,
+      promotionStaffRoleIds,
+      promotionThreshold:int(req.body.promotionThreshold,current.promotionThreshold||200,1,1000000000),
+      promotionNotifyChannelId,
+      promotionNotifyRoleId
+    };
     await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'event');
   }catch(e){next(e);}});
 
@@ -1740,9 +1795,22 @@ async function start(){
     const before=Number(state.users[userId]?.points||0);let after=before;
     if(action==='add')after=before+amount;else if(action==='remove')after=before-amount;else if(action==='set')after=amount;else after=0;
     const old=state.users[userId]||{points:0,added:0,removed:0,zomAwarded:0};
-    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard'),promotionNotified:after>=eventConfig(await store.getConfig(req.params.guildId)).promotionThreshold?Boolean(old.promotionNotified):false};
+    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard')};
     state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:userId,type:`dashboard-${action}`,delta:after-before,zom:0,command:'Dashboard',note:`${action}: ${before} -> ${after}`});state.history=state.history.slice(0,500);
     await store.saveData(req.params.guildId,'event-system.json',state);redirectDashboard(req,res,'event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/event/promotion-member',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const userId=String(req.body.userId||'').trim();if(!/^\d{15,25}$/.test(userId))return res.status(400).send('User ID غير صحيح.');
+    const action=['add','remove','set','reset'].includes(String(req.body.action||''))?String(req.body.action):'add';
+    const amount=Math.max(0,Math.min(1000000000,Math.round(Number(req.body.amount)||0)));
+    const cfg=eventConfig(await store.getConfig(req.params.guildId));
+    const raw=await store.data(req.params.guildId,'promotion-system.json',{users:{},history:[]});const state=raw&&typeof raw==='object'?raw:{users:{},history:[]};state.users=state.users&&typeof state.users==='object'?state.users:{};state.history=Array.isArray(state.history)?state.history:[];
+    const old=state.users[userId]||{points:0,added:0,removed:0,updatedAt:0,lastBy:'',notified:false};const before=Math.max(0,Number(old.points||0));let after=before;
+    if(action==='add')after=before+amount;else if(action==='remove')after=Math.max(0,before-amount);else if(action==='set')after=amount;else after=0;
+    state.users[userId]={...old,points:after,added:Number(old.added||0)+(after>before?after-before:0),removed:Number(old.removed||0)+(after<before?before-after:0),updatedAt:Date.now(),lastBy:String(req.user?.id||'dashboard'),notified:after>=cfg.promotionThreshold?action==='reset'?false:Boolean(old.notified):false};
+    state.history.unshift({at:Date.now(),actorId:String(req.user?.id||''),targetId:userId,type:`dashboard-promotion-${action}`,delta:after-before,command:'Dashboard',note:`${action}: ${before} -> ${after}`});state.history=state.history.slice(0,500);state.updatedAt=Date.now();
+    await store.saveData(req.params.guildId,'promotion-system.json',state);redirectDashboard(req,res,'event');
   }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/event/reset',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{

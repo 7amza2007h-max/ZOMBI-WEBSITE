@@ -29,6 +29,7 @@
     director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
     rules: { label: 'القوانين', icon: '📜', desc: 'لوحة قوانين تفاعلية؛ كل نوع يعرض قوانينه برسالة خاصة للعضو فقط.' },
     suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
+    event: { label: 'الإيفنت', icon: '🎉', desc: 'نقاط الإيفنت ونقاط الترقية المستقلة، الشاتات والرتب وحد الترقية.' },
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
@@ -40,7 +41,7 @@
 
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions']],
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions', 'event']],
     ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'music', 'voice', 'premium']]
   ];
 
@@ -184,7 +185,7 @@
       // shows only the cloned Send/Update action bar.
       if (node.classList?.contains('rules-system-panel')) page = 'rules';
       else if (node.classList?.contains('city-director-panel')) page = 'director';
-      else if (node.classList?.contains('event-system-panel')) page = 'overview';
+      else if (node.classList?.contains('event-system-panel')) page = 'event';
       ensureSettingsGroup(page).appendChild(node);
     }
     settingsGroups.forEach((w, pageId) => {
