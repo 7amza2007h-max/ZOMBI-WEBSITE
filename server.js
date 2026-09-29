@@ -749,9 +749,13 @@ function makeDashboardPanelV2(payload,centerName='ZOMB • CONTROL CENTER',marke
   const fieldText=fields.map(f=>`${f?.name?`**${cleanPanelText(f.name,120)}**`:''}${f?.value?`\n${cleanPanelText(f.value,300)}`:''}`.trim()).filter(Boolean).join('\n\n');
   const body=[desc,fieldText].filter(Boolean).join('\n\n');
   const assetBase=`${baseUrl()}/panel-assets`;
+  const customBanner=String(embed?.image?.url||'').trim();
+  const customLogo=String(embed?.thumbnail?.url||'').trim();
+  const bannerUrl=/^https?:\/\//i.test(customBanner)?customBanner:`${assetBase}/zombi-header-loop.gif`;
+  const logoUrl=/^https?:\/\//i.test(customLogo)?customLogo:`${assetBase}/zombi-orb.gif`;
   const parts=[
-    {type:12,items:[{media:{url:`${assetBase}/zombi-header-loop.gif`},description:'ZOMBI'}]},
-    {type:9,components:[{type:10,content:`## ${title}\n-# ✦ ${cleanPanelText(centerName,120)} ✦`}],accessory:{type:11,media:{url:`${assetBase}/zombi-orb.gif`},description:'ZOMBI'}},
+    {type:12,items:[{media:{url:bannerUrl},description:'ZOMBI'}]},
+    {type:9,components:[{type:10,content:`## ${title}\n-# ✦ ${cleanPanelText(centerName,120)} ✦`}],accessory:{type:11,media:{url:logoUrl},description:'ZOMBI'}},
     {type:14,divider:true,spacing:1}
   ];
   if(body)parts.push({type:10,content:body});
@@ -1781,76 +1785,6 @@ async function start(){
   app.post('/dashboard/:guildId/roles/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'rolePanel'))return res.status(403).send('Self Roles غير متاحة لهذه الخطة.');const limit=maxFor(req,cfg,site,'selfRoles');if(cfg.rolePanel.items.length>=limit)return res.status(403).send(`وصلت للحد المسموح (${limit}).`);const role=req.bundle.roles.find(r=>r.id===String(req.body.roleId));if(!role)return res.status(400).send('Role invalid');if(!cfg.rolePanel.items.some(p=>p.roleId===role.id))cfg.rolePanel.items.push({roleId:role.id,label:String(req.body.label||role.name).slice(0,80),emoji:String(req.body.emoji||'🔔').slice(0,32),style:['Primary','Secondary','Success','Danger'].includes(req.body.style)?req.body.style:'Primary'});await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
   app.post('/dashboard/:guildId/roles/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),item=cfg.rolePanel.items.find(x=>x.roleId===String(req.body.roleId));if(!item)return res.status(404).send('الرتبة غير موجودة.');const newRole=req.bundle.roles.find(r=>r.id===String(req.body.newRoleId));if(newRole)item.roleId=newRole.id;item.label=String(req.body.label||newRole?.name||item.label).slice(0,80);item.emoji=String(req.body.emoji||'🔔').slice(0,32);item.style=['Primary','Secondary','Success','Danger'].includes(req.body.style)?req.body.style:'Primary';await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
   app.post('/dashboard/:guildId/roles/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);cfg.rolePanel.items=cfg.rolePanel.items.filter(p=>p.roleId!==String(req.body.roleId));await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res);}catch(e){next(e);}});
-
-
-  app.post('/dashboard/:guildId/rules/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const cfg=await store.getConfig(req.params.guildId);
-    cfg.rules=cfg.rules||{};
-    cfg.rules.types=Array.isArray(cfg.rules.types)?cfg.rules.types:[];
-    cfg.rules.enabled=Boolean(req.body.enabled);
-    const channelId=String(req.body.channelId||'').trim();
-    if(channelId && !req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(c.type))) return res.status(400).send('الروم المحدد غير صالح.');
-    cfg.rules.channelId=channelId;
-    cfg.rules.title=String(req.body.title||'📜 ZOMBI • قوانين السيرفر').slice(0,256);
-    cfg.rules.description=String(req.body.description||'').slice(0,4000);
-    const color=String(req.body.color||'#E11D48').trim();
-    cfg.rules.color=/^#[0-9a-f]{6}$/i.test(color)?color:'#E11D48';
-    cfg.rules.logoUrl=String(req.body.logoUrl||'').trim().slice(0,1000);
-    cfg.rules.bannerUrl=String(req.body.bannerUrl||'').trim().slice(0,1000);
-    cfg.rules.footer=String(req.body.footer||'ZOMBI • RULES CENTER').slice(0,2048);
-    await store.saveConfig(req.params.guildId,cfg);
-    redirectDashboard(req,res,'rules');
-  }catch(e){next(e);}});
-
-  app.post('/dashboard/:guildId/rules/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const cfg=await store.getConfig(req.params.guildId);
-    cfg.rules=cfg.rules||{}; cfg.rules.types=Array.isArray(cfg.rules.types)?cfg.rules.types:[];
-    if(cfg.rules.types.length>=25) return res.status(400).send('الحد الأقصى 25 نوع قوانين.');
-    const label=String(req.body.label||'').trim().slice(0,80);
-    const content=String(req.body.content||'').trim().slice(0,12000);
-    if(!label) return res.status(400).send('اكتب اسم نوع القوانين.');
-    if(!content) return res.status(400).send('اكتب نص القوانين.');
-    let id=`rule_${Date.now().toString(36)}_${Math.floor(Math.random()*9999)}`;
-    cfg.rules.types.push({
-      id,
-      label,
-      emoji:String(req.body.emoji||'📜').trim().slice(0,32),
-      description:String(req.body.description||'').trim().slice(0,100),
-      content,
-      sortOrder:int(req.body.sortOrder,10,0,9999),
-      enabled:Boolean(req.body.enabled)
-    });
-    await store.saveConfig(req.params.guildId,cfg);
-    redirectDashboard(req,res,'rules');
-  }catch(e){next(e);}});
-
-  app.post('/dashboard/:guildId/rules/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const cfg=await store.getConfig(req.params.guildId);
-    cfg.rules=cfg.rules||{}; cfg.rules.types=Array.isArray(cfg.rules.types)?cfg.rules.types:[];
-    const item=cfg.rules.types.find(x=>String(x.id)===String(req.body.ruleId||''));
-    if(!item) return res.status(404).send('نوع القوانين غير موجود.');
-    const label=String(req.body.label||'').trim().slice(0,80);
-    const content=String(req.body.content||'').trim().slice(0,12000);
-    if(!label) return res.status(400).send('اكتب اسم نوع القوانين.');
-    if(!content) return res.status(400).send('اكتب نص القوانين.');
-    item.label=label;
-    item.emoji=String(req.body.emoji||'📜').trim().slice(0,32);
-    item.description=String(req.body.description||'').trim().slice(0,100);
-    item.content=content;
-    item.sortOrder=int(req.body.sortOrder,item.sortOrder||10,0,9999);
-    item.enabled=Boolean(req.body.enabled);
-    await store.saveConfig(req.params.guildId,cfg);
-    redirectDashboard(req,res,'rules');
-  }catch(e){next(e);}});
-
-  app.post('/dashboard/:guildId/rules/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const cfg=await store.getConfig(req.params.guildId);
-    cfg.rules=cfg.rules||{}; cfg.rules.types=Array.isArray(cfg.rules.types)?cfg.rules.types:[];
-    const id=String(req.body.ruleId||'');
-    cfg.rules.types=cfg.rules.types.filter(x=>String(x.id)!==id);
-    await store.saveConfig(req.params.guildId,cfg);
-    redirectDashboard(req,res,'rules');
-  }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/guide/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
