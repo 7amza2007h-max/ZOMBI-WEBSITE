@@ -23,7 +23,7 @@ async function ensureDb(){
   const rawUrl = String(process.env.DATABASE_URL || '').trim();
   const sslDisabled = String(process.env.DATABASE_SSL || '').toLowerCase() === 'false';
   const dbUrl = new URL(rawUrl);dbUrl.searchParams.delete('sslmode');dbUrl.searchParams.delete('channel_binding');
-  pool = new Pool({connectionString:dbUrl.toString(),max:8,ssl:sslDisabled?false:{rejectUnauthorized:false}});
+  pool = new Pool({connectionString:dbUrl.toString(),max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:15000,keepAlive:true,ssl:sslDisabled?false:{rejectUnauthorized:false}});
   readyPromise=(async()=>{
     await pool.query(`CREATE TABLE IF NOT EXISTS zombi_guild_config (guild_id TEXT PRIMARY KEY, config JSONB NOT NULL, updated_at BIGINT NOT NULL)`);
     await pool.query(`CREATE TABLE IF NOT EXISTS zombi_guild_data (guild_id TEXT NOT NULL, name TEXT NOT NULL, data JSONB NOT NULL, updated_at BIGINT NOT NULL, PRIMARY KEY (guild_id, name))`);

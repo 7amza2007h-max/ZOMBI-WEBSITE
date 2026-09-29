@@ -24,7 +24,7 @@ async function ensureDb(){
   const dbUrl=new URL(rawUrl);
   dbUrl.searchParams.delete('sslmode');
   dbUrl.searchParams.delete('channel_binding');
-  const options={connectionString:dbUrl.toString(),max:3};
+  const options={connectionString:dbUrl.toString(),max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:15000,keepAlive:true};
   if(sslDisabled)options.ssl=false;else options.ssl={rejectUnauthorized:false};
   pool=new Pool(options);
   readyPromise=(async()=>{
