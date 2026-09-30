@@ -29,6 +29,9 @@
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
     applications: { label: 'التقديمات', icon: '📝', desc: 'إنشاء نماذج تقديم متعددة، تحديد الشاتات والأسئلة ورتب المراجعة.' },
+    'staff-duty': { label: 'دوام الإدارة', icon: '🕐', desc: 'لوحة دوام الإدارة وتقارير النشاط والوجود.' },
+    'staff-event': { label: 'طلب فعالية', icon: '🎉', desc: 'لوحة طلب فعالية وشات مراجعة مستقل ورتب قبول/رفض.' },
+    'staff-leave': { label: 'طلب إجازة', icon: '🏖️', desc: 'لوحة طلب إجازة وشات مراجعة مستقل ورتب قبول/رفض.' },
     music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
@@ -37,7 +40,9 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'applications', 'music', 'voice', 'premium']]
+    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
+    ['إدارة الطاقم', ['staff-duty', 'staff-event', 'staff-leave']],
+    ['الاشتراك', ['premium']]
   ];
 
   const currentFromUrl = () => {
@@ -290,6 +295,9 @@
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
     if (title.includes('نظام التقديمات')) return 'applications';
+    if (title.includes('دوام الإدارة')) return 'staff-duty';
+    if (title.includes('طلب فعالية')) return 'staff-event';
+    if (title.includes('طلب إجازة')) return 'staff-leave';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';

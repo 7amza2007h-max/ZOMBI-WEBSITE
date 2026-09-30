@@ -465,6 +465,29 @@ function normalizeApplicationQuestion(q={},i=0){const style=String(q.style||'par
 function normalizeApplicationType(x={},i=0){const qs=(Array.isArray(x.questions)?x.questions:[]).map(normalizeApplicationQuestion).filter(q=>q.label).slice(0,5);return{id:String(x.id||`application_${i+1}`).replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,50)||`application_${i+1}`,title:String(x.title||`تقديم رقم ${i+1}`).trim().slice(0,80)||`تقديم رقم ${i+1}`,emoji:String(x.emoji||'📝').trim().slice(0,16)||'📝',description:String(x.description||'اضغط الزر بالأسفل لفتح نموذج التقديم.').trim().slice(0,1000),buttonLabel:String(x.buttonLabel||'فتح التقديم').trim().slice(0,80)||'فتح التقديم',panelChannelId:String(x.panelChannelId||'').trim(),reviewChannelId:String(x.reviewChannelId||'').trim(),reviewerRoleIds:arr(x.reviewerRoleIds).map(String).filter(Boolean).slice(0,50),acceptedRoleId:String(x.acceptedRoleId||'').trim(),cooldownHours:int(x.cooldownHours,0,0,8760),acceptMessage:String(x.acceptMessage||'✅ تم قبول طلبك. نتمنى لك التوفيق.').trim().slice(0,1000),rejectMessage:String(x.rejectMessage||'❌ تم رفض طلبك. نتمنى لك التوفيق وتحسين طلبك مستقبلاً.').trim().slice(0,1000),enabled:x.enabled!==false,panelMessageId:String(x.panelMessageId||'').trim(),questions:qs.length?qs:[normalizeApplicationQuestion({label:'اسمك + عمرك',style:'short'},0),normalizeApplicationQuestion({label:'اذكر خبراتك بالتفصيل'},1),normalizeApplicationQuestion({label:'سبب التقديم'},2)]};}
 function normalizeApplicationsConfig(raw={}){return{enabled:raw.enabled!==false,types:(Array.isArray(raw.types)?raw.types:[]).map(normalizeApplicationType).slice(0,25)};}
 
+function staffManagementConfig(cfg={}){
+  const raw=cfg.staffManagement||{};
+  return {
+    enabled:raw.enabled!==false,
+    branding:{color:String(raw.branding?.color||'#7c3aed'),logoUrl:String(raw.branding?.logoUrl||''),bannerUrl:String(raw.branding?.bannerUrl||'')},
+    duty:{enabled:raw.duty?.enabled!==false,panelChannelId:String(raw.duty?.panelChannelId||''),reportChannelId:String(raw.duty?.reportChannelId||''),allowedRoleIds:arr(raw.duty?.allowedRoleIds).map(String),onDutyRoleId:String(raw.duty?.onDutyRoleId||''),inactiveMinutes:int(raw.duty?.inactiveMinutes,60,5,1440),autoEndInactive:raw.duty?.autoEndInactive===true,panelMessageId:String(raw.duty?.panelMessageId||'')},
+    eventRequest:{enabled:raw.eventRequest?.enabled!==false,panelChannelId:String(raw.eventRequest?.panelChannelId||''),reviewChannelId:String(raw.eventRequest?.reviewChannelId||''),reviewerRoleIds:arr(raw.eventRequest?.reviewerRoleIds).map(String),panelMessageId:String(raw.eventRequest?.panelMessageId||'')},
+    leaveRequest:{enabled:raw.leaveRequest?.enabled!==false,panelChannelId:String(raw.leaveRequest?.panelChannelId||''),reviewChannelId:String(raw.leaveRequest?.reviewChannelId||''),reviewerRoleIds:arr(raw.leaveRequest?.reviewerRoleIds).map(String),leaveRoleId:String(raw.leaveRequest?.leaveRoleId||''),panelMessageId:String(raw.leaveRequest?.panelMessageId||'')}
+  };
+}
+function staffPanelPayload(kind,cfg){
+  const staff=staffManagementConfig(cfg),brand=staff.branding||{},hex=parseInt(String(brand.color||'#7c3aed').replace('#',''),16),colorValue=Number.isFinite(hex)?hex:0x7c3aed;
+  const logo=brand.logoUrl||`${baseUrl()}/panel-assets/zombi-orb.gif`;
+  const banner=brand.bannerUrl||`${baseUrl()}/panel-assets/zombi-header-loop.gif`;
+  const defs={
+    duty:{title:'🕐 ZOMBI • دوام الإدارة',description:'سجّل بداية ونهاية دوامك من الأزرار بالأسفل. يتابع ZOMBI النشاط الحقيقي أثناء الدوام مثل الكتابة والتواجد في الفويس.',footer:'ZOMBI • STAFF DUTY',buttons:[['zstaff:duty:start','بدء الدوام','🟢',3],['zstaff:duty:end','إنهاء الدوام','🔴',4],['zstaff:duty:break','استراحة','☕',2],['zstaff:duty:resume','رجوع','▶️',1],['zstaff:duty:stats','إحصائياتي','📊',2]]},
+    event:{title:'🎉 ZOMBI • طلب فعالية',description:'اضغط الزر بالأسفل لتعبئة نموذج طلب الفعالية. الطلب سيصل مباشرة إلى شات المراجعة المحدد من Dashboard.',footer:'ZOMBI • EVENT REQUEST',buttons:[['zstaff:event:open','طلب فعالية','🎉',1]]},
+    leave:{title:'🏖️ ZOMBI • طلب إجازة',description:'اضغط الزر بالأسفل لتعبئة طلب الإجازة. القبول والرفض يتمان فقط من شات الإدارة وبواسطة الرتب المحددة من Dashboard.',footer:'ZOMBI • LEAVE REQUEST',buttons:[['zstaff:leave:open','طلب إجازة','🏖️',1]]}
+  };
+  const d=defs[kind];if(!d)throw new Error('نوع لوحة الإدارة غير صحيح.');
+  return {embeds:[{color:colorValue,title:d.title,description:d.description,thumbnail:{url:logo},image:{url:banner},footer:{text:d.footer}}],components:[{type:1,components:d.buttons.map(([custom_id,label,emoji,style])=>({type:2,custom_id,label,style,emoji:{name:emoji}}))}],allowed_mentions:{parse:[]}};
+}
+
 async function guildPage(req){
   const {guild,channels,roles}=req.bundle;
   const [cfg,site,content,economyData,gangData,killerCases,missionTemplates,bankCatalog,eventData,promotionData,directorState,applicationsData]=await Promise.all([
@@ -479,6 +502,7 @@ async function guildPage(req){
     store.data(guild.id,'applications-config.json',{enabled:true,types:[]})
   ]);
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
+  const staff=staffManagementConfig(cfg);
   const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
   const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates'),musicQueueLimit=maxFor(req,cfg,site,'musicQueueSize'),musicVolumeLimit=maxFor(req,cfg,site,'musicMaxVolume'),musicTrackLimit=maxFor(req,cfg,site,'musicMaxTrackMinutes');
   const products=cfg.store.products||[],items=cfg.rolePanel.items||[],ticketTypes=cfg.tickets.types||[],guideItems=cfg.serverGuide?.items||[],directorTemplates=cfg.cityDirector?.templates||[];
@@ -688,6 +712,39 @@ async function guildPage(req){
     <h3>⚡ الرتبة التلقائية</h3><div class="form-grid"><label><input type="checkbox" name="autoRoleEnabled" ${cfg.autoRole?.enabled?'checked':''}> تفعيل إعطاء رتبة تلقائيًا عند دخول عضو جديد</label><label>الرتبة التلقائية<select name="autoRoleRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,cfg.autoRole?.roleId?[cfg.autoRole.roleId]:[])}</select></label><label><input type="checkbox" name="autoRoleIncludeBots" ${cfg.autoRole?.includeBots?'checked':''}> إعطاء الرتبة للبوتات أيضًا</label><div class="wide hint">يجب أن تكون رتبة ZOMBI BOT أعلى من الرتبة المختارة وأن يملك البوت صلاحية Manage Roles.</div></div>
     <div class="card-actions"><button class="btn primary" type="submit">💾 حفظ جميع إعدادات البوت</button><button class="btn" type="submit" name="forceBotProfile" value="1" ${canBotProfile?'':'disabled'}>🔄 حفظ وإعادة تطبيق بروفايل البوت${canBotProfile?'':' 🔒 Premium'}</button></div>
   </form>
+
+
+  <section class="panel staff-duty-panel"><h2>🕐 دوام الإدارة</h2><p>لوحة ثابتة في شات مستقل، وتقارير الدوام والنشاط تُرسل إلى شات آخر تحدده. ZOMBI يتابع هل الإداري كتب أو تواجد في الفويس أثناء الدوام.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/staff/duty/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="staff-duty"><div class="form-grid">
+      <label><input type="checkbox" name="enabled" ${staff.duty.enabled?'checked':''}> تفعيل نظام الدوام</label>
+      <label>شات اللوحة الثابتة<select name="panelChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.duty.panelChannelId)}</select></label>
+      <label>شات تقارير الدوام<select name="reportChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.duty.reportChannelId)}</select></label>
+      <label>رتبة On Duty اختياري<select name="onDutyRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,staff.duty.onDutyRoleId?[staff.duty.onDutyRoleId]:[])}</select></label>
+      <label class="wide">الرتب التي تستطيع بدء الدوام<select multiple size="8" name="allowedRoleIds">${roleOptions(roles,guild.id,staff.duty.allowedRoleIds)}</select><small>فقط هذه الرتب + مالك السيرفر.</small></label>
+      <label>اعتبار الإداري خامل بعد<input type="number" name="inactiveMinutes" min="5" max="1440" value="${Number(staff.duty.inactiveMinutes||60)}"> دقيقة</label>
+      <label><input type="checkbox" name="autoEndInactive" ${staff.duty.autoEndInactive?'checked':''}> إيقاف الدوام تلقائيًا عند الخمول</label>
+    </div><div class="card-actions"><button class="btn primary">💾 حفظ إعدادات الدوام</button><button class="btn" formaction="/dashboard/${guild.id}/staff/duty/send">📨 إرسال / تحديث لوحة الدوام</button></div></form>
+    <div class="config-card"><h3>✨ تصميم اللوحات الثلاث</h3><p class="hint">افتراضيًا يستخدم النظام شعار ZOMBI المتحرك + بنر ZOMBI المتحرك. يمكنك وضع روابط GIF مختلفة هنا، وستطبق على الدوام والفعالية والإجازة.</p><form method="post" action="/dashboard/${guild.id}/staff/branding/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="staff-duty"><div class="form-grid"><label>لون اللوحات<input type="color" name="color" value="${/^#[0-9a-f]{6}$/i.test(staff.branding.color)?esc(staff.branding.color):'#7c3aed'}"></label><label class="wide">رابط شعار GIF متحرك اختياري<input type="url" name="logoUrl" value="${esc(staff.branding.logoUrl)}" placeholder="اتركه فارغًا لشعار ZOMBI المتحرك الافتراضي"></label><label class="wide">رابط Banner GIF متحرك اختياري<input type="url" name="bannerUrl" value="${esc(staff.branding.bannerUrl)}" placeholder="اتركه فارغًا لبنر ZOMBI المتحرك الافتراضي"></label></div><button class="btn primary">💾 حفظ شكل اللوحات</button></form></div>
+  </section>
+
+  <section class="panel staff-event-request-panel"><h2>🎉 طلب فعالية</h2><p>في شات اللوحة يظهر فقط زر <b>طلب فعالية</b>. بعد تعبئة النموذج يُرسل الطلب إلى شات مراجعة منفصل، وهناك فقط تظهر أزرار القبول والرفض.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/staff/event/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="staff-event"><div class="form-grid">
+      <label><input type="checkbox" name="enabled" ${staff.eventRequest.enabled?'checked':''}> تفعيل طلب الفعاليات</label>
+      <label>شات لوحة طلب الفعالية<select name="panelChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.eventRequest.panelChannelId)}</select></label>
+      <label>شات استقبال الطلبات<select name="reviewChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.eventRequest.reviewChannelId)}</select></label>
+      <label class="wide">الرتب التي تستطيع قبول / رفض طلب الفعالية<select multiple size="8" name="reviewerRoleIds">${roleOptions(roles,guild.id,staff.eventRequest.reviewerRoleIds)}</select><small>أزرار القبول والرفض تظهر مع الطلب في شات المراجعة، وليست في لوحة التقديم.</small></label>
+    </div><div class="card-actions"><button class="btn primary">💾 حفظ إعدادات الفعالية</button><button class="btn" formaction="/dashboard/${guild.id}/staff/event/send">📨 إرسال / تحديث لوحة طلب فعالية</button></div></form>
+  </section>
+
+  <section class="panel staff-leave-request-panel"><h2>🏖️ طلب إجازة</h2><p>في شات اللوحة يظهر فقط زر <b>طلب إجازة</b>. الطلب يصل إلى شات الإدارة مع قبول / رفض، ولا يستطيع اتخاذ القرار إلا الرتب التي تحددها هنا.</p>
+    <form class="config-card" method="post" action="/dashboard/${guild.id}/staff/leave/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="staff-leave"><div class="form-grid">
+      <label><input type="checkbox" name="enabled" ${staff.leaveRequest.enabled?'checked':''}> تفعيل طلب الإجازات</label>
+      <label>شات لوحة طلب الإجازة<select name="panelChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.leaveRequest.panelChannelId)}</select></label>
+      <label>شات استقبال طلبات الإجازة<select name="reviewChannelId"><option value="">— اختر شات —</option>${textChannels(channels,staff.leaveRequest.reviewChannelId)}</select></label>
+      <label>رتبة إجازة اختيارية<select name="leaveRoleId"><option value="">— بدون رتبة —</option>${roleOptions(roles,guild.id,staff.leaveRequest.leaveRoleId?[staff.leaveRequest.leaveRoleId]:[])}</select></label>
+      <label class="wide">الرتب التي تستطيع قبول / رفض طلب الإجازة<select multiple size="8" name="reviewerRoleIds">${roleOptions(roles,guild.id,staff.leaveRequest.reviewerRoleIds)}</select></label>
+    </div><div class="card-actions"><button class="btn primary">💾 حفظ إعدادات الإجازة</button><button class="btn" formaction="/dashboard/${guild.id}/staff/leave/send">📨 إرسال / تحديث لوحة طلب إجازة</button></div></form>
+  </section>
 
   <section class="panel command-sync"><h2>⚡ Discord Panels & Commands</h2><div class="card-actions"><form method="post" action="/dashboard/${guild.id}/sync-commands"><input type="hidden" name="_csrf" value="${token}"><button class="btn primary">🔄 مزامنة أوامر السيرفر</button></form></div><h3>💎 تخصيص كل لوحة بشكل مستقل</h3><p class="hint">${canPanelDesign?'اشتراكك يسمح بالتخصيص. افتح أي لوحة وعدّل شكلها ثم أرسل/حدّث اللوحة.':'الخيار مقفول على Free. بعد تفعيل Premium أو Premium+ تستطيع تخصيص كل لوحة.'}</p><div class="stack">${panelCards}</div></section>
 
@@ -1935,6 +1992,43 @@ async function start(){
   app.post('/dashboard/:guildId/gang-missions/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{let list=await store.data(req.params.guildId,'gang-missions.json',[]);list=list.filter(x=>String(x.id)!==String(req.body.missionId));await store.saveData(req.params.guildId,'gang-missions.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/restore-legacy',requireLogin,requireOwner,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');if(String(req.params.guildId)!==homeId)return res.status(403).send('الاسترجاع متاح لسيرفر ZOMBI الأصلي فقط.');const current=await store.getConfig(homeId),keep={plan:current.plan,premiumUntil:current.premiumUntil,createdAt:current.createdAt},cfg={...legacyPreset.config,...keep,legacyPresetVersion:'v8.8',legacyPresetImportedAt:Date.now()};await store.saveConfig(homeId,cfg);for(const [name,value] of Object.entries(legacyPreset.data||{}))await store.saveData(homeId,name,value);res.redirect(`/dashboard/${homeId}`);}catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/staff/branding/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),staff=staffManagementConfig(cfg);
+    const validUrl=v=>{v=String(v||'').trim();if(!v)return'';try{const u=new URL(v);return ['http:','https:'].includes(u.protocol)?u.toString():'';}catch{return'';}};
+    staff.branding={color:/^#[0-9a-f]{6}$/i.test(String(req.body.color||''))?String(req.body.color):'#7c3aed',logoUrl:validUrl(req.body.logoUrl),bannerUrl:validUrl(req.body.bannerUrl)};
+    cfg.staffManagement=staff;await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'staff-duty');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/staff/duty/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),staff=staffManagementConfig(cfg),validChannels=new Set(req.bundle.channels.filter(c=>[0,5].includes(Number(c.type))).map(c=>String(c.id))),validRoles=new Set(req.bundle.roles.map(r=>String(r.id)));
+    const pickChannel=v=>validChannels.has(String(v||''))?String(v):'',pickRole=v=>validRoles.has(String(v||''))?String(v):'';
+    staff.duty={...staff.duty,enabled:Boolean(req.body.enabled),panelChannelId:pickChannel(req.body.panelChannelId),reportChannelId:pickChannel(req.body.reportChannelId),allowedRoleIds:arr(req.body.allowedRoleIds).map(String).filter(x=>validRoles.has(x)&&x!==String(req.params.guildId)).slice(0,50),onDutyRoleId:pickRole(req.body.onDutyRoleId),inactiveMinutes:int(req.body.inactiveMinutes,60,5,1440),autoEndInactive:Boolean(req.body.autoEndInactive)};
+    cfg.staffManagement=staff;await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'staff-duty');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/staff/event/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),staff=staffManagementConfig(cfg),validChannels=new Set(req.bundle.channels.filter(c=>[0,5].includes(Number(c.type))).map(c=>String(c.id))),validRoles=new Set(req.bundle.roles.map(r=>String(r.id)));
+    staff.eventRequest={...staff.eventRequest,enabled:Boolean(req.body.enabled),panelChannelId:validChannels.has(String(req.body.panelChannelId||''))?String(req.body.panelChannelId):'',reviewChannelId:validChannels.has(String(req.body.reviewChannelId||''))?String(req.body.reviewChannelId):'',reviewerRoleIds:arr(req.body.reviewerRoleIds).map(String).filter(x=>validRoles.has(x)&&x!==String(req.params.guildId)).slice(0,50)};
+    cfg.staffManagement=staff;await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'staff-event');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/staff/leave/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),staff=staffManagementConfig(cfg),validChannels=new Set(req.bundle.channels.filter(c=>[0,5].includes(Number(c.type))).map(c=>String(c.id))),validRoles=new Set(req.bundle.roles.map(r=>String(r.id)));
+    staff.leaveRequest={...staff.leaveRequest,enabled:Boolean(req.body.enabled),panelChannelId:validChannels.has(String(req.body.panelChannelId||''))?String(req.body.panelChannelId):'',reviewChannelId:validChannels.has(String(req.body.reviewChannelId||''))?String(req.body.reviewChannelId):'',reviewerRoleIds:arr(req.body.reviewerRoleIds).map(String).filter(x=>validRoles.has(x)&&x!==String(req.params.guildId)).slice(0,50),leaveRoleId:validRoles.has(String(req.body.leaveRoleId||''))?String(req.body.leaveRoleId):''};
+    cfg.staffManagement=staff;await store.saveConfig(req.params.guildId,cfg);redirectDashboard(req,res,'staff-leave');
+  }catch(e){next(e);}});
+
+  async function sendStaffPanelRoute(req,res,kind,section){
+    try{
+      const cfg=await store.getConfig(req.params.guildId),staff=staffManagementConfig(cfg),map={duty:staff.duty,event:staff.eventRequest,leave:staff.leaveRequest},target=map[kind];
+      if(!target?.panelChannelId)throw new Error('حدد شات اللوحة أولًا من هذا القسم.');
+      const payload=staffPanelPayload(kind,cfg),m=await sendPanelMessage(target.panelChannelId,target.panelMessageId,payload);target.panelMessageId=String(m.id);cfg.staffManagement=staff;await store.saveConfig(req.params.guildId,cfg);await botFetch(`/channels/${target.panelChannelId}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return redirectDashboard(req,res,section);
+    }catch(e){return res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}?section=${section}">رجوع</a></section>`,req.user));}
+  }
+  app.post('/dashboard/:guildId/staff/duty/send',requireLogin,requireGuildAccess,checkCsrf,(req,res)=>sendStaffPanelRoute(req,res,'duty','staff-duty'));
+  app.post('/dashboard/:guildId/staff/event/send',requireLogin,requireGuildAccess,checkCsrf,(req,res)=>sendStaffPanelRoute(req,res,'event','staff-event'));
+  app.post('/dashboard/:guildId/staff/leave/send',requireLogin,requireGuildAccess,checkCsrf,(req,res)=>sendStaffPanelRoute(req,res,'leave','staff-leave'));
 
   for(const which of ['bank','games','tickets','store','roles','name','guide','rules'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
 
