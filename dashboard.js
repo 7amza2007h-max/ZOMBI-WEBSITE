@@ -11,11 +11,12 @@
   document.body.classList.add('zombi-dashboard');
 
   const pageDefs = {
+    permissions: {label:'الرتب والصلاحيات',icon:'🛡️',desc:'تحكم عربي كامل بصلاحيات الرتب والقنوات وحماية الروابط والوسائط.'},
     warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
-    members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء وأدوات الإدارة.' },
+    members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
     xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإعدادات #p و#top.' },
     store: { label: 'المتجر', icon: '◆', desc: 'متجر الرتب، الأسعار، المميزات وشكل لوحة المتجر.' },
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
@@ -25,13 +26,22 @@
     heist: { label: 'النهب والحماية', icon: '🎯', desc: 'تحديات النهب، السجن، الكفالة وحماية الكاش.' },
     gangs: { label: 'العصابات والمهمات', icon: '🏴', desc: 'العصابات، الأعضاء، الخزنة وقوالب المهمات.' },
     robbery: { label: 'البنك المركزي', icon: '🚨', desc: 'فتح السرقة، المشاركون، التجهيزات والجوائز.' },
-    roles: { label: 'رتب الإشعارات', icon: '🔔', desc: 'لوحة Self Roles الاحترافية؛ العضو يأخذ أو يلغي الرتبة بنفسه.' },
+    director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
+    rules: { label: 'القوانين', icon: '📜', desc: 'لوحة قوانين تفاعلية؛ كل نوع يعرض قوانينه برسالة خاصة للعضو فقط.' },
+    suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
+    event: { label: 'الإيفنت', icon: '🎉', desc: 'نقاط الإيفنت ونقاط الترقية المستقلة، الشاتات والرتب وحد الترقية.' },
+    roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
     applications: { label: 'التقديمات', icon: '📝', desc: 'إنشاء نماذج تقديم متعددة، تحديد الشاتات والأسئلة ورتب المراجعة.' },
+    'staff-stats': {label:'إحصائيات الإدارة',icon:'📊',desc:'الدوام والتكتات والتقييم والنقاط لكل إداري.'},
+    'staff-insights': {label:'إعدادات الملفات والتقييم',icon:'🏆',desc:'رتب الملفات والمشاهدة والنقاط والترقيات وتقييم التكتات.'},
+    'staff-admin': {label:'قبول ورفض الإدارة',icon:'✅',desc:'أوامر قبول ورفض المتقدمين للإدارة والشات والرتب.'},
+    'staff-event-leave': {label:'إجازات الإيفنت',icon:'🏖️',desc:'لوحة إجازات الإيفنت ومراجعتها وإشعار انتهائها.'},
     'staff-duty': { label: 'دوام الإدارة', icon: '🕐', desc: 'لوحة دوام الإدارة وتقارير النشاط والوجود.' },
     'staff-event': { label: 'طلب فعالية', icon: '🎉', desc: 'لوحة طلب فعالية وشات مراجعة مستقل ورتب قبول/رفض.' },
     'staff-leave': { label: 'طلب إجازة', icon: '🏖️', desc: 'لوحة طلب إجازة وشات مراجعة مستقل ورتب قبول/رفض.' },
+    guide: { label: 'دليل السيرفر', icon: '🧭', desc: 'لوحة اختصارات تنقل الأعضاء مباشرة إلى الرومات التي تختارها.' },
     music: { label: 'الموسيقى', icon: '🎵', desc: 'تشغيل YouTube والتحكم بالصوت والطابور من شات أي فويس، حتى الرومات المؤقتة.' },
     voice: { label: 'الرومات الصوتية', icon: '◐', desc: 'الرومات المؤقتة ومكافآت الفويس وقنوات التحكم.' },
     premium: { label: 'الاشتراك والتخصيص', icon: '💎', desc: 'الاشتراك والحدود وتخصيص صورة البوت والبنر والـNickname لكل سيرفر.' }
@@ -39,14 +49,15 @@
 
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
-    ['إدارة الطاقم', ['staff-duty', 'staff-event', 'staff-leave']],
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions', 'event']],
+    ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
+    ['إدارة الطاقم', ['staff-stats', 'staff-insights', 'staff-duty', 'staff-admin', 'staff-event', 'staff-leave', 'staff-event-leave']],
     ['الاشتراك', ['premium']]
   ];
 
   const currentFromUrl = () => {
-    const s = new URLSearchParams(location.search).get('section') || 'overview';
+    let s = new URLSearchParams(location.search).get('section') || 'overview';
+    if(s==='staff-management')s='staff-duty';
     return pageDefs[s] ? s : 'overview';
   };
 
@@ -143,10 +154,15 @@
 
   const headingPage = text => {
     text = String(text || '');
+    if (text.includes('إدارة الرتب والصلاحيات المتقدمة')) return 'permissions';
     if (text.includes('⚠️ التحذيرات')) return 'warnings';
     if (text.includes('سجل السيرفر Log') || text.includes('مركز لوقات ZOMBI') || text.includes('لوقات ZOMBI')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
+    if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
+    if (text.includes('ZOMBI City Director')) return 'director';
+    if (text.includes('ZOMBI Suggestions Center')) return 'suggestions';
+    if (text.includes('ZOMBI Rules Center')) return 'rules';
     if (text.includes('Economy')) return 'economy';
     if (text.includes('Bank')) return 'city';
     if (text.includes('Levels')) return 'xp';
@@ -162,6 +178,8 @@
     if (text.includes('نظام التقديمات')) return 'applications';
     if (text.includes('متجر الرتب')) return 'store';
     if (text.includes('Self Roles')) return 'roles';
+    if (text.includes('الرتبة التلقائية')) return 'roles';
+    if (text.includes('تخصيص كل لوحة')) return 'premium';
     return 'overview';
   };
 
@@ -173,6 +191,13 @@
     let page = 'overview';
     for (const node of nodes) {
       if (node.tagName === 'H3') page = headingPage(node.textContent);
+      // Standalone system panels inside the legacy settings form must switch
+      // the active dashboard page themselves. Without this, Rules Center can
+      // be appended to the section that appeared before it and the Rules page
+      // shows only the cloned Send/Update action bar.
+      if (node.classList?.contains('rules-system-panel')) page = 'rules';
+      else if (node.classList?.contains('city-director-panel')) page = 'director';
+      else if (node.classList?.contains('event-system-panel')) page = 'event';
       ensureSettingsGroup(page).appendChild(node);
     }
     settingsGroups.forEach((w, pageId) => {
@@ -237,6 +262,8 @@
   moveControl('voiceCategory', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('voiceChannelIds', 'voice', 'إعداد قنوات الرومات الصوتية');
   moveControl('nameChangePanel', 'name', 'قناة لوحة تغيير الاسم');
+  moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
+  moveControl('cityDirector', 'director', 'قناة أحداث City Director');
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
@@ -298,6 +325,9 @@
     if (title.includes('دوام الإدارة')) return 'staff-duty';
     if (title.includes('طلب فعالية')) return 'staff-event';
     if (title.includes('طلب إجازة')) return 'staff-leave';
+    if (title.includes('أزرار دليل السيرفر')) return 'guide';
+    if (title.includes('ZOMBI Rules Center')) return 'rules';
+    if (title.includes('قوالب City Director')) return 'director';
     if (title.includes('متجر الرتب')) return 'store';
     if (title.includes('Self Roles')) return 'roles';
     if (title.includes('إدارة أرصدة')) return 'members';
@@ -305,17 +335,39 @@
     return null;
   };
 
+  const staffPanel=content.querySelector('.staff-management-panel');
+  if(staffPanel){
+    const kinds={insights:'staff-insights',duty:'staff-duty',adminDecision:'staff-admin',event:'staff-event',leave:'staff-leave',eventLeave:'staff-event-leave'};
+    [...staffPanel.querySelectorAll('form')].forEach(form=>{const page=kinds[form.querySelector('[name="kind"]')?.value];if(!page)return;const panel=document.createElement('section');panel.className='panel';panel.dataset.zPage=page;const heading=document.createElement('h2');heading.textContent=pageDefs[page].label;panel.append(heading,form);staffPanel.before(panel);});
+    staffPanel.remove();
+  }
   [...content.querySelectorAll(':scope > section.panel')].forEach(panel => {
-    if (panel === settingsForm) return;
+    if (panel === settingsForm || panel.dataset.zPage) return;
     const title = panel.querySelector(':scope > h2')?.textContent || '';
     if (panel.classList.contains('legacy-panel')) panel.dataset.zPage = 'overview';
     else if (panel.classList.contains('command-sync')) panel.dataset.zPage = 'overview';
     else {
       const page = pageByPanelTitle(title);
-      if (page) panel.dataset.zPage = page;
+      panel.dataset.zPage = page || 'overview';
     }
   });
 
+  const statsForm=content.querySelector('#staff-stats-filter'),statsResult=content.querySelector('#staff-stats-result');
+  let statsRequest=0;
+  async function loadStaffStats(page=1){
+    if(!statsForm)return;const request=++statsRequest;statsResult.textContent='جاري تحميل الإحصائيات…';
+    try{const params=new URLSearchParams(new FormData(statsForm));params.set('page',page);const response=await fetch(`/dashboard/${guildId}/staff-statistics?${params}`,{credentials:'same-origin'});if(!response.ok){let error;try{error=await response.json();}catch{}throw new Error(error?.error||'تعذر تحميل الإحصائيات. تأكد من تسجيل الدخول ومخزن البيانات.');}const data=await response.json();if(request!==statsRequest)return;statsResult.replaceChildren();
+      if(data.note){const p=document.createElement('p');p.textContent=data.note;statsResult.append(p);}
+      const wrap=document.createElement('div');wrap.className='staff-stats-scroll';const table=document.createElement('table');table.className='staff-stats-table';const head=table.createTHead().insertRow();['الإداري','الحالة','ساعات الدوام','الشفتات','الرسائل','ساعات الفويس','التكتات','تقييم الدعم','الإجازات','النقاط','الترقيات المقبولة / المعلقة'].forEach(text=>{const th=document.createElement('th');th.textContent=text;head.append(th);});const body=table.createTBody();
+      for(const row of data.rows){const tr=body.insertRow();[`${row.name} (${row.userId})`,row.onDuty?'على الدوام':'خارج الدوام',(row.dutyMs/3600000).toFixed(2),row.shifts,row.messages,(row.voiceMs/3600000).toFixed(2),row.tickets,row.ratings?`${row.avg.toFixed(2)}/5 (${row.ratings})`:'لا تقييم',row.leaves,`${row.points} / ${row.threshold}`,`${row.promotionsAccepted} / ${row.promotionsPending}`].forEach(value=>{tr.insertCell().textContent=String(value);});}wrap.append(table);statsResult.append(wrap);
+      if(!data.rows.length&&!data.note){const p=document.createElement('p');p.textContent='لا توجد ملفات مطابقة في هذه الصفحة. يمكنك البحث بمعرف الإداري.';statsResult.append(p);}
+      if(data.pages>1){const bar=document.createElement('div');bar.className='card-actions';const label=document.createElement('span');label.textContent=`صفحة ${data.page} من ${data.pages}`;bar.append(label);for(const [text,next] of [['السابق',data.page-1],['التالي',data.page+1]]){const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=text;button.disabled=next<1||next>data.pages;button.onclick=()=>loadStaffStats(next);bar.append(button);}statsResult.append(bar);}
+    }catch(error){if(request===statsRequest)statsResult.textContent=error.message;}
+  }
+  statsForm?.addEventListener('submit',event=>{event.preventDefault();loadStaffStats();});
+  nav.querySelector('[data-section="staff-stats"]')?.addEventListener('click',()=>loadStaffStats());
+  window.addEventListener('popstate',()=>{if(currentFromUrl()==='staff-stats')loadStaffStats();});
+  if(currentFromUrl()==='staff-stats')loadStaffStats();
   // Premium cards are wrapped in .two.
   [...content.querySelectorAll(':scope > .two')].forEach(two => {
     if ([...two.querySelectorAll('h2')].some(h => /Premium|حدود الخطة/.test(h.textContent))) two.dataset.zPage = 'premium';
@@ -328,7 +380,9 @@
     games: actionFor('/send/games'),
     tickets: actionFor('/send/tickets'),
     store: actionFor('/send/store'),
-    roles: actionFor('/send/roles')
+    roles: actionFor('/send/roles'),
+    guide: actionFor('/send/guide'),
+    rules: actionFor('/send/rules')
   };
 
   const extraByPage = new Map();
@@ -345,12 +399,21 @@
     return extraByPage.get(page);
   };
 
+  // HARD FIX: Rules Center is rendered as a standalone panel by server.js.
+  // Force it into the Rules page extra container so it cannot be lost/hidden
+  // by legacy settings grouping or DOM order changes.
+  const rulesPanel = content.querySelector('.rules-system-panel');
+  if (rulesPanel) {
+    rulesPanel.dataset.zPage = 'rules';
+    ensureExtra('rules').appendChild(rulesPanel);
+  }
+
   Object.entries(actionTargets).forEach(([page, form]) => {
     if (!form) return;
     const clone = form.cloneNode(true);
     clone.classList.add('z-panel-send-form');
     const btn = clone.querySelector('button');
-    if (btn) btn.textContent = page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
+    if (btn) btn.textContent = page === 'guide' ? '🧭 إرسال / تحديث دليل السيرفر' : page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
     const bar = document.createElement('div');
     bar.className = 'z-section-actionbar';
     bar.appendChild(clone);
@@ -421,92 +484,67 @@
     ensureSettingsGroup('premium').prepend(notice);
   }
 
-  // Save only the visible settings section.
-  // This is important because HTML constraint validation also checks hidden
-  // controls when they live inside the same <form>. Older builds therefore
-  // made every save button look broken when a value in another section was
-  // above its current plan limit.
+  // Reliable section-scoped saving.
+  // The server already saves only the section named in _settingsSection, so do not
+  // disable controls from other pages. Disabling fields caused stale/partial FormData
+  // and was the main reason one save could erase a previous save or require retries.
   if (settingsForm) {
-    let restoreTimer = null;
-    const originalDisabled = new WeakMap();
+    settingsForm.noValidate = true;
+    let sectionInput = settingsForm.querySelector(':scope > input[name="_settingsSection"]');
+    if (!sectionInput) {
+      sectionInput = document.createElement('input');
+      sectionInput.type = 'hidden';
+      sectionInput.name = '_settingsSection';
+      settingsForm.appendChild(sectionInput);
+    }
 
-    const sectionInput = document.createElement('input');
-    sectionInput.type = 'hidden';
-    sectionInput.name = '_settingsSection';
-    settingsForm.appendChild(sectionInput);
+    const resolvePage = button => button?.name === 'forceBotProfile'
+      ? 'overview'
+      : (button?.dataset?.page || currentFromUrl() || 'overview');
 
-    const restoreTemporarilyDisabled = () => {
-      clearTimeout(restoreTimer);
-      settingsForm.querySelectorAll('[data-z-save-temp-disabled="1"]').forEach(control => {
-        const wasDisabled = originalDisabled.get(control) === true;
-        control.disabled = wasDisabled;
-        control.removeAttribute('data-z-save-temp-disabled');
-        originalDisabled.delete(control);
-      });
-    };
-
-    const prepareSectionSave = (button, page) => {
-      restoreTemporarilyDisabled();
-      const group = settingsGroups.get(page);
-      if (!group) return true;
+    const markSection = button => {
+      const page = resolvePage(button);
       sectionInput.value = page;
-
-      const allowed = new Set(group.querySelectorAll('input,select,textarea,button'));
-      const csrfField = settingsForm.querySelector(':scope > input[name="_csrf"]');
-      if (csrfField) allowed.add(csrfField);
-      allowed.add(sectionInput);
-      allowed.add(button);
-
-      settingsForm.querySelectorAll('input,select,textarea,button').forEach(control => {
-        if (allowed.has(control)) return;
-        if (control.closest('.z-save-bar') && control.name === 'forceBotProfile' && page === 'overview') return;
-        originalDisabled.set(control, control.disabled === true);
-        if (!control.disabled) {
-          control.disabled = true;
-          control.dataset.zSaveTempDisabled = '1';
-        }
-      });
-
-      // Validate only the active page. Other pages are disabled above and
-      // therefore cannot silently cancel this submit.
-      if (!settingsForm.checkValidity()) {
-        settingsForm.reportValidity();
-        settingsForm.dispatchEvent(new Event('z-save-failed'));
-        restoreTemporarilyDisabled();
-        return false;
-      }
-
-      // upgrade.js serializes the form during the submit event. Keep the other
-      // pages disabled long enough for FormData to be built, then restore them
-      // in case the request is rejected without leaving the page.
-      restoreTimer = setTimeout(restoreTemporarilyDisabled, 1500);
-      return true;
+      if (button) button.dataset.page = page;
+      return page;
     };
 
-    let preparedSubmitter = null;
     settingsForm.addEventListener('click', event => {
       const button = event.target.closest('button[type="submit"]');
       if (!button || button.form !== settingsForm) return;
-      const page = button.name === 'forceBotProfile'
-        ? 'overview'
-        : (button.dataset.page || currentFromUrl());
-      button.dataset.page = page;
-      if (!prepareSectionSave(button, page)) { event.preventDefault(); return; }
-      preparedSubmitter = button;
+      markSection(button);
+      // Validation belongs to the active server-side section. Hidden controls on
+      // another page must never cancel this submit.
+      button.formNoValidate = true;
     }, true);
 
-    // Keyboard submits / requestSubmit() do not always produce a click event.
-    // Prepare the active section again at submit time so only that page is sent.
     settingsForm.addEventListener('submit', event => {
       if (event.defaultPrevented) return;
-      const button = event.submitter || preparedSubmitter || settingsForm.querySelector('.z-local-save:not(.z-section-hidden)') || settingsForm.querySelector('.z-save-bar button[type="submit"]');
-      if (!button) return;
-      const page = button.name === 'forceBotProfile' ? 'overview' : (button.dataset.page || currentFromUrl());
-      if (preparedSubmitter !== button && !prepareSectionSave(button, page)) event.preventDefault();
-      preparedSubmitter = null;
+      const button = event.submitter || settingsForm.querySelector(`button[type="submit"][data-page="${currentFromUrl()}"]`) || settingsForm.querySelector('.z-save-bar button[type="submit"]');
+      markSection(button);
+      if (settingsForm.dataset.zSaving === '1') {
+        event.preventDefault();
+        return;
+      }
+      settingsForm.dataset.zSaving = '1';
+      if (button) {
+        button.dataset.zOldText = button.textContent;
+        button.textContent = '⏳ جارٍ الحفظ...';
+      }
+      // If navigation is blocked by a server/network error, re-enable saving.
+      setTimeout(() => {
+        settingsForm.dataset.zSaving = '0';
+        if (button?.dataset?.zOldText) button.textContent = button.dataset.zOldText;
+      }, 8000);
     }, true);
 
-    settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
+    settingsForm.addEventListener('z-save-failed', () => {
+      settingsForm.dataset.zSaving = '0';
+      settingsForm.querySelectorAll('button[data-z-old-text]').forEach(button => {
+        button.textContent = button.dataset.zOldText;
+        delete button.dataset.zOldText;
+      });
+    });
   }
 
   const allPostForms = () => [...content.querySelectorAll('form[method="post" i]')];
