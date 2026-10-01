@@ -1784,7 +1784,25 @@ async function start(){
 
     access.restoreLocked(beforeSettings,cfg,site);
     cfg.setupComplete=true;
-    const saved=await store.saveConfig(req.params.guildId,cfg);
+    // Save only the fields that changed in this request, merged atomically with
+    // the latest DB row. This prevents the bot or another dashboard request from
+    // overwriting a successful save with an older full config snapshot.
+    const saved=store.saveConfigDelta
+      ? await store.saveConfigDelta(req.params.guildId,beforeSettings,cfg)
+      : await store.saveConfig(req.params.guildId,cfg);
+
+    // Never show ?saved=1 unless the persisted row can be read back immediately.
+    // This turns silent/illusory saves into a visible error instead of claiming success.
+    const persisted=await store.getConfig(req.params.guildId);
+    const verifyKeys={
+      overview:['system','features','branding','welcome'], economy:['currency','economy','channels'], members:['moderation','autoRole','roleSecurity'], xp:['levels','channels'],
+      store:['store','channels','panelMedia'], games:['games','channels','panelMedia'], city:['bank','channels','panelMedia'], heist:['bank'], gangs:['gangs','channels'], robbery:['robbery','channels'],
+      roles:['rolePanel','channels','panelMedia'], name:['nameChange','channels','panelMedia'], tickets:['tickets','channels','panelMedia'], voice:['voiceRooms','channels'], guide:['serverGuide','channels','panelMedia'],
+      director:['cityDirector','channels'], suggestions:['suggestions'], rules:['rules','panelMedia'], music:['music'], logs:['logging','moderation','channels'], warnings:['warnings'], permissions:['roleSecurity']
+    };
+    const keys=settingsSection==='all'?Object.keys(cfg):verifyKeys[settingsSection]||[];
+    const mismatch=keys.find(key=>JSON.stringify(persisted?.[key]??null)!==JSON.stringify(saved?.[key]??null));
+    if(mismatch)throw new Error(`فشل التحقق من حفظ قسم ${settingsSection} (${mismatch}). لم يتم اعتبار العملية محفوظة.`);
 
     if(saves('members')){
       // إذا تغيّرت رتبة العقوبة، امسح فقط البتّات التي يديرها ZOMBI من الرتبة القديمة.

@@ -58,6 +58,49 @@ async function resolveEntitlement(p,gid,rawCfg){
 function applyRecovered(cfg,ent){if(!ent)return cfg;const current=planNameForConfig(cfg),until=premiumUntilForConfig(cfg)||explicitLegacyLifetime(cfg);if(planRank(ent.plan)>planRank(current)||(planRank(ent.plan)===planRank(current)&&Number(ent.premiumUntil)>Number(until))){cfg.plan=normalizePlanId(ent.plan);cfg.premiumUntil=Number(ent.premiumUntil);}return cfg;}
 async function getConfig(guildId){if(!dbEnabled())return local.getConfig(guildId);const p=await ensureDb(),id=String(guildId),r=await p.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1',[id]),raw=r.rows[0]?.config||local.defaults(id),ent=await resolveEntitlement(p,id,raw),cfg=local.normalizeConfig(applyRecovered(local.normalizeConfig(raw,id),ent),id);if(!sameJson(raw,cfg))await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(cfg),Date.now()]);const e=entitlementFromConfig(cfg);if(e)await putEntitlement(p,id,e.plan,e.premiumUntil,Number(cfg.subscriptionUpdatedAt||0)||Date.now());return clone(cfg);}
 async function saveConfig(guildId,input){if(!dbEnabled())return local.saveConfig(guildId,input);const p=await ensureDb(),id=String(guildId),cfg=local.normalizeConfig(input,id);await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(cfg),Date.now()]);const e=entitlementFromConfig(cfg);if(e)await putEntitlement(p,id,e.plan,e.premiumUntil,Number(cfg.subscriptionUpdatedAt||0)||Date.now());return clone(cfg);}
+
+function deepDelta(before,after){
+  if(sameJson(before,after))return undefined;
+  if(Array.isArray(before)||Array.isArray(after)||!before||!after||typeof before!=='object'||typeof after!=='object')return clone(after);
+  const out={};
+  for(const key of new Set([...Object.keys(before||{}),...Object.keys(after||{})])){
+    if(!Object.prototype.hasOwnProperty.call(after||{},key)){out[key]=null;continue;}
+    const d=deepDelta(before?.[key],after?.[key]);
+    if(d!==undefined)out[key]=d;
+  }
+  return Object.keys(out).length?out:undefined;
+}
+function applyDelta(target,delta){
+  if(delta===undefined)return clone(target);
+  if(Array.isArray(delta)||!delta||typeof delta!=='object')return clone(delta);
+  const out=(target&&typeof target==='object'&&!Array.isArray(target))?clone(target):{};
+  for(const [key,value] of Object.entries(delta)){
+    if(value===null){delete out[key];continue;}
+    out[key]=applyDelta(out[key],value);
+  }
+  return out;
+}
+async function saveConfigDelta(guildId,before,input){
+  if(!dbEnabled()){
+    const latest=local.getConfig(guildId),delta=deepDelta(local.normalizeConfig(before,guildId),local.normalizeConfig(input,guildId));
+    return local.saveConfig(guildId,local.normalizeConfig(applyDelta(latest,delta),guildId));
+  }
+  const p=await ensureDb(),c=await p.connect(),id=String(guildId);
+  try{
+    await c.query('BEGIN');
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`zombi_cfg:${id}`]);
+    const r=await c.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1 FOR UPDATE',[id]);
+    const latest=local.normalizeConfig(r.rows[0]?.config||local.defaults(id),id);
+    const normalizedBefore=local.normalizeConfig(before,id),normalizedInput=local.normalizeConfig(input,id);
+    const delta=deepDelta(normalizedBefore,normalizedInput);
+    const merged=local.normalizeConfig(applyDelta(latest,delta),id);
+    await c.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(merged),Date.now()]);
+    const e=entitlementFromConfig(merged);if(e)await putEntitlement(c,id,e.plan,e.premiumUntil,Number(merged.subscriptionUpdatedAt||0)||Date.now());
+    await c.query('COMMIT');
+    return clone(merged);
+  }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
+}
+
 async function patchConfig(guildId,patch){const current=await getConfig(guildId),next=clone(current);for(const [section,value] of Object.entries(patch||{}))next[section]=(value&&typeof value==='object'&&!Array.isArray(value))?{...(next[section]||{}),...value}:value;return saveConfig(guildId,next);}
 async function data(guildId,name,fallback={}){if(!dbEnabled())return local.data(guildId,name,fallback);const p=await ensureDb(),r=await p.query('SELECT data FROM zombi_guild_data WHERE guild_id=$1 AND name=$2',[String(guildId),String(name)]);return clone(r.rows[0]?.data??fallback);}
 async function saveData(guildId,name,value){if(!dbEnabled())return local.saveData(guildId,name,value);const p=await ensureDb();await p.query(`INSERT INTO zombi_guild_data(guild_id,name,data,updated_at) VALUES($1,$2,$3::jsonb,$4) ON CONFLICT(guild_id,name) DO UPDATE SET data=EXCLUDED.data,updated_at=EXCLUDED.updated_at`,[String(guildId),String(name),jsonParam(value),Date.now()]);return clone(value);}
@@ -78,4 +121,4 @@ async function getCodes(){if(!dbEnabled())return local.getCodes();const p=await 
 async function createCode(days=30,plan='premium'){plan=normalizePlanId(plan);if(!['premium','premium_plus'].includes(plan))throw new Error('خطة غير صالحة.');if(!dbEnabled())return local.createCode(days,plan);const p=await ensureDb(),chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let code='';for(let tries=0;tries<10;tries++){let s='ZOMBI-';for(let i=0;i<12;i++)s+=chars[Math.floor(Math.random()*chars.length)];try{await p.query(`INSERT INTO zombi_premium_codes(code,days,created_at,used_at,used_by_guild_id,plan) VALUES($1,$2,$3,0,'',$4)`,[s,Math.max(1,Math.min(3650,Math.round(Number(days)||30))),Date.now(),plan]);code=s;break;}catch(e){if(e.code!=='23505')throw e;}}if(!code)throw new Error('تعذر إنشاء كود.');return{code,plan,days:Math.max(1,Math.min(3650,Math.round(Number(days)||30))),createdAt:Date.now(),usedAt:0,usedByGuildId:''};}
 async function redeemCode(guildId,code){if(!dbEnabled())return local.redeemCode(guildId,code);const p=await ensureDb(),c=await p.connect();try{await c.query('BEGIN');const r=await c.query('SELECT * FROM zombi_premium_codes WHERE code=$1 FOR UPDATE',[String(code||'').trim().toUpperCase()]),row=r.rows[0];if(!row)throw new Error('كود التفعيل غير صحيح.');if(Number(row.used_at||0))throw new Error('هذا الكود مستخدم مسبقًا.');await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[String(guildId)]);const cr=await c.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1 FOR UPDATE',[String(guildId)]),cfg=local.normalizeConfig(cr.rows[0]?.config||{},String(guildId));if(planNameForConfig(cfg)==='premium_plus'&&normalizePlanId(row.plan)==='premium')throw new Error('لديك Premium+ فعّال؛ استخدم هذا الكود بعد انتهاء اشتراكك.');const normalized=local.normalizeConfig(applySubscription(cfg,Number(row.days),row.plan||'premium'),String(guildId));await c.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[String(guildId),jsonParam(normalized),Date.now()]);const now=Date.now();await c.query('UPDATE zombi_premium_codes SET used_at=$1,used_by_guild_id=$2 WHERE code=$3',[now,String(guildId),row.code]);const e=entitlementFromConfig(normalized);if(e)await c.query(`INSERT INTO zombi_subscription_entitlements(guild_id,plan,premium_until,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT(guild_id) DO UPDATE SET plan=EXCLUDED.plan,premium_until=EXCLUDED.premium_until,updated_at=EXCLUDED.updated_at`,[String(guildId),e.plan,e.premiumUntil,now]);await c.query('COMMIT');return{item:{code:row.code,plan:row.plan||'premium',days:Number(row.days),createdAt:Number(row.created_at),usedAt:now,usedByGuildId:String(guildId)},config:normalized};}catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}}
 async function health(){if(!dbEnabled())return{mode:'local-json',ok:true};try{const p=await ensureDb();await p.query('SELECT 1');return{mode:'postgres',ok:true};}catch(e){return{mode:'postgres',ok:false,error:e.message};}}
-module.exports={dbEnabled,ensureDb,getConfig,saveConfig,patchConfig,data,saveData,getGameContent,saveGameContent,getEconomy,getUser,updateUser,transferBalance,allGuildIds,isPremium,setPremium,removePremium,getGlobalConfig,saveGlobalConfig,getCodes,createCode,redeemCode,health};
+module.exports={dbEnabled,ensureDb,getConfig,saveConfig,saveConfigDelta,patchConfig,data,saveData,getGameContent,saveGameContent,getEconomy,getUser,updateUser,transferBalance,allGuildIds,isPremium,setPremium,removePremium,getGlobalConfig,saveGlobalConfig,getCodes,createCode,redeemCode,health};
