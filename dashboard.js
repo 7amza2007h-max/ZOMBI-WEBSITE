@@ -211,6 +211,8 @@
         localSave.type = 'submit';
         localSave.className = 'btn primary z-local-save';
         localSave.dataset.page = pageId;
+        localSave.name = '_saveSection';
+        localSave.value = pageId;
         localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
         localBar.appendChild(localSave);
         w.appendChild(localBar);
@@ -311,7 +313,7 @@
     const heistGroup=ensureSettingsGroup('heist');
     heistGroup.innerHTML='<h3>🎯 النهب والحماية والكفالة</h3><div class="form-grid z-heist-fields"></div>';
     settingsForm.querySelectorAll('[name]').forEach(field=>{if(/^(heist|cashProtection)/.test(field.name)){const label=field.closest('label');if(label)heistGroup.querySelector('.z-heist-fields').appendChild(label);}});
-    const bar=document.createElement('div');bar.className='z-local-save-bar';bar.innerHTML='<button type="submit" class="btn primary z-local-save" data-page="heist">💾 حفظ النهب والحماية</button>';heistGroup.appendChild(bar);settingsForm.appendChild(heistGroup);
+    const bar=document.createElement('div');bar.className='z-local-save-bar';bar.innerHTML='<button type="submit" name="_saveSection" value="heist" class="btn primary z-local-save" data-page="heist">💾 حفظ النهب والحماية</button>';heistGroup.appendChild(bar);settingsForm.appendChild(heistGroup);
   }
 
   // Mark major dashboard cards so only their section is visible.
@@ -505,7 +507,7 @@
     const markSection = button => {
       const page = resolvePage(button);
       sectionInput.value = page;
-      if (button) button.dataset.page = page;
+      if (button) { button.dataset.page = page; if (button.name === '_saveSection' || button.classList.contains('z-local-save') || button.closest('.z-save-bar')) { button.name = '_saveSection'; button.value = page; } }
       return page;
     };
 
@@ -583,6 +585,8 @@
       const saveBtn = settingsForm.querySelector('.z-save-bar button[type="submit"]:not([name="forceBotProfile"])');
       if (saveBtn) {
         saveBtn.dataset.page = section;
+        saveBtn.name = '_saveSection';
+        saveBtn.value = section;
         saveBtn.textContent = section === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${def.label}`;
       }
       settingsForm.querySelectorAll('.z-local-save').forEach(btn => {
