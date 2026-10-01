@@ -33,6 +33,11 @@
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
+    applications: { label: 'التقديمات', icon: '📝', desc: 'إنشاء نماذج تقديم متعددة، تحديد الشاتات والأسئلة ورتب المراجعة.' },
+    'staff-stats': {label:'إحصائيات الإدارة',icon:'📊',desc:'الدوام والتكتات والتقييم والنقاط لكل إداري.'},
+    'staff-insights': {label:'إعدادات الملفات والتقييم',icon:'🏆',desc:'رتب الملفات والمشاهدة والنقاط والترقيات وتقييم التكتات.'},
+    'staff-admin': {label:'قبول ورفض الإدارة',icon:'✅',desc:'أوامر قبول ورفض المتقدمين للإدارة والشات والرتب.'},
+    'staff-event-leave': {label:'إجازات الإيفنت',icon:'🏖️',desc:'لوحة إجازات الإيفنت ومراجعتها وإشعار انتهائها.'},
     'staff-duty': { label: 'دوام الإدارة', icon: '🕐', desc: 'لوحة دوام الإدارة وتقارير النشاط والوجود.' },
     'staff-event': { label: 'طلب فعالية', icon: '🎉', desc: 'لوحة طلب فعالية وشات مراجعة مستقل ورتب قبول/رفض.' },
     'staff-leave': { label: 'طلب إجازة', icon: '🏖️', desc: 'لوحة طلب إجازة وشات مراجعة مستقل ورتب قبول/رفض.' },
@@ -45,13 +50,14 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions', 'event']],
-    ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'music', 'voice']],
-    ['إدارة الطاقم', ['staff-duty', 'staff-event', 'staff-leave']],
+    ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
+    ['إدارة الطاقم', ['staff-stats', 'staff-insights', 'staff-duty', 'staff-admin', 'staff-event', 'staff-leave', 'staff-event-leave']],
     ['الاشتراك', ['premium']]
   ];
 
   const currentFromUrl = () => {
-    const s = new URLSearchParams(location.search).get('section') || 'overview';
+    let s = new URLSearchParams(location.search).get('section') || 'overview';
+    if(s==='staff-management')s='staff-duty';
     return pageDefs[s] ? s : 'overview';
   };
 
@@ -169,6 +175,7 @@
     if (text.includes('🎮 الألعاب')) return 'games';
     if (text.includes('تغيير الاسم')) return 'name';
     if (text.includes('التذاكر')) return 'tickets';
+    if (text.includes('نظام التقديمات')) return 'applications';
     if (text.includes('متجر الرتب')) return 'store';
     if (text.includes('Self Roles')) return 'roles';
     if (text.includes('الرتبة التلقائية')) return 'roles';
@@ -314,6 +321,7 @@
     if (title.includes('من القاتل')) return 'killer';
     if (title.includes('قوالب مهمات العصابات') || title.includes('العصابات الحالية')) return 'gangs';
     if (title.includes('أنواع التذاكر')) return 'tickets';
+    if (title.includes('نظام التقديمات')) return 'applications';
     if (title.includes('دوام الإدارة')) return 'staff-duty';
     if (title.includes('طلب فعالية')) return 'staff-event';
     if (title.includes('طلب إجازة')) return 'staff-leave';
@@ -327,17 +335,39 @@
     return null;
   };
 
+  const staffPanel=content.querySelector('.staff-management-panel');
+  if(staffPanel){
+    const kinds={insights:'staff-insights',duty:'staff-duty',adminDecision:'staff-admin',event:'staff-event',leave:'staff-leave',eventLeave:'staff-event-leave'};
+    [...staffPanel.querySelectorAll('form')].forEach(form=>{const page=kinds[form.querySelector('[name="kind"]')?.value];if(!page)return;const panel=document.createElement('section');panel.className='panel';panel.dataset.zPage=page;const heading=document.createElement('h2');heading.textContent=pageDefs[page].label;panel.append(heading,form);staffPanel.before(panel);});
+    staffPanel.remove();
+  }
   [...content.querySelectorAll(':scope > section.panel')].forEach(panel => {
-    if (panel === settingsForm) return;
+    if (panel === settingsForm || panel.dataset.zPage) return;
     const title = panel.querySelector(':scope > h2')?.textContent || '';
     if (panel.classList.contains('legacy-panel')) panel.dataset.zPage = 'overview';
     else if (panel.classList.contains('command-sync')) panel.dataset.zPage = 'overview';
     else {
       const page = pageByPanelTitle(title);
-      if (page) panel.dataset.zPage = page;
+      panel.dataset.zPage = page || 'overview';
     }
   });
 
+  const statsForm=content.querySelector('#staff-stats-filter'),statsResult=content.querySelector('#staff-stats-result');
+  let statsRequest=0;
+  async function loadStaffStats(page=1){
+    if(!statsForm)return;const request=++statsRequest;statsResult.textContent='جاري تحميل الإحصائيات…';
+    try{const params=new URLSearchParams(new FormData(statsForm));params.set('page',page);const response=await fetch(`/dashboard/${guildId}/staff-statistics?${params}`,{credentials:'same-origin'});if(!response.ok){let error;try{error=await response.json();}catch{}throw new Error(error?.error||'تعذر تحميل الإحصائيات. تأكد من تسجيل الدخول ومخزن البيانات.');}const data=await response.json();if(request!==statsRequest)return;statsResult.replaceChildren();
+      if(data.note){const p=document.createElement('p');p.textContent=data.note;statsResult.append(p);}
+      const wrap=document.createElement('div');wrap.className='staff-stats-scroll';const table=document.createElement('table');table.className='staff-stats-table';const head=table.createTHead().insertRow();['الإداري','الحالة','ساعات الدوام','الشفتات','الرسائل','ساعات الفويس','التكتات','تقييم الدعم','الإجازات','النقاط','الترقيات المقبولة / المعلقة'].forEach(text=>{const th=document.createElement('th');th.textContent=text;head.append(th);});const body=table.createTBody();
+      for(const row of data.rows){const tr=body.insertRow();[`${row.name} (${row.userId})`,row.onDuty?'على الدوام':'خارج الدوام',(row.dutyMs/3600000).toFixed(2),row.shifts,row.messages,(row.voiceMs/3600000).toFixed(2),row.tickets,row.ratings?`${row.avg.toFixed(2)}/5 (${row.ratings})`:'لا تقييم',row.leaves,`${row.points} / ${row.threshold}`,`${row.promotionsAccepted} / ${row.promotionsPending}`].forEach(value=>{tr.insertCell().textContent=String(value);});}wrap.append(table);statsResult.append(wrap);
+      if(!data.rows.length&&!data.note){const p=document.createElement('p');p.textContent='لا توجد ملفات مطابقة في هذه الصفحة. يمكنك البحث بمعرف الإداري.';statsResult.append(p);}
+      if(data.pages>1){const bar=document.createElement('div');bar.className='card-actions';const label=document.createElement('span');label.textContent=`صفحة ${data.page} من ${data.pages}`;bar.append(label);for(const [text,next] of [['السابق',data.page-1],['التالي',data.page+1]]){const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=text;button.disabled=next<1||next>data.pages;button.onclick=()=>loadStaffStats(next);bar.append(button);}statsResult.append(bar);}
+    }catch(error){if(request===statsRequest)statsResult.textContent=error.message;}
+  }
+  statsForm?.addEventListener('submit',event=>{event.preventDefault();loadStaffStats();});
+  nav.querySelector('[data-section="staff-stats"]')?.addEventListener('click',()=>loadStaffStats());
+  window.addEventListener('popstate',()=>{if(currentFromUrl()==='staff-stats')loadStaffStats();});
+  if(currentFromUrl()==='staff-stats')loadStaffStats();
   // Premium cards are wrapped in .two.
   [...content.querySelectorAll(':scope > .two')].forEach(two => {
     if ([...two.querySelectorAll('h2')].some(h => /Premium|حدود الخطة/.test(h.textContent))) two.dataset.zPage = 'premium';

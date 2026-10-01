@@ -364,3 +364,5 @@ body.zombi-dashboard::after{
 .zombi-dashboard .game-table tbody td{background:rgba(12,14,19,.84)!important}
 .zombi-dashboard .z-save-bar{border-color:rgba(244,63,94,.28)!important;background:rgba(10,11,15,.94)!important;box-shadow:0 18px 50px rgba(0,0,0,.44)!important}
 @media(max-width:900px){body.zombi-dashboard{background-attachment:scroll!important}.zombi-dashboard .z-dashboard-sidebar{border-radius:0!important}.zombi-dashboard .z-settings-page{padding:16px!important}}
+
+.staff-stats-scroll{overflow-x:auto;max-width:100%}.staff-stats-table{width:100%;border-collapse:collapse;white-space:nowrap}.staff-stats-table th,.staff-stats-table td{padding:12px;text-align:right;border-bottom:1px solid #ffffff20}#staff-stats-filter{margin-bottom:16px}#staff-stats-result{min-height:60px}
