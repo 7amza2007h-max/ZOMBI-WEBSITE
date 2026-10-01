@@ -1210,9 +1210,14 @@ async function start(){
   app.post('/dashboard/:guildId/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
     const beforeSettings=structuredClone(cfg);
-    const requestedSection=String(req.body?._settingsSection||'all').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'all';
+    // Never interpret a missing section marker as "save everything". Older
+    // frontend builds occasionally lost _settingsSection during submit, which
+    // made unchecked/missing controls from unrelated pages overwrite saved
+    // values. A full save is now allowed only when the request explicitly says
+    // _settingsSection=all.
+    const requestedSection=String(req.body?._settingsSection||'overview').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'overview';
     const knownSections=new Set(['all','permissions','warnings','logs','overview','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
-    const settingsSection=knownSections.has(requestedSection)?requestedSection:'all';
+    const settingsSection=knownSections.has(requestedSection)?requestedSection:'overview';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
 
@@ -1254,11 +1259,19 @@ async function start(){
       if(cfg.cityDirector.rewardMax<cfg.cityDirector.rewardMin)cfg.cityDirector.rewardMax=cfg.cityDirector.rewardMin;
     }
 
-    const panelMediaKeys=['bank','games','tickets','store','roles','name','guide','rules'];
+    const panelMediaSections={bank:'city',games:'games',tickets:'tickets',store:'store',roles:'roles',name:'name',guide:'guide',rules:'rules'};
     cfg.panelMedia={...(cfg.panelMedia||{})};
-    for(const key of panelMediaKeys){
+    for(const [key,section] of Object.entries(panelMediaSections)){
+      if(!saves(section))continue;
       const bannerField=`panelMedia_${key}_bannerUrl`,thumbField=`panelMedia_${key}_thumbnailUrl`;
-      if(has(bannerField)||has(thumbField))cfg.panelMedia[key]={...(cfg.panelMedia[key]||{}),bannerUrl:String(req.body[bannerField]||'').trim(),thumbnailUrl:String(req.body[thumbField]||'').trim()};
+      if(has(bannerField)||has(thumbField)){
+        const previous=cfg.panelMedia[key]||{};
+        cfg.panelMedia[key]={
+          ...previous,
+          bannerUrl:has(bannerField)?String(req.body[bannerField]||'').trim():String(previous.bannerUrl||''),
+          thumbnailUrl:has(thumbField)?String(req.body[thumbField]||'').trim():String(previous.thumbnailUrl||'')
+        };
+      }
     }
 
     if(saves('economy')){
@@ -1375,8 +1388,13 @@ async function start(){
       const selected=String(req.body.logs||'');
       if(selected&&!req.bundle.channels.some(c=>c.id===selected&&[0,5].includes(c.type)))return res.status(400).send('روم اللوج غير صالح لهذا السيرفر.');
     }
-    const channelNames=['logs','logBank','logEconomy','logGangs','logRobbery','logTickets','logStore','logWarnings','logGames','logLevels','logVoice','logMusic','logModeration','logMessages','logMembers','logCommands','logPanels','logRoles','logNameChange','logPremium','logEvent','logSystem','levelUp','zom','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel','serverGuidePanel','cityDirector'];
-    for(const name of channelNames){if(has(name))cfg.channels[name]=String(req.body[name]||'');}
+    const channelSections={
+      logs:'logs',logBank:'logs',logEconomy:'logs',logGangs:'logs',logRobbery:'logs',logTickets:'logs',logStore:'logs',logWarnings:'logs',logGames:'logs',logLevels:'logs',logVoice:'logs',logMusic:'logs',logModeration:'logs',logMessages:'logs',logMembers:'logs',logCommands:'logs',logPanels:'logs',logRoles:'logs',logNameChange:'logs',logPremium:'logs',logEvent:'logs',logSystem:'logs',
+      levelUp:'xp',zom:'economy',gamePanel:'games',ticketPanel:'tickets',ticketCategory:'tickets',storePanel:'store',rolePanel:'roles',bankPanel:'city',centralBank:'robbery',gangCategory:'gangs',gangLogs:'gangs',voiceCreate:'voice',voiceControl:'voice',voiceCategory:'voice',nameChangePanel:'name',serverGuidePanel:'guide',cityDirector:'director'
+    };
+    for(const [name,section] of Object.entries(channelSections)){
+      if(has(name)&&saves(section))cfg.channels[name]=String(req.body[name]||'');
+    }
 
     if(saves('city')){
       cfg.bank={
@@ -2016,6 +2034,45 @@ async function start(){
   app.post('/dashboard/:guildId/gang-missions/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{let list=await store.data(req.params.guildId,'gang-missions.json',[]);list=list.filter(x=>String(x.id)!==String(req.body.missionId));await store.saveData(req.params.guildId,'gang-missions.json',list);redirectDashboard(req,res);}catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/restore-legacy',requireLogin,requireOwner,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');if(String(req.params.guildId)!==homeId)return res.status(403).send('الاسترجاع متاح لسيرفر ZOMBI الأصلي فقط.');const current=await store.getConfig(homeId),keep={plan:current.plan,premiumUntil:current.premiumUntil,createdAt:current.createdAt},cfg={...legacyPreset.config,...keep,legacyPresetVersion:'v8.8',legacyPresetImportedAt:Date.now()};await store.saveConfig(homeId,cfg);for(const [name,value] of Object.entries(legacyPreset.data||{}))await store.saveData(homeId,name,value);res.redirect(`/dashboard/${homeId}`);}catch(e){next(e);}});
+
+  // ===============================
+  // 📜 Rules Center CRUD + instant panel refresh
+  // ===============================
+  app.post('/dashboard/:guildId/rules/settings',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId);
+    cfg.rules={...(cfg.rules||{}),
+      enabled:Boolean(req.body.enabled),
+      channelId:String(req.body.channelId||''),
+      title:String(req.body.title||'📜 ZOMBI • قوانين السيرفر').slice(0,256),
+      description:String(req.body.description||'').slice(0,2000),
+      footer:String(req.body.footer||'ZOMBI • RULES CENTER').slice(0,160),
+      color:/^#[0-9a-f]{6}$/i.test(String(req.body.color||''))?String(req.body.color):'#E11D48',
+      logoUrl:String(req.body.logoUrl||'').trim(),
+      bannerUrl:String(req.body.bannerUrl||'').trim()
+    };
+    const saved=await store.saveConfig(req.params.guildId,cfg);
+    if(saved.rules?.channelId && (saved.rules?.types||[]).some(x=>x.enabled!==false)) await sendPanel('rules',req.params.guildId,req.bundle,{config:saved}).catch(()=>{});
+    redirectDashboard(req,res,'rules');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/rules/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId);cfg.rules=cfg.rules||{};cfg.rules.types=Array.isArray(cfg.rules.types)?cfg.rules.types:[];
+    if(cfg.rules.types.length>=25)throw new Error('الحد الأقصى 25 قسم قوانين.');
+    let id=slug(req.body.label)||`rules-${Date.now().toString(36)}`;while(cfg.rules.types.some(x=>String(x.id)===id))id=`${id}-${Math.floor(Math.random()*99)}`;
+    cfg.rules.types.push({id,label:String(req.body.label||'قوانين').slice(0,90),emoji:String(req.body.emoji||'📜').slice(0,32),description:String(req.body.description||'').slice(0,100),content:String(req.body.content||'').slice(0,12000),enabled:Boolean(req.body.enabled),sortOrder:int(req.body.sortOrder,10,0,9999)});
+    const saved=await store.saveConfig(req.params.guildId,cfg);if(saved.rules?.channelId)await sendPanel('rules',req.params.guildId,req.bundle,{config:saved}).catch(()=>{});redirectDashboard(req,res,'rules');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/rules/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),id=String(req.body.ruleId||''),item=(cfg.rules?.types||[]).find(x=>String(x.id)===id);if(!item)throw new Error('قسم القوانين غير موجود.');
+    item.label=String(req.body.label||item.label||'قوانين').slice(0,90);item.emoji=String(req.body.emoji||'📜').slice(0,32);item.description=String(req.body.description||'').slice(0,100);item.content=String(req.body.content||'').slice(0,12000);item.enabled=Boolean(req.body.enabled);item.sortOrder=int(req.body.sortOrder,item.sortOrder||10,0,9999);
+    const saved=await store.saveConfig(req.params.guildId,cfg);if(saved.rules?.channelId)await sendPanel('rules',req.params.guildId,req.bundle,{config:saved}).catch(()=>{});redirectDashboard(req,res,'rules');
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/rules/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId),id=String(req.body.ruleId||'');cfg.rules=cfg.rules||{};cfg.rules.types=(cfg.rules.types||[]).filter(x=>String(x.id)!==id);
+    const saved=await store.saveConfig(req.params.guildId,cfg);if(saved.rules?.channelId && (saved.rules?.types||[]).some(x=>x.enabled!==false))await sendPanel('rules',req.params.guildId,req.bundle,{config:saved}).catch(()=>{});redirectDashboard(req,res,'rules');
+  }catch(e){next(e);}});
 
   for(const which of ['bank','games','tickets','store','roles','name','guide','rules'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
 
