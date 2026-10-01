@@ -553,7 +553,7 @@ async function guildPage(req){
     <div class="form-grid"><label>حالة البوت<input name="presenceText" value="${esc(cfg.system?.presenceText||'ZOM Economy | /help')}"></label><label>Presence<select name="presenceStatus"><option value="online" ${cfg.system?.presenceStatus==='online'?'selected':''}>Online</option><option value="idle" ${cfg.system?.presenceStatus==='idle'?'selected':''}>Idle</option><option value="dnd" ${cfg.system?.presenceStatus==='dnd'?'selected':''}>DND</option><option value="invisible" ${cfg.system?.presenceStatus==='invisible'?'selected':''}>Invisible</option></select></label><label>اسم العملة ${lockedNote(canCurrency)}<input name="currencyName" value="${esc(cfg.currency.name)}" ${disabled(canCurrency)}></label><label>Emoji العملة<input name="currencyEmoji" value="${esc(cfg.currency.emoji)}"></label><label>لون Embed ${lockedNote(canBrand)}<input name="brandColor" value="${esc(cfg.branding.color)}" ${disabled(canBrand)}></label><label>اسم ZOMBI في اللوحات ${lockedNote(canBrand)}<input name="customName" value="${esc(cfg.branding.customName)}" ${disabled(canBrand)}></label><label>Footer مخصص ${lockedNote(canBrand)}<input name="customFooter" value="${esc(cfg.branding.customFooter)}" ${disabled(canBrand)}></label><label>Nickname البوت داخل السيرفر ${lockedNote(canBotProfile,profileLockText)}<input name="botNickname" value="${esc(cfg.branding.botNickname||'')}" ${disabled(canBotProfile)}></label><label class="wide">Logo البوت في لوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">Banner لوحات البوت داخل هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio مخصص للوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<textarea name="botBio" maxlength="190" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label><label class="wide">Logo اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelLogoUrl" value="${esc(cfg.branding.panelLogoUrl||'')}" ${disabled(canBotProfile)}></label><label class="wide">Banner اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelBannerUrl" value="${esc(cfg.branding.panelBannerUrl||'')}" ${disabled(canBotProfile)}></label><label class="wide">رابط خط الزخرفة / Divider<input type="url" name="lineUrl" value="${esc(cfg.branding.lineUrl||'')}" placeholder="https://.../line.gif"></label></div>
     <div class="warn small">✅ Premium يستطيع تغيير Nickname وصورة البوت وBanner وBio بشكل مختلف داخل كل سيرفر. استخدم رابط HTTPS مباشر للصورة؛ مسح الرابط يعيد البوت للصورة/البنر العام في هذا السيرفر.</div>
     <h3>📍 تحديد كل الرومات من Dashboard</h3><div class="form-grid"><label>Game Panel<select name="gamePanel">${textChannels(channels,cfg.channels.gamePanel)}</select></label><label>Ticket Panel<select name="ticketPanel">${textChannels(channels,cfg.channels.ticketPanel)}</select></label><label>Ticket Category<select name="ticketCategory">${categories(channels,cfg.channels.ticketCategory)}</select></label><label>Store Panel<select name="storePanel">${textChannels(channels,cfg.channels.storePanel)}</select></label><label>Self Roles Panel<select name="rolePanel">${textChannels(channels,cfg.channels.rolePanel)}</select></label><label>Level / TOP<select name="levelUp">${textChannels(channels,cfg.channels.levelUp)}</select><small>كلمة توب للـXP تعمل هنا فقط.</small></label><label>ZOM / TOP<select name="zom">${textChannels(channels,cfg.channels.zom||'')}</select><small>كلمة توب ورصيد/تحويل ZOM تعمل هنا فقط.</small></label><label>Bank Panel<select name="bankPanel">${textChannels(channels,cfg.channels.bankPanel)}</select></label><label>البنك المركزي / السرقة<select name="centralBank">${textChannels(channels,cfg.channels.centralBank)}</select></label><label>Category العصابات<select name="gangCategory">${categories(channels,cfg.channels.gangCategory)}</select></label><label>Logs العصابات<select name="gangLogs">${textChannels(channels,cfg.channels.gangLogs)}</select></label><label>روم إنشاء Voice<select name="voiceCreate">${voiceChannels(channels,cfg.channels.voiceCreate)}</select></label><label>شات تحكم Voice<select name="voiceControl">${textChannels(channels,cfg.channels.voiceControl)}</select></label><label>Category Voice<select name="voiceCategory">${categories(channels,cfg.channels.voiceCategory)}</select></label><label>لوحة تغيير الاسم<select name="nameChangePanel">${textChannels(channels,cfg.channels.nameChangePanel)}</select></label><label>لوحة دليل السيرفر<select name="serverGuidePanel">${textChannels(channels,cfg.channels.serverGuidePanel)}</select></label><label>روم City Director<select name="cityDirector">${textChannels(channels,cfg.channels.cityDirector)}</select></label><label class="wide">رومات مكافأة الرسائل<select multiple name="messageChannelIds">${multiChannelOptions(channels,cfg.economy.messageChannelIds,[0,5])}</select></label><label class="wide">رومات مكافأة الفويس<select multiple name="voiceChannelIds">${multiChannelOptions(channels,cfg.economy.voiceChannelIds,[2,13])}</select></label></div>
-    <h3>👋 نظام الترحيب</h3><div class="form-grid"><label><input type="checkbox" name="welcomeEnabled" ${cfg.welcome?.enabled?'checked':''}> تفعيل الترحيب عند دخول عضو جديد</label><label>روم الترحيب<select name="welcomeChannel">${textChannels(channels,cfg.welcome?.channelId||'')}</select></label><label>روم القوانين<select name="welcomeRulesChannel">${textChannels(channels,cfg.welcome?.rulesChannelId||'')}</select></label><label class="wide">رابط صورة الترحيب العلوية<input type="url" name="welcomeBannerUrl" value="${esc(cfg.welcome?.bannerUrl||'')}" placeholder="https://.../welcome-banner.png"></label><label>عنوان الترحيب<input name="welcomeTitle" value="${esc(cfg.welcome?.title||'')}" placeholder="مثال: حياك الله في ZOMBI"></label><label class="wide">وصف قصير تحت الصورة<textarea name="welcomeDescription" maxlength="400" placeholder="مثال: نتمنى لك وقت ممتع معنا">${esc(cfg.welcome?.description||'')}</textarea></label><label>القسم 1 — الاسم<input name="welcomeLabel_0" value="${esc(cfg.welcome?.channels?.[0]?.label||'قوانين السيرفر')}"></label><label>القسم 1 — الإيموجي<input name="welcomeEmoji_0" value="${esc(cfg.welcome?.channels?.[0]?.emoji||'📜')}"></label><label class="wide">القسم 1 — الروم<select name="welcomeRefChannel_0">${textChannels(channels,cfg.welcome?.channels?.[0]?.channelId||cfg.welcome?.rulesChannelId||'')}</select></label><label>القسم 2 — الاسم<input name="welcomeLabel_1" value="${esc(cfg.welcome?.channels?.[1]?.label||'الشات العام')}"></label><label>القسم 2 — الإيموجي<input name="welcomeEmoji_1" value="${esc(cfg.welcome?.channels?.[1]?.emoji||'💬')}"></label><label class="wide">القسم 2 — الروم<select name="welcomeRefChannel_1">${textChannels(channels,cfg.welcome?.channels?.[1]?.channelId||'')}</select></label><label>القسم 3 — الاسم<input name="welcomeLabel_2" value="${esc(cfg.welcome?.channels?.[2]?.label||'السوشال ميديا')}"></label><label>القسم 3 — الإيموجي<input name="welcomeEmoji_2" value="${esc(cfg.welcome?.channels?.[2]?.emoji||'🌐')}"></label><label class="wide">القسم 3 — الروم<select name="welcomeRefChannel_2">${textChannels(channels,cfg.welcome?.channels?.[2]?.channelId||'')}</select></label><div class="wide hint">الصورة ستظهر أعلى الرسالة، وتحتها ينزل منشن العضو + قائمة الأقسام التي تحددها هنا. إذا تركت رابط الصورة فارغًا سيستخدم ZOMBI الصورة الافتراضية.</div><div class="wide card-actions"><button class="btn primary" type="submit" formaction="/dashboard/${guild.id}/welcome/save" data-page="overview">💾 حفظ إعدادات الترحيب فقط</button></div></div>
+    <h3>👋 نظام الترحيب</h3><div class="form-grid"><label><input type="checkbox" name="welcomeEnabled" ${cfg.welcome?.enabled?'checked':''}> تفعيل الترحيب عند دخول عضو جديد</label><label>روم الترحيب<select name="welcomeChannel">${textChannels(channels,cfg.welcome?.channelId||'')}</select></label><label>روم القوانين<select name="welcomeRulesChannel">${textChannels(channels,cfg.welcome?.rulesChannelId||'')}</select></label><label class="wide">رابط صورة الترحيب العلوية<input type="url" name="welcomeBannerUrl" value="${esc(cfg.welcome?.bannerUrl||'')}" placeholder="https://.../welcome-banner.png"></label><label>عنوان الترحيب<input name="welcomeTitle" value="${esc(cfg.welcome?.title||'')}" placeholder="مثال: حياك الله في ZOMBI"></label><label class="wide">وصف قصير تحت الصورة<textarea name="welcomeDescription" maxlength="400" placeholder="مثال: نتمنى لك وقت ممتع معنا">${esc(cfg.welcome?.description||'')}</textarea></label><label>القسم 1 — الاسم<input name="welcomeLabel_0" value="${esc(cfg.welcome?.channels?.[0]?.label||'قوانين السيرفر')}"></label><label>القسم 1 — الإيموجي<input name="welcomeEmoji_0" value="${esc(cfg.welcome?.channels?.[0]?.emoji||'📜')}"></label><label class="wide">القسم 1 — الروم<select name="welcomeRefChannel_0">${textChannels(channels,cfg.welcome?.channels?.[0]?.channelId||cfg.welcome?.rulesChannelId||'')}</select></label><label>القسم 2 — الاسم<input name="welcomeLabel_1" value="${esc(cfg.welcome?.channels?.[1]?.label||'الشات العام')}"></label><label>القسم 2 — الإيموجي<input name="welcomeEmoji_1" value="${esc(cfg.welcome?.channels?.[1]?.emoji||'💬')}"></label><label class="wide">القسم 2 — الروم<select name="welcomeRefChannel_1">${textChannels(channels,cfg.welcome?.channels?.[1]?.channelId||'')}</select></label><label>القسم 3 — الاسم<input name="welcomeLabel_2" value="${esc(cfg.welcome?.channels?.[2]?.label||'السوشال ميديا')}"></label><label>القسم 3 — الإيموجي<input name="welcomeEmoji_2" value="${esc(cfg.welcome?.channels?.[2]?.emoji||'🌐')}"></label><label class="wide">القسم 3 — الروم<select name="welcomeRefChannel_2">${textChannels(channels,cfg.welcome?.channels?.[2]?.channelId||'')}</select></label><div class="wide hint">الصورة ستظهر أعلى الرسالة، وتحتها ينزل منشن العضو + قائمة الأقسام التي تحددها هنا. إذا تركت رابط الصورة فارغًا سيستخدم ZOMBI الصورة الافتراضية.</div></div>
     <h3>🧩 تشغيل وإيقاف الأنظمة</h3><div class="checks">${featureChecks}</div>
     <h3>🧭 دليل السيرفر التفاعلي</h3>${panelMediaFields(cfg,'guide','لوحة دليل السيرفر')}<div class="form-grid"><label><input type="checkbox" name="serverGuideEnabled" ${cfg.serverGuide?.enabled!==false?'checked':''}> تفعيل دليل السيرفر</label><label>لون اللوحة<input name="serverGuideColor" value="${esc(cfg.serverGuide?.color||'#7c3aed')}" placeholder="#7c3aed"></label><label class="wide">العنوان<input name="serverGuideTitle" value="${esc(cfg.serverGuide?.title||'🧭 دليل السيرفر')}"></label><label class="wide">الوصف<textarea name="serverGuideDescription">${esc(cfg.serverGuide?.description||'')}</textarea></label><label>Footer<input name="serverGuideFooter" value="${esc(cfg.serverGuide?.footer||'ZOMBI • SERVER GUIDE')}"></label><label class="wide">Banner URL<input type="url" name="serverGuideBannerUrl" value="${esc(cfg.serverGuide?.bannerUrl||'')}" placeholder="https://..."></label></div>
     <h3>🌆 ZOMBI City Director — 100 حدث حي</h3>
@@ -626,7 +626,7 @@ async function guildPage(req){
       <label>مغادرة تلقائية بعد ثوانٍ<input type="number" name="musicAutoLeaveSeconds" value="${Number(cfg.music?.autoLeaveSeconds??180)}" min="30" max="3600" ${canMusic?'':'disabled'}></label>
       <label><input type="checkbox" name="musicAnnounceNowPlaying" ${cfg.music?.announceNowPlaying!==false?'checked':''} ${canMusic?'':'disabled'}> إرسال رسالة الآن يتم التشغيل</label>
     </div>
-    <h3>🔊 الرومات الصوتية المؤقتة</h3><div class="form-grid"><label><input type="checkbox" name="voiceRoomsEnabled" ${cfg.voiceRooms?.enabled===true?'checked':''}> تشغيل النظام</label><label>اسم الروم<input name="voiceRoomName" value="${esc(cfg.voiceRooms?.roomName||'🎙️・{username}')}"></label><label>User Limit<input type="number" name="voiceUserLimit" value="${cfg.voiceRooms?.userLimit||0}" min="0" max="99"></label><label>Bitrate<input type="number" name="voiceBitrate" value="${cfg.voiceRooms?.bitrate||64000}" min="8000" max="384000"></label><label class="wide">🖼️ Banner لوحة التحكم الصوتي<input type="url" name="voiceBannerUrl" value="${esc(cfg.voiceRooms?.bannerUrl||'')}" placeholder="https://.../banner.png"></label><label class="wide">🔹 Logo / Thumbnail لوحة التحكم الصوتي<input type="url" name="voiceThumbnailUrl" value="${esc(cfg.voiceRooms?.thumbnailUrl||'')}" placeholder="https://.../logo.png"></label><div class="wide card-actions"><button class="btn primary" type="submit" formaction="/dashboard/${guild.id}/send/voice" data-page="voice">📨 حفظ وإرسال / تحديث لوحة التحكم الصوتية</button></div></div>
+    <h3>🔊 الرومات الصوتية المؤقتة</h3><div class="form-grid"><label><input type="checkbox" name="voiceRoomsEnabled" ${cfg.voiceRooms?.enabled===true?'checked':''}> تشغيل النظام</label><label>اسم الروم<input name="voiceRoomName" value="${esc(cfg.voiceRooms?.roomName||'🎙️・{username}')}"></label><label>User Limit<input type="number" name="voiceUserLimit" value="${cfg.voiceRooms?.userLimit||0}" min="0" max="99"></label><label>Bitrate<input type="number" name="voiceBitrate" value="${cfg.voiceRooms?.bitrate||64000}" min="8000" max="384000"></label><label class="wide">🖼️ Banner لوحة التحكم الصوتي<input type="url" name="voiceBannerUrl" value="${esc(cfg.voiceRooms?.bannerUrl||'')}" placeholder="https://.../banner.png"></label><label class="wide">🔹 Logo / Thumbnail لوحة التحكم الصوتي<input type="url" name="voiceThumbnailUrl" value="${esc(cfg.voiceRooms?.thumbnailUrl||'')}" placeholder="https://.../logo.png"></label></div>
     <h3>📋 مركز لوقات ZOMBI — روم منفصل لكل نظام</h3>
     <input type="hidden" name="loggingPresent" value="1">
     <div class="checks"><label><input type="checkbox" name="modLogActions" ${cfg.moderation?.logActions!==false?'checked':''}> ✅ تفعيل نظام اللوقات</label>${Object.entries({audit:'إجراءات الإدارة والرومات والرتب',messages:'حذف وتعديل الرسائل',members:'دخول وخروج وتغييرات الأعضاء',voice:'الفويس والكتم والكاميرا',games:'الألعاب',commands:'أوامر السلاش',actions:'إجراءات عامة للبوت'}).map(([k,label])=>`<label><input type="checkbox" name="log_${k}" ${cfg.logging?.[k]!==false?'checked':''}> ${label}</label>`).join('')}</div>
@@ -696,7 +696,7 @@ async function guildPage(req){
     </section>
     <h3>⚠️ التحذيرات</h3><p class="hint">ثلاثة أنظمة مستقلة: لكل نوع شات خاص، رتب مخوّلة، وسجل ورتب مستويات منفصلة. لا توجد عقوبات تلقائية؛ النظام يحفظ السبب ويعطي رتبة مستوى التحذير المختارة فقط.</p><div class="form-grid">${warningRoleFields('members','👤 تحذيرات الأعضاء')}${warningRoleFields('administration','🛡️ تحذيرات الإدارة')}${warningRoleFields('events','🎉 تحذيرات الإيفنت')}<div class="wide hint"><b>الأوامر:</b> <code>تحذير @عضو</code> • <code>تحذير إدارة @عضو</code> • <code>تحذير إيفنت @عضو</code>. لإزالة آخر تحذير استبدل «تحذير» بـ «إزالة تحذير». البوت يفتح زر كتابة السبب مثل النظام القديم.</div></div>
     <h3>🔤 لعبة تجميع الحروف</h3><div class="config-card"><p>صاحب الأمر يكون الحكم. أول لاعب عشوائي، وإذا كانت الكلمة صحيحة يختار اللاعب التالي، وإذا كانت خاطئة يخرج والبوت يختار عشوائيًا. آخر لاعب يفوز بالجائزة.</p><div class="form-grid">
-      <label><input type="checkbox" name="letterChainEnabled" ${cfg.games.letterChain?.enabled!==false?'checked':''}> تشغيل اللعبة</label>
+      <label><input type="checkbox" checked disabled> اللعبة مفعلة دائمًا</label><input type="hidden" name="letterChainEnabled" value="1">
       <label>أمر اللعبة<input name="letterChainCommand" value="${esc(cfg.games.letterChain?.command||'#تجميع-الحروف')}" maxlength="40"></label>
       <label>وقت دخول اللاعبين (ثانية)<input type="number" name="letterChainLobbySeconds" value="${Number(cfg.games.letterChain?.lobbySeconds||25)}" min="5" max="300"></label>
       <label>وقت كتابة الكلمة (ثانية)<input type="number" name="letterChainAnswerSeconds" value="${Number(cfg.games.letterChain?.answerSeconds||15)}" min="5" max="120"></label>
@@ -705,8 +705,8 @@ async function guildPage(req){
       <label>أقل عدد لاعبين<input type="number" name="letterChainMinPlayers" value="${Number(cfg.games.letterChain?.minPlayers||3)}" min="2" max="25"></label>
       <label>أقصى عدد لاعبين<input type="number" name="letterChainMaxPlayers" value="${Number(cfg.games.letterChain?.maxPlayers||20)}" min="2" max="25"></label>
       <label class="wide">الرومات المسموح تشغيل اللعبة فيها<select multiple size="5" name="letterChainChannelIds">${textChannelMultiOptions(channels,cfg.games.letterChain?.channelIds||[])}</select><small>فارغ = كل الرومات.</small></label>
-      <label class="wide">الرتب المسموح لها بدء اللعبة<select multiple size="5" name="letterChainStartRoleIds">${roleOptions(roles,guild.id,cfg.games.letterChain?.startRoleIds||[])}</select><small>مالك السيرفر والإدارة مسموح لهم دائمًا.</small></label>
-      <label class="wide">بنك الحروف<textarea name="letterChainLetterPool" rows="3" maxlength="300">${esc(cfg.games.letterChain?.letterPool||'ا أ إ آ ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي ة ى ؤ ئ ء')}</textarea><small>يفصل بين الحروف بمسافة. كل حرف لا يتكرر حتى يتم استهلاك البنك كاملًا.</small></label><div class="wide card-actions"><button class="btn primary" type="submit" formaction="/dashboard/${guild.id}/games/letter-chain/save" formmethod="post" data-page="games">💾 حفظ لعبة تجميع الحروف فقط</button></div>
+      <label class="wide">الرتب المسموح لها بدء اللعبة<select multiple size="5" name="letterChainStartRoleIds">${roleOptions(roles,guild.id,cfg.games.letterChain?.startRoleIds||[])}</select><small>مالك السيرفر مسموح دائمًا، وباقي الأعضاء فقط حسب الرتب التي تختارها هنا.</small></label>
+      <label class="wide">بنك الحروف<textarea name="letterChainLetterPool" rows="3" maxlength="300">${esc(cfg.games.letterChain?.letterPool||'ا أ إ آ ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي ة ى ؤ ئ ء')}</textarea><small>يفصل بين الحروف بمسافة. كل حرف لا يتكرر حتى يتم استهلاك البنك كاملًا.</small></label>
     </div></div>
     <h3>🎡 عجلة الحظ / الروليت / الكراسي</h3><div class="form-grid"><label class="wide">جوائز عجلة الحظ — افصل بفاصلة<input name="wheelRewards" value="${esc((cfg.games.wheelRewards||[]).join(', '))}"></label><label><input type="checkbox" name="rouletteEnabled" ${cfg.games.rouletteEnabled!==false?'checked':''}> تشغيل الروليت</label><label>وقت دور الروليت ثانية<input type="number" name="rouletteTurnSeconds" value="${cfg.games.rouletteTurnSeconds||25}" min="10" max="120"></label><label>Revive<input type="number" name="rouletteCostRevive" value="${cfg.games.rouletteActionCosts?.revive||0}" min="0"></label><label>Link<input type="number" name="rouletteCostLink" value="${cfg.games.rouletteActionCosts?.link||0}" min="0"></label><label>Protect<input type="number" name="rouletteCostProtect" value="${cfg.games.rouletteActionCosts?.protect||0}" min="0"></label><label>Freeze<input type="number" name="rouletteCostFreeze" value="${cfg.games.rouletteActionCosts?.freeze||0}" min="0"></label><label>Double<input type="number" name="rouletteCostDouble" value="${cfg.games.rouletteActionCosts?.double||0}" min="0"></label><label>Curse<input type="number" name="rouletteCostCurse" value="${cfg.games.rouletteActionCosts?.curse||0}" min="0"></label><label>Unlink<input type="number" name="rouletteCostUnlink" value="${cfg.games.rouletteActionCosts?.unlink||0}" min="0"></label><label>Add<input type="number" name="rouletteCostAdd" value="${cfg.games.rouletteActionCosts?.add||0}" min="0"></label><label>عداد بدء الكراسي<input type="number" name="chairsStartCountdownSeconds" value="${cfg.games.chairs?.startCountdownSeconds||5}" min="1" max="60"></label><label>فاصل الجولات ms<input type="number" name="chairsBetweenRoundsMs" value="${cfg.games.chairs?.betweenRoundsMs||2500}" min="250"></label></div>
     <h3>🎮 الألعاب</h3>${panelMediaFields(cfg,'games','لوحة الألعاب')}${lockedNote(canGameSettings,'تعديل إعدادات الألعاب غير متاح في خطتك.')}<div class="z-game-command-guide"><b>⌨️ طريقة تشغيل الألعاب من الشات</b><p>اكتب <code>#</code> ثم اسم اللعبة: <code>#اسئلة</code> <code>#تخمين</code> <code>#سرعة</code> <code>#ترتيب</code> <code>#صح-خطأ</code> <code>#حساب</code> <code>#الاقرب</code> <code>#كلمة</code> <code>#عجلة</code> <code>#يومي</code> <code>#مافيا</code> <code>#روليت</code> <code>#كراسي</code> <code>#من-القاتل</code> <code>#تجميع-الحروف</code> <code>#برا-السالفة</code> <code>#xo</code>.</p><small>إذا تجاوزت قيمة الحد الذي حدده Owner لخطتك، لن يتم الحفظ وستظهر رسالة ترقية الاشتراك.</small></div><div class="form-grid"><label class="wide">الرتب المسموح لها ببدء الألعاب<select multiple name="gameStartRoleIds">${roleOptions(roles,guild.id,cfg.games?.startRoleIds)}</select><small class="hint">الأدمن وManage Server مسموح لهم دائمًا. إذا لم تختَر رتبة إضافية، تبقى الألعاب للإدارة فقط.</small></label></div><div class="table-wrap game-table"><table><thead><tr><th>اللعبة</th><th>تشغيل</th><th>الجولات</th><th>الوقت</th><th>Cooldown</th><th>Reward Min</th><th>Reward Max</th><th>XP</th><th>الرومات</th><th>رتب البدء</th></tr></thead><tbody>${gameRows}</tbody></table></div><div class="form-grid"><label>Roulette Min<input type="number" name="rouletteMinPlayers" value="${cfg.games.lobby?.roulette?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Roulette Max<input type="number" name="rouletteMaxPlayers" value="${cfg.games.lobby?.roulette?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الروليت"></label><label>Chairs Min<input type="number" name="chairsMinPlayers" value="${cfg.games.lobby?.chairs?.minPlayers||2}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Chairs Max<input type="number" name="chairsMaxPlayers" value="${cfg.games.lobby?.chairs?.maxPlayers||20}" min="2" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي الكراسي"></label><label>Mafia Min<input type="number" name="mafiaMinPlayers" value="${cfg.games.lobby?.mafia?.minPlayers||4}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label><label>Mafia Max<input type="number" name="mafiaMaxPlayers" value="${cfg.games.lobby?.mafia?.maxPlayers||20}" min="4" max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-plan-max="${maxFor(req,cfg,site,'maxGamePlayers')}" data-limit-label="عدد لاعبي المافيا"></label><label>🕵️ مكافأة برا السالفة<input type="number" name="outsiderReward" value="${cfg.games.outsider?.reward??300}" min="0"></label><label>🕵️ أقل لاعبين<input type="number" name="outsiderMinPlayers" value="${cfg.games.outsider?.minPlayers??3}" min="3" max="25"></label><label>🕵️ أقصى لاعبين<input type="number" name="outsiderMaxPlayers" value="${cfg.games.outsider?.maxPlayers??20}" min="3" max="25"></label><label>❎ جائزة بطل XO<input type="number" name="xoTournamentReward" value="${cfg.games.xoTournament?.reward??0}" min="0"></label><label>❎ أقل لاعبين XO<input type="number" name="xoTournamentMinPlayers" value="${cfg.games.xoTournament?.minPlayers??2}" min="2" max="25"></label><label>❎ أقصى لاعبين XO<input type="number" name="xoTournamentMaxPlayers" value="${cfg.games.xoTournament?.maxPlayers??16}" min="2" max="25"></label></div>
@@ -1017,7 +1017,6 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
   if(which==='store'){if(!featureAllowed(site,cfg,'store'))throw new Error('Store غير متاح لهذه الخطة.');const payload=rawStorePanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store.panelMessageId,payload);cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
   if(which==='name'){if(!cfg.nameChange?.enabled)throw new Error('فعّل نظام تغيير الاسم أولًا.');if(!cfg.channels.nameChangePanel)throw new Error('حدد روم لوحة تغيير الاسم أولًا.');const hex=parseInt(String(cfg.nameChange.color||'#8B5CF6').replace('#',''),16);const embed={color:Number.isFinite(hex)?hex:0x8B5CF6,title:cfg.nameChange.title||'تغيير اسمك في السيرفر',description:cfg.nameChange.description||'اضغط الزر لتغيير اسمك.',footer:{text:'ZOMBI • NAME CENTER'}};if(cfg.nameChange.bannerUrl)embed.image={url:cfg.nameChange.bannerUrl};const payload={embeds:[embed],components:[{type:1,components:[{type:2,style:1,custom_id:'zombi_name_change_open',label:String(cfg.nameChange.buttonLabel||'تغيير اسمي').slice(0,80),emoji:{name:String(cfg.nameChange.buttonEmoji||'✏️')}}]}]};const m=await sendOrUpdate(cfg.channels.nameChangePanel,cfg.nameChange.panelMessageId,payload);cfg.nameChange.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='roles'){if(!featureAllowed(site,cfg,'rolePanel'))throw new Error('Self Roles غير متاحة لهذه الخطة.');const items=(cfg.rolePanel.items||[]).slice(0,limitFor(site,cfg,'selfRoles'));if(!items.length)throw new Error('أضف رتب Self Roles أولًا.');const roleMap=new Map(bundle.roles.map(r=>[r.id,r])),styleMap={Primary:1,Secondary:2,Success:3,Danger:4},rows=[];for(let i=0;i<items.length;i+=5)rows.push({type:1,components:items.slice(i,i+5).map(x=>({type:2,style:styleMap[x.style]||2,custom_id:`pub:role:${x.roleId}`,label:String(x.label||roleMap.get(x.roleId)?.name||'Role').slice(0,80),...(x.emoji?{emoji:{name:x.emoji}}:{})}))});const payload={embeds:[{color:color(cfg),title:cfg.rolePanel.title,description:cfg.rolePanel.description,footer:{text:cfg.rolePanel.footer||'ZOMBI • ROLE CENTER'}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel.panelMessageId,payload);cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
-  if(which==='voice'){if(!featureAllowed(site,cfg,'voiceRooms'))throw new Error('الرومات الصوتية غير متاحة لهذه الخطة.');if(!cfg.channels?.voiceControl)throw new Error('حدد شات تحكم Voice أولًا.');const payload={embeds:[{color:0x5865F2,title:'🎛️ لوحة التحكم بالرومات الصوتية',description:['تحكم كامل برومك الصوتي المؤقت.','','استخدم الأزرار بالأسفل لإدارة الروم:','','🔒 **قفل** / 🔓 **فتح** الدخول','🙈 **إخفاء** / 👁️ **إظهار** الروم','✏️ **تغيير الاسم** و 👥 **تحديد العدد**','🚫 **طرد عضو** و 👑 **نقل الملكية**','🗑️ **حذف الروم** نهائيًا','','⚠️ يجب أن تكون داخل رومك الصوتي لاستخدام اللوحة.'].join('\n'),footer:{text:'ZOMBI • Temporary Voice Rooms'}}],components:[{type:1,components:[{type:2,style:4,custom_id:'voice_lock',label:'قفل',emoji:{name:'🔒'}},{type:2,style:3,custom_id:'voice_unlock',label:'فتح',emoji:{name:'🔓'}},{type:2,style:2,custom_id:'voice_hide',label:'إخفاء',emoji:{name:'🙈'}},{type:2,style:1,custom_id:'voice_show',label:'إظهار',emoji:{name:'👁️'}}]},{type:1,components:[{type:2,style:1,custom_id:'voice_rename',label:'تغيير الاسم',emoji:{name:'✏️'}},{type:2,style:1,custom_id:'voice_limit',label:'تحديد العدد',emoji:{name:'👥'}},{type:2,style:4,custom_id:'voice_kick',label:'طرد عضو',emoji:{name:'🚫'}},{type:2,style:2,custom_id:'voice_transfer',label:'نقل الملكية',emoji:{name:'👑'}}]},{type:1,components:[{type:2,style:4,custom_id:'voice_delete',label:'حذف الروم',emoji:{name:'🗑️'}}]}]};if(cfg.voiceRooms?.bannerUrl)payload.embeds[0].image={url:cfg.voiceRooms.bannerUrl};if(cfg.voiceRooms?.thumbnailUrl)payload.embeds[0].thumbnail={url:cfg.voiceRooms.thumbnailUrl};const before=structuredClone(cfg);const m=await sendOrUpdate(cfg.channels.voiceControl,cfg.voiceRooms?.controlMessageId,payload);cfg.voiceRooms.controlMessageId=m.id;if(store.saveConfigDelta)await store.saveConfigDelta(guildId,before,cfg);else await store.saveConfig(guildId,cfg);return;}
   if(which==='guide'){if(!featureAllowed(site,cfg,'serverGuide'))throw new Error('دليل السيرفر غير متاح لهذه الخطة.');if(!cfg.channels?.serverGuidePanel)throw new Error('حدد روم لوحة دليل السيرفر أولًا.');const payload=rawGuidePanelPayload(cfg,guildId);const m=await sendOrUpdate(cfg.channels.serverGuidePanel,cfg.serverGuide?.panelMessageId,payload);cfg.serverGuide.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
 }
 
@@ -1277,6 +1276,33 @@ async function start(){
       }
     }
 
+    if(saves('welcome')){
+      const welcomeChannelId=String(req.body.welcomeChannel||'').trim();
+      const welcomeRulesChannelId=String(req.body.welcomeRulesChannel||'').trim();
+      const validWelcomeTextChannel=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));
+      if(!validWelcomeTextChannel(welcomeChannelId))return res.status(400).send('روم الترحيب غير صالح لهذا السيرفر.');
+      if(!validWelcomeTextChannel(welcomeRulesChannelId))return res.status(400).send('روم القوانين غير صالح لهذا السيرفر.');
+      if(Boolean(req.body.welcomeEnabled)&&!welcomeChannelId)return res.status(400).send('اختر روم الترحيب قبل تفعيل النظام.');
+      const welcomeChannels=Array.from({length:3},(_,idx)=>({
+        label:String(req.body[`welcomeLabel_${idx}`]||'').trim().slice(0,60),
+        emoji:String(req.body[`welcomeEmoji_${idx}`]||'📌').trim().slice(0,16)||'📌',
+        channelId:String(req.body[`welcomeRefChannel_${idx}`]||'').trim()
+      })).filter(item=>item.channelId);
+      for(const item of welcomeChannels){
+        if(!validWelcomeTextChannel(item.channelId))return res.status(400).send(`روم ${item.label||'القسم'} غير صالح لهذا السيرفر.`);
+      }
+      cfg.welcome={
+        ...(cfg.welcome||{}),
+        enabled:Boolean(req.body.welcomeEnabled),
+        channelId:welcomeChannelId,
+        rulesChannelId:welcomeRulesChannelId,
+        bannerUrl:String(req.body.welcomeBannerUrl||'').trim(),
+        title:String(req.body.welcomeTitle||'').trim().slice(0,120),
+        description:String(req.body.welcomeDescription||'').trim().slice(0,400),
+        channels:welcomeChannels
+      };
+    }
+
     if(saves('economy')){
       if(rejectOverLimit(req.body.dailyAmount,'maxDailyReward','Daily Reward'))return;
       if(rejectOverLimit(req.body.messageReward,'maxMessageReward','مكافأة الرسائل'))return;
@@ -1343,26 +1369,6 @@ async function start(){
       }
       if(has('lineUrl'))cfg.branding.lineUrl=String(req.body.lineUrl||'').trim();
 
-      const welcomeChannelId=String(req.body.welcomeChannel||'').trim();
-      const welcomeRulesChannelId=String(req.body.welcomeRulesChannel||'').trim();
-      const validWelcomeTextChannel=id=>!id||req.bundle.channels.some(c=>String(c.id)===id&&[0,5].includes(Number(c.type)));
-      if(!validWelcomeTextChannel(welcomeChannelId))return res.status(400).send('روم الترحيب غير صالح لهذا السيرفر.');
-      if(!validWelcomeTextChannel(welcomeRulesChannelId))return res.status(400).send('روم القوانين غير صالح لهذا السيرفر.');
-      if(Boolean(req.body.welcomeEnabled)&&(!welcomeChannelId||!welcomeRulesChannelId))return res.status(400).send('لتفعيل الترحيب اختر روم الترحيب وروم القوانين.');
-      cfg.welcome={
-        ...(cfg.welcome||{}),
-        enabled:Boolean(req.body.welcomeEnabled),
-        channelId:welcomeChannelId,
-        rulesChannelId:welcomeRulesChannelId,
-        bannerUrl:String(req.body.welcomeBannerUrl||'').trim(),
-        title:String(req.body.welcomeTitle||'').trim().slice(0,120),
-        description:String(req.body.welcomeDescription||'').trim().slice(0,400),
-        channels:Array.from({length:3},(_,idx)=>({
-          label:String(req.body[`welcomeLabel_${idx}`]||'').trim().slice(0,60),
-          emoji:String(req.body[`welcomeEmoji_${idx}`]||'').trim().slice(0,16),
-          channelId:String(req.body[`welcomeRefChannel_${idx}`]||'').trim()
-        })).filter(item=>validWelcomeTextChannel(item.channelId)&&item.channelId)
-      };
     }
 
     if(saves('economy')){
@@ -1741,7 +1747,7 @@ async function start(){
       };
       cfg.games.letterChain={
         ...cfg.games.letterChain,
-        enabled:Boolean(req.body.letterChainEnabled),
+        enabled:true,
         command:String(req.body.letterChainCommand||cfg.games.letterChain?.command||'#تجميع-الحروف').trim().replace(/\s+/g,' ').slice(0,40)||'#تجميع-الحروف',
         lobbySeconds:int(req.body.letterChainLobbySeconds,cfg.games.letterChain?.lobbySeconds||25,5,300),
         answerSeconds:int(req.body.letterChainAnswerSeconds,cfg.games.letterChain?.answerSeconds||15,5,120),
@@ -1798,7 +1804,7 @@ async function start(){
     // This turns silent/illusory saves into a visible error instead of claiming success.
     const persisted=await store.getConfig(req.params.guildId);
     const verifyKeys={
-      overview:['system','features','branding','welcome'], economy:['currency','economy','channels'], members:['moderation','autoRole','roleSecurity'], xp:['levels','channels'],
+      overview:['system','features','branding'], welcome:['welcome'], economy:['currency','economy','channels'], members:['moderation','autoRole','roleSecurity'], xp:['levels','channels'],
       store:['store','channels','panelMedia'], games:['games','channels','panelMedia'], city:['bank','channels','panelMedia'], heist:['bank'], gangs:['gangs','channels'], robbery:['robbery','channels'],
       roles:['rolePanel','channels','panelMedia'], name:['nameChange','channels','panelMedia'], tickets:['tickets','channels','panelMedia'], voice:['voiceRooms','channels'], guide:['serverGuide','channels','panelMedia'],
       director:['cityDirector','channels'], suggestions:['suggestions'], rules:['rules','panelMedia'], music:['music'], logs:['logging','moderation','channels'], warnings:['warnings'], permissions:['roleSecurity']
@@ -1848,6 +1854,93 @@ async function start(){
     }
 
     redirectDashboard(req,res);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/overview/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const gid=req.params.guildId;
+    const [current,site]=await Promise.all([store.getConfig(gid),store.getGlobalConfig()]);
+    const next={
+      ...current,
+      system:{...(current.system||{})},
+      features:{...(current.features||{})},
+      branding:{...(current.branding||{})},
+      channels:{...(current.channels||{})}
+    };
+    if(req.body.presenceText!==undefined)next.system.presenceText=String(req.body.presenceText||'ZOM Economy | /help').slice(0,128);
+    if(req.body.presenceStatus!==undefined&&['online','idle','dnd','invisible'].includes(String(req.body.presenceStatus)))next.system.presenceStatus=String(req.body.presenceStatus);
+    for(const k of CORE_FEATURES){
+      if(req.body[`feature_${k}`]!==undefined || Object.prototype.hasOwnProperty.call(req.body,`feature_${k}`)){
+        next.features[k]=featureAllowed(site,current,k)?Boolean(req.body[`feature_${k}`]):false;
+      }
+    }
+    if(featureAllowed(site,current,'customBranding')){
+      if(req.body.brandColor!==undefined)next.branding.color=String(req.body.brandColor||current.branding?.color||'#E11D48');
+      if(req.body.customName!==undefined)next.branding.customName=String(req.body.customName||'').slice(0,80);
+      if(req.body.customFooter!==undefined)next.branding.customFooter=String(req.body.customFooter||'').slice(0,160);
+    }
+    if(isGuildOwner(req)&&featureAllowed(site,current,'customBotProfile')){
+      if(req.body.botNickname!==undefined)next.branding.botNickname=String(req.body.botNickname||'').slice(0,32);
+      if(req.body.avatarUrl!==undefined)next.branding.avatarUrl=String(req.body.avatarUrl||'').trim();
+      if(req.body.bannerUrl!==undefined)next.branding.bannerUrl=String(req.body.bannerUrl||'').trim();
+      if(req.body.botBio!==undefined)next.branding.bio=String(req.body.botBio||'').trim().slice(0,190);
+      if(req.body.panelLogoUrl!==undefined)next.branding.panelLogoUrl=String(req.body.panelLogoUrl||'').trim();
+      if(req.body.panelBannerUrl!==undefined)next.branding.panelBannerUrl=String(req.body.panelBannerUrl||'').trim();
+    }
+    if(req.body.lineUrl!==undefined)next.branding.lineUrl=String(req.body.lineUrl||'').trim();
+
+    const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));
+    const validCategory=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&Number(c.type)===4);
+    const validVoice=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[2,13].includes(Number(c.type)));
+    const channelNames=['logs','logBank','logEconomy','logGangs','logRobbery','logTickets','logStore','logWarnings','logGames','logLevels','logVoice','logMusic','logModeration','logMessages','logMembers','logCommands','logPanels','logRoles','logNameChange','logPremium','logEvent','logSystem','levelUp','zom','gamePanel','ticketPanel','ticketCategory','storePanel','rolePanel','bankPanel','centralBank','gangCategory','gangLogs','voiceCreate','voiceControl','voiceCategory','nameChangePanel','serverGuidePanel','cityDirector'];
+    for(const name of channelNames){
+      if(req.body[name]===undefined)continue;
+      const value=String(req.body[name]||'').trim();
+      const ok=name==='ticketCategory'||name==='gangCategory'||name==='voiceCategory'?validCategory(value):name==='voiceCreate'?validVoice(value):validText(value);
+      if(!ok)throw new Error(`الروم المحدد في ${name} غير صالح لهذا السيرفر.`);
+      next.channels[name]=value;
+    }
+    const saved=store.saveConfigDelta?await store.saveConfigDelta(gid,current,next):await store.saveConfig(gid,next);
+    const verify=await store.getConfig(gid);
+    const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
+    for(const key of ['system','features','branding','channels']){
+      if(JSON.stringify(stable(verify[key]))!==JSON.stringify(stable(saved[key])))throw new Error(`فشل التحقق من حفظ الرئيسية (${key}).`);
+    }
+    if(isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')&&req.body.botNickname!==undefined){
+      await botFetch(`/guilds/${gid}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding?.botNickname||null})}).catch(()=>{});
+    }
+    return res.redirect(`/dashboard/${gid}?section=overview&saved=1`);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/welcome/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const gid=req.params.guildId;
+    const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));
+    const welcomeChannelId=String(req.body.welcomeChannel||'').trim();
+    const rulesChannelId=String(req.body.welcomeRulesChannel||'').trim();
+    if(!validText(welcomeChannelId))throw new Error('روم الترحيب غير صالح لهذا السيرفر.');
+    if(!validText(rulesChannelId))throw new Error('روم القوانين غير صالح لهذا السيرفر.');
+    if(Boolean(req.body.welcomeEnabled)&&!welcomeChannelId)throw new Error('اختر روم الترحيب قبل تفعيل النظام.');
+    const channels=Array.from({length:3},(_,idx)=>({
+      label:String(req.body[`welcomeLabel_${idx}`]||'').trim().slice(0,60),
+      emoji:String(req.body[`welcomeEmoji_${idx}`]||'📌').trim().slice(0,16)||'📌',
+      channelId:String(req.body[`welcomeRefChannel_${idx}`]||'').trim()
+    })).filter(x=>x.channelId);
+    for(const item of channels)if(!validText(item.channelId))throw new Error(`روم ${item.label||'القسم'} غير صالح لهذا السيرفر.`);
+    const current=await store.getConfig(gid);
+    const nextWelcome={
+      ...(current.welcome||{}),
+      enabled:Boolean(req.body.welcomeEnabled),
+      channelId:welcomeChannelId,
+      rulesChannelId,
+      bannerUrl:String(req.body.welcomeBannerUrl||'').trim(),
+      title:String(req.body.welcomeTitle||'').trim().slice(0,120),
+      description:String(req.body.welcomeDescription||'').trim().slice(0,400),
+      channels
+    };
+    const saved=await store.patchConfig(gid,{welcome:nextWelcome});
+    const verify=await store.getConfig(gid);
+    const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
+    if(JSON.stringify(stable(verify.welcome))!==JSON.stringify(stable(saved.welcome)))throw new Error('فشل التحقق من حفظ الترحيب في قاعدة البيانات.');
+    return res.redirect(`/dashboard/${gid}?section=welcome&saved=1`);
   }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/questions',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gameQuestions'))return res.status(403).send('تعديل الأسئلة غير متاح في خطتك.');const max=maxFor(req,cfg,site,'questionsPerGame'),next=normalizeGameContent({quizQuestions:parsePairs(req.body.quizText,max,'qa'),trueFalseQuestions:parsePairs(req.body.trueFalseText,max,'qa'),wordQuestions:parsePairs(req.body.wordText,max,'word'),speedWords:parseWords(req.body.speedText,max),dailyQuestions:parsePairs(req.body.dailyText,max,'qa')});await store.saveGameContent(req.params.guildId,next);redirectDashboard(req,res);}catch(e){next(e);}});
@@ -2111,33 +2204,6 @@ async function start(){
     const saved=await store.saveConfig(req.params.guildId,cfg);if(saved.rules?.channelId && (saved.rules?.types||[]).some(x=>x.enabled!==false))await sendPanel('rules',req.params.guildId,req.bundle,{config:saved}).catch(()=>{});redirectDashboard(req,res,'rules');
   }catch(e){next(e);}});
 
-  app.post('/dashboard/:guildId/games/letter-chain/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const gid=req.params.guildId,current=await store.getConfig(gid),site=await store.getGlobalConfig();
-    if(!featureAllowed(site,current,'games'))throw new Error('نظام الألعاب غير متاح لهذه الخطة.');
-    const old=current.games?.letterChain||{};
-    const next={
-      enabled:Boolean(req.body.letterChainEnabled),
-      command:String(req.body.letterChainCommand||old.command||'#تجميع-الحروف').trim().replace(/\s+/g,' ').slice(0,40)||'#تجميع-الحروف',
-      lobbySeconds:int(req.body.letterChainLobbySeconds,old.lobbySeconds||25,5,300),
-      answerSeconds:int(req.body.letterChainAnswerSeconds,old.answerSeconds||15,5,120),
-      judgeSeconds:int(req.body.letterChainJudgeSeconds,old.judgeSeconds||20,5,120),
-      winnerReward:int(req.body.letterChainWinnerReward,old.winnerReward??300,0,maxFor(req,current,site,'maxWinnerReward')),
-      minPlayers:int(req.body.letterChainMinPlayers,old.minPlayers||3,2,25),
-      maxPlayers:int(req.body.letterChainMaxPlayers,old.maxPlayers||20,2,25),
-      channelIds:arr(req.body.letterChainChannelIds).map(String).filter(id=>/^\d{15,25}$/.test(id)).slice(0,50),
-      startRoleIds:arr(req.body.letterChainStartRoleIds).map(String).filter(id=>/^\d{15,25}$/.test(id)).slice(0,50),
-      letterPool:String(req.body.letterChainLetterPool||old.letterPool||'').trim().slice(0,300)
-    };
-    if(next.maxPlayers<next.minPlayers)next.maxPlayers=next.minPlayers;
-    const saved=await store.patchConfig(gid,{games:{...(current.games||{}),letterChain:next}});
-    const verify=await store.getConfig(gid);
-    const stable=v=>JSON.stringify(v);
-    if(stable(verify.games?.letterChain)!==stable(saved.games?.letterChain))throw new Error('فشل حفظ لعبة تجميع الحروف فعليًا في قاعدة البيانات.');
-    return res.redirect(`/dashboard/${gid}?section=games&saved=1`);
-  }catch(e){next(e);}});
-
-  app.post('/dashboard/:guildId/welcome/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const gid=req.params.guildId;const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));const welcomeChannelId=String(req.body.welcomeChannel||'').trim(),rulesChannelId=String(req.body.welcomeRulesChannel||'').trim();if(!validText(welcomeChannelId))throw new Error('روم الترحيب غير صالح لهذا السيرفر.');if(!validText(rulesChannelId))throw new Error('روم القوانين غير صالح لهذا السيرفر.');const channels=Array.from({length:3},(_,idx)=>({label:String(req.body[`welcomeLabel_${idx}`]||'').trim().slice(0,60),emoji:String(req.body[`welcomeEmoji_${idx}`]||'📌').trim().slice(0,16)||'📌',channelId:String(req.body[`welcomeRefChannel_${idx}`]||'').trim()})).filter(x=>x.channelId);for(const item of channels){if(!validText(item.channelId))throw new Error(`روم ${item.label||'القسم'} غير صالح لهذا السيرفر.`);}if(Boolean(req.body.welcomeEnabled)&&!welcomeChannelId)throw new Error('اختر روم الترحيب قبل تفعيل النظام.');const nextWelcome={enabled:Boolean(req.body.welcomeEnabled),channelId:welcomeChannelId,rulesChannelId,bannerUrl:String(req.body.welcomeBannerUrl||'').trim(),title:String(req.body.welcomeTitle||'').trim().slice(0,120),description:String(req.body.welcomeDescription||'').trim().slice(0,400),channels};const saved=await store.patchConfig(gid,{welcome:nextWelcome});const verify=await store.getConfig(gid);const expected=JSON.stringify(saved.welcome),actual=JSON.stringify(verify.welcome);if(actual!==expected)throw new Error('فشل حفظ إعدادات الترحيب فعليًا في قاعدة البيانات. لم يتم عرض نجاح وهمي.');redirectDashboard(req,res,'overview');}catch(e){next(e);}});
-  app.post('/dashboard/:guildId/send/voice',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId),before=structuredClone(cfg);const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));const voiceControl=String(req.body.voiceControl||cfg.channels?.voiceControl||'').trim();if(!voiceControl||!validText(voiceControl))throw new Error('حدد شات تحكم Voice صالح أولًا.');cfg.channels={...(cfg.channels||{}),voiceControl};if(req.body.voiceCreate!==undefined)cfg.channels.voiceCreate=String(req.body.voiceCreate||'').trim();if(req.body.voiceCategory!==undefined)cfg.channels.voiceCategory=String(req.body.voiceCategory||'').trim();cfg.voiceRooms={...(cfg.voiceRooms||{}),enabled:Boolean(req.body.voiceRoomsEnabled),roomName:String(req.body.voiceRoomName||cfg.voiceRooms?.roomName||'🎙️・{username}').slice(0,80),userLimit:int(req.body.voiceUserLimit,cfg.voiceRooms?.userLimit||0,0,99),bitrate:int(req.body.voiceBitrate,cfg.voiceRooms?.bitrate||64000,8000,384000),bannerUrl:String(req.body.voiceBannerUrl||'').trim(),thumbnailUrl:String(req.body.voiceThumbnailUrl||'').trim()};const saved=store.saveConfigDelta?await store.saveConfigDelta(req.params.guildId,before,cfg):await store.saveConfig(req.params.guildId,cfg);await sendPanel('voice',req.params.guildId,req.bundle,{config:saved});redirectDashboard(req,res,'voice');}catch(e){next(e);}});
   for(const which of ['bank','games','tickets','store','roles','name','guide','rules'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
 
   app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(publicSiteConfig(await store.getGlobalConfig())),req.user));}catch(e){next(e);}});

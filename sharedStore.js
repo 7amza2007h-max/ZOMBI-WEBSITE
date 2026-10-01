@@ -101,25 +101,7 @@ async function saveConfigDelta(guildId,before,input){
   }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
 }
 
-async function patchConfig(guildId,patch){
-  if(!dbEnabled()){
-    const current=local.getConfig(guildId),next=clone(current);
-    for(const [section,value] of Object.entries(patch||{}))next[section]=(value&&typeof value==='object'&&!Array.isArray(value))?{...(next[section]||{}),...clone(value)}:clone(value);
-    return local.saveConfig(guildId,next);
-  }
-  const p=await ensureDb(),c=await p.connect(),id=String(guildId);
-  try{
-    await c.query('BEGIN');
-    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`zombi_cfg:${id}`]);
-    const r=await c.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1 FOR UPDATE',[id]);
-    const latest=local.normalizeConfig(r.rows[0]?.config||local.defaults(id),id),next=clone(latest);
-    for(const [section,value] of Object.entries(patch||{}))next[section]=(value&&typeof value==='object'&&!Array.isArray(value))?{...(next[section]||{}),...clone(value)}:clone(value);
-    const normalized=local.normalizeConfig(next,id);
-    await c.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(normalized),Date.now()]);
-    await c.query('COMMIT');
-    return clone(normalized);
-  }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
-}
+async function patchConfig(guildId,patch){const current=await getConfig(guildId),next=clone(current);for(const [section,value] of Object.entries(patch||{}))next[section]=(value&&typeof value==='object'&&!Array.isArray(value))?{...(next[section]||{}),...value}:value;return saveConfig(guildId,next);}
 async function data(guildId,name,fallback={}){if(!dbEnabled())return local.data(guildId,name,fallback);const p=await ensureDb(),r=await p.query('SELECT data FROM zombi_guild_data WHERE guild_id=$1 AND name=$2',[String(guildId),String(name)]);return clone(r.rows[0]?.data??fallback);}
 async function saveData(guildId,name,value){if(!dbEnabled())return local.saveData(guildId,name,value);const p=await ensureDb();await p.query(`INSERT INTO zombi_guild_data(guild_id,name,data,updated_at) VALUES($1,$2,$3::jsonb,$4) ON CONFLICT(guild_id,name) DO UPDATE SET data=EXCLUDED.data,updated_at=EXCLUDED.updated_at`,[String(guildId),String(name),jsonParam(value),Date.now()]);return clone(value);}
 async function getGameContent(guildId){if(!dbEnabled())return local.getGameContent(guildId);const raw=await data(guildId,'game-content.json',DEFAULT_GAME_CONTENT);const normalized=normalizeGameContent(raw);if(JSON.stringify(raw)!==JSON.stringify(normalized))await saveData(guildId,'game-content.json',normalized);return clone(normalized);}

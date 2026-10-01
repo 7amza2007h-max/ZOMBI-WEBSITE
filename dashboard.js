@@ -15,6 +15,7 @@
     warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
+    welcome: { label: 'الترحيب', icon: '👋', desc: 'صورة الترحيب، روم الترحيب، روم القوانين وروابط الأقسام للعضو الجديد.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
     xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإعدادات #p و#top.' },
@@ -50,7 +51,7 @@
   const groups = [
     ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions', 'event']],
-    ['الأنظمة', ['permissions', 'warnings', 'logs', 'rules', 'guide', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
+    ['الأنظمة', ['permissions', 'warnings', 'logs', 'welcome', 'rules', 'guide', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
     ['إدارة الطاقم', ['staff-stats', 'staff-insights', 'staff-duty', 'staff-admin', 'staff-event', 'staff-leave', 'staff-event-leave']],
     ['الاشتراك', ['premium']]
   ];
@@ -158,6 +159,7 @@
     if (text.includes('⚠️ التحذيرات')) return 'warnings';
     if (text.includes('سجل السيرفر Log') || text.includes('مركز لوقات ZOMBI') || text.includes('لوقات ZOMBI')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
+    if (text.includes('نظام الترحيب')) return 'welcome';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
     if (text.includes('دليل السيرفر التفاعلي')) return 'guide';
     if (text.includes('ZOMBI City Director')) return 'director';
@@ -173,6 +175,7 @@
     if (text.includes('Moderation')) return 'members';
     if (text.includes('عجلة الحظ')) return 'games';
     if (text.includes('🎮 الألعاب')) return 'games';
+    if (text.includes('تجميع الحروف')) return 'games';
     if (text.includes('تغيير الاسم')) return 'name';
     if (text.includes('التذاكر')) return 'tickets';
     if (text.includes('نظام التقديمات')) return 'applications';
@@ -226,6 +229,27 @@
       actionBar.remove();
       settingsForm.appendChild(bar);
     }
+
+    // Welcome has its own page and its own POST route.
+    const welcomeGroup = settingsGroups.get('welcome');
+    if (welcomeGroup) {
+      welcomeGroup.querySelectorAll('.z-local-save-bar').forEach(el => el.remove());
+      const welcomeForm = document.createElement('form');
+      welcomeForm.method = 'post';
+      welcomeForm.action = `/dashboard/${guildId}/welcome/save`;
+      welcomeForm.className = 'panel z-welcome-dedicated-form';
+      welcomeForm.dataset.zPage = 'welcome';
+      welcomeForm.noValidate = true;
+      const csrfCopy = csrf?.cloneNode(true);
+      if (csrfCopy) welcomeForm.appendChild(csrfCopy);
+      welcomeForm.appendChild(welcomeGroup);
+      const saveBar = document.createElement('div');
+      saveBar.className = 'z-local-save-bar';
+      saveBar.innerHTML = '<button type="submit" class="btn primary">💾 حفظ إعدادات الترحيب</button>';
+      welcomeForm.appendChild(saveBar);
+      settingsForm.after(welcomeForm);
+      settingsGroups.delete('welcome');
+    }
   }
 
   // Move channel selectors to the pages where they belong while keeping them inside the same settings form.
@@ -269,6 +293,30 @@
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
+
+  // Main/overview also gets its own save route. This avoids the legacy giant
+  // settings POST from dropping fields after the dashboard moves controls around.
+  if (settingsForm) {
+    const overviewGroup = settingsGroups.get('overview');
+    if (overviewGroup) {
+      overviewGroup.querySelectorAll('.z-local-save-bar').forEach(el => el.remove());
+      const overviewForm = document.createElement('form');
+      overviewForm.method = 'post';
+      overviewForm.action = `/dashboard/${guildId}/overview/save`;
+      overviewForm.className = 'panel z-overview-dedicated-form';
+      overviewForm.dataset.zPage = 'overview';
+      overviewForm.noValidate = true;
+      const csrfCopy = settingsForm.querySelector(':scope > input[name="_csrf"]')?.cloneNode(true);
+      if (csrfCopy) overviewForm.appendChild(csrfCopy);
+      overviewForm.appendChild(overviewGroup);
+      const saveBar = document.createElement('div');
+      saveBar.className = 'z-local-save-bar';
+      saveBar.innerHTML = '<button type="submit" class="btn primary">💾 حفظ الرئيسية</button>';
+      overviewForm.appendChild(saveBar);
+      settingsForm.after(overviewForm);
+      settingsGroups.delete('overview');
+    }
+  }
 
 
   // سرقة البنك: اختيار الرتبة يظهر فقط عند استخدام منشن رتبة.
