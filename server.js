@@ -493,6 +493,12 @@ async function guildPage(req){
     store.data(guild.id,'applications-config.json',{enabled:true,types:[]}),
     store.data(guild.id,'staff-systems.json',{})
   ]);
+  // WELCOME V3: keep welcome settings in their own durable record as well as config.
+  // This prevents any unrelated config save/normalizer from wiping the welcome form.
+  const dedicatedWelcome = await store.data(guild.id,'welcome-config.json',null).catch(()=>null);
+  if(dedicatedWelcome && typeof dedicatedWelcome==='object' && Object.keys(dedicatedWelcome).length){
+    cfg.welcome={...(cfg.welcome||{}),...dedicatedWelcome};
+  }
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
   const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
   const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates'),musicQueueLimit=maxFor(req,cfg,site,'musicQueueSize'),musicVolumeLimit=maxFor(req,cfg,site,'musicMaxVolume'),musicTrackLimit=maxFor(req,cfg,site,'musicMaxTrackMinutes');
@@ -1941,11 +1947,15 @@ async function start(){
       description:String(req.body.welcomeDescription||'').trim().slice(0,400),
       channels
     };
-    const saved=await store.patchConfig(gid,{welcome:nextWelcome});
-    const verify=await store.getConfig(gid);
+    // Save to a dedicated record first. This is the source of truth for welcome.
+    const dedicatedSaved=await store.saveData(gid,'welcome-config.json',nextWelcome);
+    // Keep the legacy config copy in sync for older bot builds, but do not let it
+    // decide whether the dedicated save succeeded.
+    await store.patchConfig(gid,{welcome:nextWelcome}).catch(error=>console.warn('Welcome legacy config sync failed:',error?.message||error));
+    const verifyDedicated=await store.data(gid,'welcome-config.json',{});
     const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
-    if(JSON.stringify(stable(verify.welcome))!==JSON.stringify(stable(saved.welcome)))throw new Error('فشل التحقق من حفظ الترحيب في قاعدة البيانات.');
-    return res.redirect(`/dashboard/${gid}?section=welcome&saved=1`);
+    if(JSON.stringify(stable(verifyDedicated))!==JSON.stringify(stable(dedicatedSaved)))throw new Error('فشل التحقق من حفظ الترحيب المستقل في قاعدة البيانات.');
+    return res.redirect(`/dashboard/${gid}?section=welcome&saved=1&welcomeSaved=1`);
   }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/questions',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gameQuestions'))return res.status(403).send('تعديل الأسئلة غير متاح في خطتك.');const max=maxFor(req,cfg,site,'questionsPerGame'),next=normalizeGameContent({quizQuestions:parsePairs(req.body.quizText,max,'qa'),trueFalseQuestions:parsePairs(req.body.trueFalseText,max,'qa'),wordQuestions:parsePairs(req.body.wordText,max,'word'),speedWords:parseWords(req.body.speedText,max),dailyQuestions:parsePairs(req.body.dailyText,max,'qa')});await store.saveGameContent(req.params.guildId,next);redirectDashboard(req,res);}catch(e){next(e);}});
