@@ -484,92 +484,67 @@
     ensureSettingsGroup('premium').prepend(notice);
   }
 
-  // Save only the visible settings section.
-  // This is important because HTML constraint validation also checks hidden
-  // controls when they live inside the same <form>. Older builds therefore
-  // made every save button look broken when a value in another section was
-  // above its current plan limit.
+  // Reliable section-scoped saving.
+  // The server already saves only the section named in _settingsSection, so do not
+  // disable controls from other pages. Disabling fields caused stale/partial FormData
+  // and was the main reason one save could erase a previous save or require retries.
   if (settingsForm) {
-    let restoreTimer = null;
-    const originalDisabled = new WeakMap();
+    settingsForm.noValidate = true;
+    let sectionInput = settingsForm.querySelector(':scope > input[name="_settingsSection"]');
+    if (!sectionInput) {
+      sectionInput = document.createElement('input');
+      sectionInput.type = 'hidden';
+      sectionInput.name = '_settingsSection';
+      settingsForm.appendChild(sectionInput);
+    }
 
-    const sectionInput = document.createElement('input');
-    sectionInput.type = 'hidden';
-    sectionInput.name = '_settingsSection';
-    settingsForm.appendChild(sectionInput);
+    const resolvePage = button => button?.name === 'forceBotProfile'
+      ? 'overview'
+      : (button?.dataset?.page || currentFromUrl() || 'overview');
 
-    const restoreTemporarilyDisabled = () => {
-      clearTimeout(restoreTimer);
-      settingsForm.querySelectorAll('[data-z-save-temp-disabled="1"]').forEach(control => {
-        const wasDisabled = originalDisabled.get(control) === true;
-        control.disabled = wasDisabled;
-        control.removeAttribute('data-z-save-temp-disabled');
-        originalDisabled.delete(control);
-      });
-    };
-
-    const prepareSectionSave = (button, page) => {
-      restoreTemporarilyDisabled();
-      const group = settingsGroups.get(page);
-      if (!group) return true;
+    const markSection = button => {
+      const page = resolvePage(button);
       sectionInput.value = page;
-
-      const allowed = new Set(group.querySelectorAll('input,select,textarea,button'));
-      const csrfField = settingsForm.querySelector(':scope > input[name="_csrf"]');
-      if (csrfField) allowed.add(csrfField);
-      allowed.add(sectionInput);
-      allowed.add(button);
-
-      settingsForm.querySelectorAll('input,select,textarea,button').forEach(control => {
-        if (allowed.has(control)) return;
-        if (control.closest('.z-save-bar') && control.name === 'forceBotProfile' && page === 'overview') return;
-        originalDisabled.set(control, control.disabled === true);
-        if (!control.disabled) {
-          control.disabled = true;
-          control.dataset.zSaveTempDisabled = '1';
-        }
-      });
-
-      // Validate only the active page. Other pages are disabled above and
-      // therefore cannot silently cancel this submit.
-      if (!settingsForm.checkValidity()) {
-        settingsForm.reportValidity();
-        settingsForm.dispatchEvent(new Event('z-save-failed'));
-        restoreTemporarilyDisabled();
-        return false;
-      }
-
-      // upgrade.js serializes the form during the submit event. Keep the other
-      // pages disabled long enough for FormData to be built, then restore them
-      // in case the request is rejected without leaving the page.
-      restoreTimer = setTimeout(restoreTemporarilyDisabled, 1500);
-      return true;
+      if (button) button.dataset.page = page;
+      return page;
     };
 
-    let preparedSubmitter = null;
     settingsForm.addEventListener('click', event => {
       const button = event.target.closest('button[type="submit"]');
       if (!button || button.form !== settingsForm) return;
-      const page = button.name === 'forceBotProfile'
-        ? 'overview'
-        : (button.dataset.page || currentFromUrl());
-      button.dataset.page = page;
-      if (!prepareSectionSave(button, page)) { event.preventDefault(); return; }
-      preparedSubmitter = button;
+      markSection(button);
+      // Validation belongs to the active server-side section. Hidden controls on
+      // another page must never cancel this submit.
+      button.formNoValidate = true;
     }, true);
 
-    // Keyboard submits / requestSubmit() do not always produce a click event.
-    // Prepare the active section again at submit time so only that page is sent.
     settingsForm.addEventListener('submit', event => {
       if (event.defaultPrevented) return;
-      const button = event.submitter || preparedSubmitter || settingsForm.querySelector('.z-local-save:not(.z-section-hidden)') || settingsForm.querySelector('.z-save-bar button[type="submit"]');
-      if (!button) return;
-      const page = button.name === 'forceBotProfile' ? 'overview' : (button.dataset.page || currentFromUrl());
-      if (preparedSubmitter !== button && !prepareSectionSave(button, page)) event.preventDefault();
-      preparedSubmitter = null;
+      const button = event.submitter || settingsForm.querySelector(`button[type="submit"][data-page="${currentFromUrl()}"]`) || settingsForm.querySelector('.z-save-bar button[type="submit"]');
+      markSection(button);
+      if (settingsForm.dataset.zSaving === '1') {
+        event.preventDefault();
+        return;
+      }
+      settingsForm.dataset.zSaving = '1';
+      if (button) {
+        button.dataset.zOldText = button.textContent;
+        button.textContent = '⏳ جارٍ الحفظ...';
+      }
+      // If navigation is blocked by a server/network error, re-enable saving.
+      setTimeout(() => {
+        settingsForm.dataset.zSaving = '0';
+        if (button?.dataset?.zOldText) button.textContent = button.dataset.zOldText;
+      }, 8000);
     }, true);
 
-    settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
+    settingsForm.addEventListener('z-save-failed', () => {
+      settingsForm.dataset.zSaving = '0';
+      settingsForm.querySelectorAll('button[data-z-old-text]').forEach(button => {
+        button.textContent = button.dataset.zOldText;
+        delete button.dataset.zOldText;
+      });
+    });
   }
 
   const allPostForms = () => [...content.querySelectorAll('form[method="post" i]')];
