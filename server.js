@@ -1803,7 +1803,23 @@ async function start(){
       director:['cityDirector','channels'], suggestions:['suggestions'], rules:['rules','panelMedia'], music:['music'], logs:['logging','moderation','channels'], warnings:['warnings'], permissions:['roleSecurity']
     };
     const keys=settingsSection==='all'?Object.keys(cfg):verifyKeys[settingsSection]||[];
-    const mismatch=keys.find(key=>JSON.stringify(persisted?.[key]??null)!==JSON.stringify(saved?.[key]??null));
+    const stableValue=value=>{
+      if(Array.isArray(value))return value.map(stableValue);
+      if(value&&typeof value==='object'){const out={};for(const key of Object.keys(value).sort())out[key]=stableValue(value[key]);return out;}
+      return value??null;
+    };
+    const sameValue=(a,b)=>JSON.stringify(stableValue(a))===JSON.stringify(stableValue(b));
+    let verified=persisted;
+    let mismatch=keys.find(key=>!sameValue(verified?.[key],saved?.[key]));
+    // A bot process can save another setting at almost the same moment. Re-apply only
+    // this request's delta once against the newest row, then verify again. This avoids
+    // both false “saved” messages and lost dashboard changes.
+    if(mismatch&&store.saveConfigDelta){
+      await new Promise(resolve=>setTimeout(resolve,75));
+      await store.saveConfigDelta(req.params.guildId,beforeSettings,cfg);
+      verified=await store.getConfig(req.params.guildId);
+      mismatch=keys.find(key=>!sameValue(verified?.[key],saved?.[key]));
+    }
     if(mismatch)throw new Error(`فشل التحقق من حفظ قسم ${settingsSection} (${mismatch}). لم يتم اعتبار العملية محفوظة.`);
 
     if(saves('members')){
