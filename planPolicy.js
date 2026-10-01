@@ -31,16 +31,6 @@ const FEATURE_DEFS = [
 ].map(([key, label, emoji]) => ({ key, label, emoji }));
 
 const GAME_DEFS = [
-  { id:'memorycolors',label:'ذاكرة الألوان',     emoji:'🧠', publicSupported:true, editableQuestions:false },
-  { id:'reaction',    label:'ردة الفعل',       emoji:'⚡', publicSupported:true, editableQuestions:false },
-  { id:'different',   label:'المختلف',         emoji:'🔎', publicSupported:true, editableQuestions:false },
-  { id:'sequence',    label:'ترتيب الأرقام',   emoji:'🔢', publicSupported:true, editableQuestions:false },
-  { id:'safebutton',  label:'الزر الآمن',      emoji:'🛡️', publicSupported:true, editableQuestions:false },
-  { id:'mathrush',    label:'حساب سريع',       emoji:'➗', publicSupported:true, editableQuestions:false },
-  { id:'emojiquiz',   label:'خمن الإيموجي',    emoji:'🎭', publicSupported:true, editableQuestions:false },
-  { id:'higherlower', label:'أعلى أو أقل',     emoji:'📈', publicSupported:true, editableQuestions:false },
-  { id:'treasure',    label:'صيد الكنز',       emoji:'💎', publicSupported:true, editableQuestions:false },
-  { id:'codebreaker', label:'فك الكود',        emoji:'🔐', publicSupported:true, editableQuestions:false },
   { id:'quiz',       label:'أسئلة',          emoji:'🧠', publicSupported:true, editableQuestions:true },
   { id:'guess',      label:'تخمين',          emoji:'🔢', publicSupported:true, editableQuestions:false },
   { id:'rps',        label:'حجر ورق مقص',    emoji:'✂️', publicSupported:true, editableQuestions:false },
