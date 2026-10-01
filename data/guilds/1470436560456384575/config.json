@@ -1,0 +1,1023 @@
+{
+  "guildId": "1470436560456384575",
+  "plan": "free",
+  "premiumUntil": 0,
+  "createdAt": 1790885022849,
+  "updatedAt": 1790885607822,
+  "setupComplete": true,
+  "system": {
+    "presenceText": "ZOM Economy | /help",
+    "presenceStatus": "online"
+  },
+  "features": {
+    "economy": true,
+    "bank": true,
+    "games": true,
+    "tickets": true,
+    "store": true,
+    "rolePanel": true,
+    "levels": true,
+    "voiceRewards": true,
+    "voiceRooms": true,
+    "moderation": true,
+    "gangs": true,
+    "gangMissions": true,
+    "bankRobbery": true,
+    "serverGuide": true,
+    "cityDirector": false
+  },
+  "branding": {
+    "color": "#B00020",
+    "name": "ZOMBI",
+    "footer": "Powered by ZOMBI",
+    "customName": "",
+    "customFooter": "ZOMBI • ZOM Store",
+    "botNickname": "zombi",
+    "avatarUrl": "",
+    "bannerUrl": "",
+    "bio": "",
+    "panelLogoUrl": "",
+    "panelBannerUrl": "",
+    "lineUrl": ""
+  },
+  "panelMedia": {
+    "bank": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "games": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "tickets": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "store": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "roles": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "name": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "guide": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    },
+    "rules": {
+      "bannerUrl": "",
+      "thumbnailUrl": ""
+    }
+  },
+  "currency": {
+    "name": "ZOM",
+    "emoji": "🪙"
+  },
+  "channels": {
+    "logs": "",
+    "gamePanel": "",
+    "ticketPanel": "1470436562226384949",
+    "ticketCategory": "1512985902316519514",
+    "storePanel": "1545211249246216284",
+    "rolePanel": "1545012486162485259",
+    "levelUp": "1543273620996882523",
+    "zom": "",
+    "bankPanel": "1543276583417024632",
+    "centralBank": "1544496140396011570",
+    "gangCategory": "",
+    "gangLogs": "",
+    "voiceCreate": "1543271928884895754",
+    "voiceControl": "1535455746299265046",
+    "voiceCategory": "1535455743858188349",
+    "nameChangePanel": "1545515128584404993",
+    "serverGuidePanel": "",
+    "cityDirector": ""
+  },
+  "economy": {
+    "dailyAmount": 500,
+    "dailyCooldownHours": 24,
+    "messageEvery": 15,
+    "messageReward": 10,
+    "messageCooldownSeconds": 6,
+    "transferCooldownSeconds": 10,
+    "voiceEveryMinutes": 10,
+    "voiceReward": 10,
+    "messageChannelIds": [
+      "1470436562226384954"
+    ],
+    "voiceChannelIds": [
+      "1470436562524307525",
+      "1512980080836477009",
+      "1512980317760258098",
+      "1512980356431745124",
+      "1512980570181865584",
+      "1535455743858188349"
+    ]
+  },
+  "bank": {
+    "heistEnabled": true,
+    "heistCooldownSeconds": 300,
+    "heistGameCooldownSeconds": 7200,
+    "heistTimeSeconds": 25,
+    "heistJailHours": 2,
+    "heistBailPrice": 50000,
+    "cashProtectionPrice": 25000,
+    "cashProtectionMinutes": 60,
+    "cashProtectionCooldownMinutes": 240,
+    "heistGamesEnabled": {
+      "green": true,
+      "numbers": true,
+      "memory": true,
+      "odd": true,
+      "code": true,
+      "lights": true,
+      "math": true
+    },
+    "depositEnabled": true,
+    "withdrawEnabled": true,
+    "maxTransaction": 1000000000,
+    "title": "🏦 ZOMBI City Bank",
+    "description": "نظام البنك الأصلي في سيرفر ZOMBI.",
+    "goldValue": 100000,
+    "salaryCooldownHours": 4,
+    "maxSalary": 200,
+    "tradeProfitPercent": 15,
+    "tradeSessionMinutes": 5,
+    "maxLoan": 100000,
+    "loanInterestPercent": 25,
+    "companyEmployeeStartSalary": 4000,
+    "companyEmployeeSalaryIncrease": 500,
+    "companyLevelUpHours": 24,
+    "companyOwnerStartSalary": 100000,
+    "companyOwnerSalaryIncrease": 5000,
+    "topExcludedUserIds": [],
+    "topColor": "#E11D48",
+    "topLogoUrl": "",
+    "workRewardMin": 150,
+    "workRewardMax": 500,
+    "workCooldownMinutes": 60,
+    "savingsInterestPercent": 1,
+    "savingsInterestCooldownHours": 24,
+    "savingsInterestMaxReward": 10000,
+    "bankChannelId": "1543276583417024632"
+  },
+  "moderation": {
+    "clearEnabled": true,
+    "kickEnabled": true,
+    "banEnabled": true,
+    "lockEnabled": true,
+    "logActions": true,
+    "timeoutEnabled": true,
+    "timeoutAllowedRoleIds": [],
+    "timeoutMaxMinutes": 10080,
+    "timeoutRequireReason": false,
+    "timeoutOwnerBypass": true,
+    "timeoutRespectHierarchy": true,
+    "moveEnabled": true,
+    "moveAllowedRoleIds": [],
+    "moveOwnerBypass": true,
+    "moveSourceChannelIds": [],
+    "moveDestinationChannelIds": [],
+    "roleBanEnabled": false,
+    "roleBanRoleId": "",
+    "roleBanAllowedRoleIds": [],
+    "roleBanVisibleChannelIds": [],
+    "roleBanOwnerBypass": true,
+    "roleBanRespectHierarchy": true,
+    "roleBanAllowSendMessages": true,
+    "roleBanHideVoice": true
+  },
+  "roleSecurity": {
+    "enabled": true,
+    "ownerBypass": true,
+    "content": {
+      "links": {
+        "enabled": false,
+        "allowedRoleIds": [],
+        "exemptChannelIds": [],
+        "allowDiscordLinks": false
+      },
+      "videos": {
+        "enabled": false,
+        "allowedRoleIds": [],
+        "exemptChannelIds": []
+      },
+      "images": {
+        "enabled": false,
+        "allowedRoleIds": [],
+        "exemptChannelIds": []
+      },
+      "files": {
+        "enabled": false,
+        "allowedRoleIds": [],
+        "exemptChannelIds": []
+      }
+    },
+    "channelRules": []
+  },
+  "warnings": {
+    "role1Id": "1544159442982014976",
+    "role2Id": "1544159663451406507",
+    "role3Id": "1544159697618346095"
+  },
+  "games": {
+    "rounds": 5,
+    "roundTimeSeconds": 25,
+    "winnerReward": 300,
+    "startRoleIds": [],
+    "enabled": {
+      "memorycolors": true,
+      "reaction": true,
+      "different": true,
+      "sequence": true,
+      "safebutton": true,
+      "mathrush": true,
+      "emojiquiz": true,
+      "higherlower": true,
+      "treasure": true,
+      "codebreaker": true,
+      "quiz": true,
+      "guess": true,
+      "rps": true,
+      "speed": true,
+      "scramble": true,
+      "truefalse": true,
+      "math": true,
+      "closest": true,
+      "word": true,
+      "wheel": true,
+      "daily": true,
+      "mafia": true,
+      "roulette": true,
+      "chairs": true,
+      "killer": true
+    },
+    "quickGameSettings": {
+      "memorycolors": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "reaction": {
+        "rounds": 5,
+        "roundTimeSeconds": 15,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "different": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "sequence": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "safebutton": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "mathrush": {
+        "rounds": 5,
+        "roundTimeSeconds": 20,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "emojiquiz": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "higherlower": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "treasure": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "codebreaker": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 100,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "quiz": {
+        "rounds": 5,
+        "roundTimeSeconds": 24,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "guess": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "rps": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "speed": {
+        "rounds": 5,
+        "roundTimeSeconds": 15,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "scramble": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "truefalse": {
+        "rounds": 5,
+        "roundTimeSeconds": 20,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "math": {
+        "rounds": 5,
+        "roundTimeSeconds": 20,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "closest": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "word": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "wheel": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "daily": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "mafia": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "roulette": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "chairs": {
+        "rounds": 5,
+        "roundTimeSeconds": 20,
+        "winnerReward": 500,
+        "cooldownSeconds": 60,
+        "rewardMin": 500,
+        "rewardMax": 500,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      },
+      "killer": {
+        "rounds": 5,
+        "roundTimeSeconds": 25,
+        "winnerReward": 300,
+        "cooldownSeconds": 60,
+        "rewardMin": 300,
+        "rewardMax": 300,
+        "xpReward": 25,
+        "allowedChannelIds": [],
+        "startRoleIds": []
+      }
+    },
+    "wheelRewards": [
+      50,
+      75,
+      100,
+      150,
+      200,
+      300
+    ],
+    "rouletteEnabled": true,
+    "rouletteTurnSeconds": 25,
+    "rouletteActionCosts": {
+      "revive": 300,
+      "link": 300,
+      "protect": 300,
+      "freeze": 500,
+      "double": 500,
+      "curse": 500,
+      "unlink": 200,
+      "add": 1000
+    },
+    "chairs": {
+      "startCountdownSeconds": 5,
+      "betweenRoundsMs": 2500
+    },
+    "lobby": {
+      "roulette": {
+        "minPlayers": 2,
+        "maxPlayers": 25
+      },
+      "chairs": {
+        "minPlayers": 2,
+        "maxPlayers": 20
+      },
+      "mafia": {
+        "minPlayers": 4,
+        "maxPlayers": 20
+      }
+    },
+    "outsider": {
+      "reward": 300,
+      "minPlayers": 3,
+      "maxPlayers": 20
+    },
+    "xoTournament": {
+      "reward": 0,
+      "minPlayers": 2,
+      "maxPlayers": 16
+    },
+    "letterChain": {
+      "enabled": true,
+      "command": "#تجميع-الحروف",
+      "lobbySeconds": 25,
+      "answerSeconds": 15,
+      "judgeSeconds": 20,
+      "minPlayers": 3,
+      "maxPlayers": 20,
+      "winnerReward": 300,
+      "channelIds": [],
+      "startRoleIds": [],
+      "letterPool": "ا أ إ آ ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي ة ى ؤ ئ ء"
+    }
+  },
+  "gangs": {
+    "maxMembers": 7,
+    "maxDeputies": 2,
+    "createCost": 0,
+    "bankEnabled": true,
+    "missionsEnabled": true,
+    "minMissionParticipants": 2,
+    "maxMissionSteps": 5,
+    "puzzleMaxAttempts": 2,
+    "chatMaxAttempts": 2,
+    "relayMaxAttempts": 2,
+    "missionCooldownMinutes": 600,
+    "missionDurationMinutes": 30,
+    "missionRewardMin": 5000,
+    "missionRewardMax": 7000,
+    "missionVoiceSeconds": 60,
+    "roleColor": "#2b2d31"
+  },
+  "robbery": {
+    "enabled": false,
+    "minParticipants": 5,
+    "lobbyMinutes": 10,
+    "missionMinutes": 15,
+    "reward": 150000,
+    "cooldownHours": 24,
+    "mentionMode": "everyone",
+    "mentionRoleId": "",
+    "equipment": {
+      "mask": 5000,
+      "hacking": 25000,
+      "drill": 30000,
+      "radio": 12000,
+      "car": 50000
+    },
+    "panelMessageId": ""
+  },
+  "voiceRooms": {
+    "enabled": true,
+    "roomName": "🎙️・{username}",
+    "userLimit": 0,
+    "bitrate": 64000,
+    "controlMessageId": "",
+    "bannerUrl": "",
+    "thumbnailUrl": ""
+  },
+  "music": {
+    "enabled": true,
+    "allowEveryone": true,
+    "controllerRoleIds": [],
+    "defaultVolume": 60,
+    "autoLeaveSeconds": 180,
+    "announceNowPlaying": true
+  },
+  "nameChange": {
+    "enabled": true,
+    "title": "تغيير اسمك في السيرفر",
+    "description": "لتغيير اسمك داخل السيرفر اضغط على الزر بالأسفل.\nسيظهر لك نموذج تكتب فيه الاسم الجديد، وبعد الإرسال يتغير اسمك مباشرة ويظهر لجميع أعضاء السيرفر.",
+    "buttonLabel": "تغيير اسمي",
+    "buttonEmoji": "✏️",
+    "modalTitle": "تغيير اسمك في السيرفر",
+    "inputLabel": "ضع الاسم الجديد",
+    "inputPlaceholder": "اكتب اسمك الجديد هنا...",
+    "successMessage": "✅ تم تغيير اسمك بنجاح إلى **{name}**.",
+    "cooldownSeconds": 30,
+    "color": "#8B5CF6",
+    "bannerUrl": "",
+    "panelMessageId": "1545519086006571130"
+  },
+  "levels": {
+    "xpPerMessage": 1,
+    "xpCooldownSeconds": 30,
+    "voiceXpPerMinute": 5,
+    "voiceMinMembers": 1,
+    "voiceIgnoreMuted": false,
+    "voiceIgnoreDeafened": true,
+    "baseXp": 200,
+    "growth": 50,
+    "seasonEnabled": true,
+    "seasonId": "season-1",
+    "seasonName": "Season 1",
+    "roleRewardMode": "cumulative",
+    "roleRewards": [],
+    "bannerUrl": "",
+    "thumbnailUrl": ""
+  },
+  "tickets": {
+    "title": "🎫 ZOMBI Tickets",
+    "description": "اختر نوع التكت الذي تريد فتحه من القائمة بالأسفل.",
+    "buttonLabel": "فتح تذكرة",
+    "buttonEmoji": "🎫",
+    "supportRoleIds": [],
+    "types": [
+      {
+        "id": "ticket_1788358549815_1126",
+        "label": "دعم فني",
+        "name": "دعم فني",
+        "emoji": "🎫",
+        "description": "لاي مشكلة بالسيرفر",
+        "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+        "categoryId": "1512985902316519514",
+        "supportRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445",
+          "1470436560783675444"
+        ],
+        "viewRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445",
+          "1470436560783675444"
+        ],
+        "openRoleIds": [],
+        "maxOpenPerUser": 1,
+        "enabled": true
+      },
+      {
+        "id": "ticket_1788358563319_9720",
+        "label": "شكوى ع اداري",
+        "name": "شكوى ع اداري",
+        "emoji": "🎫",
+        "description": "لاي شكوى ع اداري",
+        "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+        "categoryId": "1512985902316519514",
+        "supportRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445"
+        ],
+        "viewRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445"
+        ],
+        "openRoleIds": [],
+        "maxOpenPerUser": 1,
+        "enabled": true
+      },
+      {
+        "id": "ticket_1788358575871_501",
+        "label": "تقديم ع الادارة",
+        "name": "تقديم ع الادارة",
+        "emoji": "🎫",
+        "description": "للتقديم ع الادارة",
+        "welcomeMessage": "ارحب ب سيرفر ZOMBI سوف يتم الرد عليك باقرب وقت",
+        "categoryId": "1512985902316519514",
+        "supportRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445",
+          "1470436560783675444"
+        ],
+        "viewRoleIds": [
+          "1511388779544318105",
+          "1470436560783675445",
+          "1470436560783675444"
+        ],
+        "openRoleIds": [],
+        "maxOpenPerUser": 1,
+        "enabled": true
+      }
+    ],
+    "panelMessageId": "1544712624984301700"
+  },
+  "store": {
+    "title": "متجر الرتب",
+    "description": "افتح القائمة واختار الرتبة التي تريد معرفة سعرها ومميزاتها، وبعدها اضغط زر الشراء.",
+    "footer": "ZOMBI • ZOM Store",
+    "accentColor": "#B00020",
+    "thumbnailUrl": "",
+    "bannerUrl": "",
+    "detailBannerUrl": "",
+    "products": [
+      {
+        "id": "product_1788481265714_805",
+        "type": "role",
+        "roleId": "1545226194989883464",
+        "name": "مطنوخ الادارة 💎ྀི",
+        "price": 30000,
+        "category": "رتب الادارة",
+        "emoji": "💎",
+        "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+        "features": [
+          "رتبة مميزة داخل السيرفر",
+          "تضاف مباشرة بعد نجاح عملية الشراء"
+        ],
+        "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-6a000a1c-e2ca-462f-bae6-a16c0129174f.png",
+        "bannerUrl": "",
+        "enabled": true,
+        "sortOrder": 1,
+        "accessMode": "admins",
+        "allowedRoleIds": []
+      },
+      {
+        "id": "product_1787965808129_3677",
+        "type": "role",
+        "roleId": "1470436560767029401",
+        "name": "Extremely Active LVL 20",
+        "price": 15000,
+        "category": "رتب الأعضاء",
+        "emoji": "🏷️",
+        "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+        "features": [
+          "رتبة مميزة داخل السيرفر",
+          "تضاف مباشرة بعد نجاح عملية الشراء"
+        ],
+        "imageUrl": "https://cdn.phototourl.com/free/2026-09-04-09dd7003-31ef-4721-869f-0f4eea6e33fa.png",
+        "bannerUrl": "https://cdn.phototourl.com/free/2026-09-04-c7053671-9fc7-4a17-bb81-ba24e6f86c7c.png",
+        "enabled": true,
+        "sortOrder": 10,
+        "accessMode": "everyone",
+        "allowedRoleIds": []
+      },
+      {
+        "id": "product_1788221712126_6395",
+        "type": "role",
+        "roleId": "1470436560767029402",
+        "name": "💫 Insanely Active [LVL 30]",
+        "price": 25000,
+        "category": "رتب الأعضاء",
+        "emoji": "💫",
+        "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+        "features": [
+          "رتبة مميزة داخل السيرفر",
+          "تضاف مباشرة بعد نجاح عملية الشراء"
+        ],
+        "imageUrl": "https://cdn.phototourl.com/free/2026-09-04-543e5406-f3db-4760-ba3c-f2584b17f564.png",
+        "bannerUrl": "https://cdn.phototourl.com/free/2026-09-04-9bf0216c-79ee-4936-a512-d2f818f94532.png",
+        "enabled": true,
+        "sortOrder": 20,
+        "accessMode": "everyone",
+        "allowedRoleIds": []
+      },
+      {
+        "id": "product_1788221721365_7454",
+        "type": "role",
+        "roleId": "1470436560767029403",
+        "name": "🌠 Most Active [LVL 50]",
+        "price": 50000,
+        "category": "رتب الأعضاء",
+        "emoji": "🌠",
+        "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+        "features": [
+          "رتبة مميزة داخل السيرفر",
+          "تضاف مباشرة بعد نجاح عملية الشراء"
+        ],
+        "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-1008d1b1-714c-4d9c-98b6-f8cda17f601d.png",
+        "bannerUrl": "https://cdn.phototourl.com/member/2026-09-04-bf9966e8-9f10-4620-b968-a3135ea3ba2f.png",
+        "enabled": true,
+        "sortOrder": 30,
+        "accessMode": "everyone",
+        "allowedRoleIds": []
+      },
+      {
+        "id": "product_1788221759001_8541",
+        "type": "role",
+        "roleId": "1470436560767029405",
+        "name": "👑 VIP",
+        "price": 120000,
+        "category": "رتب الأعضاء",
+        "emoji": "👑",
+        "description": "رتبة مميزة يمكنك شراؤها باستخدام رصيد ZOM.",
+        "features": [
+          "رتبة مميزة داخل السيرفر",
+          "تضاف مباشرة بعد نجاح عملية الشراء"
+        ],
+        "imageUrl": "https://cdn.phototourl.com/member/2026-09-04-0f68fd44-4f5f-42e7-b00a-d45d3421ad5f.png",
+        "bannerUrl": "https://cdn.phototourl.com/member/2026-09-04-2c0041d5-fc74-4f60-bf4c-1fcc63d723d9.png",
+        "enabled": true,
+        "sortOrder": 40,
+        "accessMode": "everyone",
+        "allowedRoleIds": []
+      }
+    ],
+    "panelMessageId": ""
+  },
+  "rolePanel": {
+    "title": "🔔 ZOMBI • مركز الإشعارات",
+    "description": "اختر الإشعارات التي تريدها من الأزرار بالأسفل. اضغط مرة للحصول على الرتبة، واضغط مرة ثانية لإلغائها.",
+    "footer": "ZOMBI • ROLE CENTER",
+    "items": [
+      {
+        "roleId": "1545011875333275678",
+        "label": "Games Notifications",
+        "emoji": "🎮",
+        "style": "Primary"
+      },
+      {
+        "roleId": "1545206872762486924",
+        "label": "Notifications-سرقة بنك",
+        "emoji": "🔔",
+        "style": "Danger"
+      }
+    ],
+    "panelMessageId": ""
+  },
+  "autoRole": {
+    "enabled": false,
+    "roleId": "",
+    "includeBots": false
+  },
+  "welcome": {
+    "enabled": false,
+    "channelId": "",
+    "rulesChannelId": "",
+    "bannerUrl": "",
+    "title": "",
+    "description": "",
+    "channels": []
+  },
+  "suggestions": {
+    "enabled": true,
+    "color": "#E11D48",
+    "channels": []
+  },
+  "serverGuide": {
+    "enabled": true,
+    "title": "🧭 دليل السيرفر",
+    "description": "اختر القسم الذي تريد الانتقال إليه من الأزرار بالأسفل.",
+    "footer": "ZOMBI • SERVER GUIDE",
+    "color": "#7c3aed",
+    "bannerUrl": "",
+    "items": [],
+    "panelMessageId": ""
+  },
+  "rules": {
+    "enabled": true,
+    "title": "📜 ZOMBI • قوانين السيرفر",
+    "description": "جميع قوانين سيرفر ZOMBI في مكان واحد. اختر نوع القوانين من القائمة بالأسفل لعرضها لك بشكل خاص.",
+    "footer": "ZOMBI • RULES CENTER",
+    "color": "#E11D48",
+    "channelId": "",
+    "logoUrl": "",
+    "bannerUrl": "",
+    "panelMessageId": "",
+    "types": [
+      {
+        "id": "city",
+        "label": "قوانين المدينة",
+        "emoji": "🔗",
+        "description": "القوانين العامة داخل المدينة",
+        "content": "ضع قوانين المدينة من Dashboard.",
+        "enabled": true,
+        "sortOrder": 10
+      },
+      {
+        "id": "discord",
+        "label": "قوانين الديسكورد",
+        "emoji": "💻",
+        "description": "قوانين الشات والتعامل داخل Discord",
+        "content": "ضع قوانين الديسكورد من Dashboard.",
+        "enabled": true,
+        "sortOrder": 20
+      }
+    ]
+  },
+  "cityDirector": {
+    "enabled": false,
+    "autoEnabled": false,
+    "intervalMinutes": 120,
+    "durationMinutes": 10,
+    "goal": 20,
+    "minParticipants": 2,
+    "maxParticipants": 30,
+    "missionStages": 8,
+    "taskSeconds": 45,
+    "spreadAllOpenChannels": true,
+    "successPercent": 70,
+    "useBuiltinEvents": true,
+    "penaltiesEnabled": true,
+    "cashPenaltyAmount": 1000,
+    "bankPenaltyAmount": 1500,
+    "mutePenaltyMinutes": 120,
+    "punishmentChannelId": "",
+    "excludedChannelIds": [],
+    "enabledPenaltyIds": [],
+    "rewardMin": 500,
+    "rewardMax": 1500,
+    "mentionEveryone": false,
+    "templates": [
+      {
+        "id": "blackout",
+        "name": "انقطاع الكهرباء",
+        "emoji": "⚡",
+        "description": "تعرضت المدينة لانقطاع واسع. تعاونوا لإعادة تشغيل الأنظمة قبل انتهاء الوقت.",
+        "difficulty": "hard",
+        "goalMultiplier": 1,
+        "enabled": true
+      },
+      {
+        "id": "convoy",
+        "name": "شحنة المدينة",
+        "emoji": "🚚",
+        "description": "وصلت شحنة مهمة إلى ZOMBI City. ساعدوا في تأمينها وإيصالها للوجهة.",
+        "difficulty": "normal",
+        "goalMultiplier": 0.9,
+        "enabled": true
+      },
+      {
+        "id": "market-crash",
+        "name": "أزمة السوق",
+        "emoji": "📉",
+        "description": "السوق تحت ضغط شديد. اجمعوا الجهود لتثبيت اقتصاد المدينة.",
+        "difficulty": "elite",
+        "goalMultiplier": 1.35,
+        "enabled": true
+      },
+      {
+        "id": "city-emergency",
+        "name": "حالة طوارئ",
+        "emoji": "🚨",
+        "description": "تم إعلان حالة طوارئ في المدينة. كل مساهمة تقرّب السيرفر من السيطرة على الوضع.",
+        "difficulty": "hard",
+        "goalMultiplier": 1.15,
+        "enabled": true
+      },
+      {
+        "id": "world-boss",
+        "name": "World Boss",
+        "emoji": "👹",
+        "description": "ظهر تحدٍ ضخم يحتاج تعاون عدد كبير من أعضاء السيرفر قبل انتهاء الوقت.",
+        "difficulty": "legendary",
+        "goalMultiplier": 1.8,
+        "enabled": true
+      }
+    ]
+  },
+  "legacyPresetVersion": "v8.8",
+  "legacyPresetImportedAt": 1790885022852
+}

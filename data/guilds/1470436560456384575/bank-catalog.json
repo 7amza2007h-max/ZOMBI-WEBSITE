@@ -1,0 +1,80 @@
+{
+  "jobs": {
+    "worker": {
+      "name": "🧹 عامل",
+      "salary": 200
+    },
+    "security": {
+      "name": "👮 حارس أمن",
+      "salary": 200
+    },
+    "teacher": {
+      "name": "👨‍🏫 مدرس",
+      "salary": 200
+    },
+    "designer": {
+      "name": "🎨 مصمم",
+      "salary": 200
+    },
+    "programmer": {
+      "name": "💻 مبرمج",
+      "salary": 200
+    },
+    "engineer": {
+      "name": "👷 مهندس",
+      "salary": 200
+    },
+    "manager": {
+      "name": "👨‍💼 مدير",
+      "salary": 200
+    }
+  },
+  "companies": {
+    "bank": {
+      "id": "bank",
+      "name": "🏦 ZOMBI City Bank",
+      "description": "شركة الخدمات البنكية",
+      "priceGold": 20
+    },
+    "tech": {
+      "id": "tech",
+      "name": "💻 ZOMBI Tech",
+      "description": "شركة التكنولوجيا",
+      "priceGold": 20
+    },
+    "media": {
+      "id": "media",
+      "name": "📺 ZOMBI Media",
+      "description": "شركة الإعلام",
+      "priceGold": 20
+    },
+    "transport": {
+      "id": "transport",
+      "name": "🚗 ZOMBI Transport",
+      "description": "شركة النقل",
+      "priceGold": 20
+    }
+  },
+  "stocks": {
+    "ZZTECH": {
+      "symbol": "ZZTECH",
+      "name": "💻 ZOMBI Tech",
+      "price": 100000
+    },
+    "ZZBANK": {
+      "symbol": "ZZBANK",
+      "name": "🏦 ZOMBI City Bank",
+      "price": 150000
+    },
+    "ZZMEDIA": {
+      "symbol": "ZZMEDIA",
+      "name": "📺 ZOMBI Media",
+      "price": 80000
+    },
+    "ZZCAR": {
+      "symbol": "ZZCAR",
+      "name": "🚗 ZOMBI Motors",
+      "price": 120000
+    }
+  }
+}

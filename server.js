@@ -882,8 +882,8 @@ function legacyHomeStorePanelPayload(cfg){
   const products=(cfg.store?.products||[]).filter(p=>p.enabled!==false).sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0));if(!products.length)throw new Error('أضف منتجات أولًا.');
   const publicProducts=products.filter(p=>!p.accessMode||p.accessMode==='everyone'),restricted=products.some(p=>p.accessMode&&p.accessMode!=='everyone');
   const groups=new Map();for(const p of publicProducts){const k=String(p.category||'رتب الأعضاء').slice(0,80)||'رتب الأعضاء';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p);}const components=[];let idx=0;
-  for(const [category,items] of [...groups.entries()].slice(0,restricted?4:5)){components.push({type:1,components:[{type:3,custom_id:`zom_store_select_${idx++}`,placeholder:category.slice(0,150),options:items.slice(0,25).map(p=>({label:String(p.name||'Role').slice(0,100),description:`السعر: ${Number(p.price||0).toLocaleString()} ZOM`.slice(0,100),value:String(p.id),...(p.emoji?{emoji:{name:String(p.emoji)}}:{})}))}]});}
-  if(restricted&&components.length<5)components.push({type:1,components:[{type:2,style:2,custom_id:'zom_store_private_open',label:'الرتب الخاصة',emoji:{name:'🔒'}}]});
+  for(const [category,items] of [...groups.entries()].slice(0,restricted?4:5)){components.push({type:1,components:[{type:3,custom_id:`pub:store:select:${idx++}`,placeholder:category.slice(0,150),options:items.slice(0,25).map(p=>({label:String(p.name||'Role').slice(0,100),description:`السعر: ${Number(p.price||0).toLocaleString()} ZOM`.slice(0,100),value:String(p.id),...(p.emoji?{emoji:{name:String(p.emoji)}}:{})}))}]});}
+  if(restricted&&components.length<5)components.push({type:1,components:[{type:2,style:2,custom_id:'pub:store:private',label:'الرتب الخاصة',emoji:{name:'🔒'}}]});
   const embed={color:parseInt(String(cfg.store?.accentColor||'#B00020').replace('#',''),16)||0xB00020,title:cfg.store?.title||'متجر الرتب',description:`${cfg.store?.description||'افتح القائمة واختار الرتبة التي تريد معرفة سعرها ومميزاتها، وبعدها اضغط زر الشراء.'}\n\n💰 الأسعار بالـ **ZOM**${restricted?'\n🔒 يوجد قسم رتب خاصة حسب صلاحيات العضو.':''}`,footer:{text:cfg.store?.footer||'ZOMBI • ZOM Store'}};
   const thumb=cfg.store?.thumbnailUrl||cfg.branding?.panelLogoUrl;if(thumb)embed.thumbnail={url:thumb};const banner=cfg.store?.bannerUrl||cfg.branding?.panelBannerUrl;if(banner)embed.image={url:banner};return{embeds:[embed],components:components.slice(0,5)};
 }
@@ -996,7 +996,7 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
     const payload={embeds:[embed],components:[{type:1,components:[{type:3,custom_id:'zombi_rules_select',placeholder:'📜 اختر نوع القوانين...',min_values:1,max_values:1,options}]}],allowed_mentions:{parse:[]}};
     const m=await sendOrUpdate(cfg.rules.channelId,cfg.rules.panelMessageId,payload);cfg.rules.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;
   }
-  if(which==='store'){const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store?.panelMessageId,legacyHomeStorePanelPayload(cfg));cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
+  if(which==='store'){const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store?.panelMessageId,rawStorePanelPayload(cfg,site));cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
     if(which==='roles'){const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel?.panelMessageId,legacyHomeRolePanelPayload(cfg,bundle));cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   }
   if(which==='bank'){const payload=rawBankPanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.bankPanel,cfg.bank?.panelMessageId,payload);cfg.bank.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
@@ -2238,7 +2238,7 @@ async function start(){
     }else if(kind==='event'){
       const e={color:0x5865F2,title:'🎉 طلب فعالية',description:'لديك فكرة فعالية؟ اضغط الزر بالأسفل واملأ النموذج. سيتم إرسال الطلب مباشرة إلى الإدارة للمراجعة.',footer:{text:'ZOMBI • EVENT REQUEST'}};
       if(x.bannerUrl)e.image={url:x.bannerUrl};if(x.thumbnailUrl)e.thumbnail={url:x.thumbnailUrl};
-      payload=makeDashboardPanelV2({embeds:[e],components:[{type:1,components:[{type:2,style:1,custom_id:'staff:req:event:open',label:'طلب فعالية',emoji:{name:'🎉'}}]}]},'ZOMBI • EVENT REQUEST','ZOMBI-EVENT-REQUEST');
+      payload=makeDashboardPanelV2({embeds:[e],components:[{type:1,components:[{type:2,style:1,custom_id:'zstaff:event:open',label:'طلب فعالية',emoji:{name:'🎉'}}]}]},'ZOMBI • EVENT REQUEST','ZOMBI-EVENT-REQUEST');
     }else{
       const e={color:0x7c3aed,title:'🏖️ طلب إجازة',description:'لتقديم إجازة إدارية اضغط الزر بالأسفل وحدد بداية الإجازة ونهايتها والسبب.',footer:{text:'ZOMBI • LEAVE REQUEST'}};
       if(x.bannerUrl)e.image={url:x.bannerUrl};if(x.thumbnailUrl)e.thumbnail={url:x.thumbnailUrl};
