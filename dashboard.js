@@ -106,6 +106,80 @@
   main.className = 'z-dashboard-shell';
   main.append(content, sidebar);
 
+  // HARD SECTION ROUTER: keeps every dashboard section isolated even if a later
+  // optional UI enhancement throws. This is intentionally installed early.
+  const inferStandalonePage = (el) => {
+    if (!el) return 'overview';
+    if (el.dataset?.zPage) return el.dataset.zPage;
+    if (el.classList?.contains('rules-system-panel')) return 'rules';
+    if (el.classList?.contains('city-director-panel')) return 'director';
+    if (el.classList?.contains('event-system-panel')) return 'event';
+    if (el.classList?.contains('command-sync') || el.classList?.contains('legacy-panel')) return 'overview';
+    const title = String(el.querySelector?.(':scope > h2, :scope > h3')?.textContent || '');
+    const pairs = [
+      ['إحصائيات الإدارة','staff-stats'],['إعدادات الملفات','staff-insights'],['دوام الإدارة','staff-duty'],['قبول ورفض','staff-admin'],
+      ['طلب فعالية','staff-event'],['إجازات الإيفنت','staff-event-leave'],['طلب إجازة','staff-leave'],['نظام التقديمات','applications'],
+      ['محتوى الألعاب','game-content'],['من القاتل','killer'],['أنواع التذاكر','tickets'],['متجر الرتب','store'],['Self Roles','roles'],
+      ['إدارة أرصدة','members'],['قوالب مهمات العصابات','gangs'],['العصابات الحالية','gangs'],['قوالب City Director','director'],
+      ['ZOMBI Rules Center','rules'],['Premium','premium'],['حدود الخطة','premium'],['تخصيص بروفايل البوت','premium']
+    ];
+    for (const [text,page] of pairs) if (title.includes(text)) return page;
+    return 'overview';
+  };
+
+  const hardRenderSection = (requested) => {
+    let section = pageDefs[requested] ? requested : 'overview';
+    try {
+      nav.querySelectorAll('a[data-section]').forEach(a => {
+        const active = a.dataset.section === section;
+        a.classList.toggle('active', active);
+        if (active) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');
+      });
+      const h1 = pageHeader?.querySelector('h1');
+      const p = pageHeader?.querySelector('p');
+      if (h1) h1.textContent = pageDefs[section].label;
+      if (p) p.textContent = pageDefs[section].desc;
+
+      const form = content.querySelector(`form[action="/dashboard/${guildId}/settings"]`);
+      const groups = form ? [...form.querySelectorAll(':scope > .z-settings-page')] : [];
+      const activeGroup = groups.find(g => g.dataset.settingsPage === section);
+      if (form) form.classList.toggle('z-section-hidden', !activeGroup);
+      groups.forEach(g => g.classList.toggle('z-section-hidden', g !== activeGroup));
+      if (form && activeGroup) {
+        const saveBar = form.querySelector(':scope > .z-save-bar');
+        if (saveBar) saveBar.classList.toggle('z-section-hidden', section === 'permissions');
+      }
+
+      [...content.querySelectorAll(':scope > section.panel, :scope > .z-page-extra')].forEach(el => {
+        if (el === form) return;
+        const page = inferStandalonePage(el);
+        el.dataset.zPage = page;
+        el.classList.toggle('z-section-hidden', page !== section);
+      });
+
+      // Some standalone panels can be nested one level deeper by older builds.
+      [...content.querySelectorAll('[data-z-page]')].forEach(el => {
+        if (el === form || el.closest('.z-settings-page')) return;
+        el.classList.toggle('z-section-hidden', el.dataset.zPage !== section);
+      });
+    } catch (error) {
+      console.error('ZOMBI hard section router:', error);
+    }
+  };
+  window.__zombiRenderSection = hardRenderSection;
+  document.addEventListener('click', event => {
+    const a = event.target.closest?.('.z-side-nav a[data-section]');
+    if (!a) return;
+    event.preventDefault();
+    const section = a.dataset.section || 'overview';
+    history.pushState({}, '', `/dashboard/${guildId}?section=${encodeURIComponent(section)}`);
+    hardRenderSection(section);
+    window.scrollTo({top:0,behavior:'auto'});
+  }, true);
+  window.addEventListener('popstate', () => hardRenderSection(currentFromUrl()));
+  setTimeout(() => hardRenderSection(currentFromUrl()), 0);
+  setTimeout(() => hardRenderSection(currentFromUrl()), 250);
+
   const oldHead = content.querySelector('.dash-head');
   const guildNameText = oldHead?.querySelector('h1')?.textContent?.trim() || 'ZOMBI Server';
   const escapeNode=document.createElement('span');escapeNode.textContent=guildNameText;const guildName=escapeNode.innerHTML;
@@ -216,6 +290,8 @@
         localSave.dataset.page = pageId;
         localSave.name = '_saveSection';
         localSave.value = pageId;
+        if (pageId === 'welcome') localSave.formAction = `/dashboard/${guildId}/welcome/save`;
+        else if (pageId === 'overview') localSave.formAction = `/dashboard/${guildId}/overview/save`;
         localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
         localBar.appendChild(localSave);
         w.appendChild(localBar);
@@ -230,26 +306,9 @@
       settingsForm.appendChild(bar);
     }
 
-    // Welcome has its own page and its own POST route.
-    const welcomeGroup = settingsGroups.get('welcome');
-    if (welcomeGroup) {
-      welcomeGroup.querySelectorAll('.z-local-save-bar').forEach(el => el.remove());
-      const welcomeForm = document.createElement('form');
-      welcomeForm.method = 'post';
-      welcomeForm.action = `/dashboard/${guildId}/welcome/save`;
-      welcomeForm.className = 'panel z-welcome-dedicated-form';
-      welcomeForm.dataset.zPage = 'welcome';
-      welcomeForm.noValidate = true;
-      const csrfCopy = csrf?.cloneNode(true);
-      if (csrfCopy) welcomeForm.appendChild(csrfCopy);
-      welcomeForm.appendChild(welcomeGroup);
-      const saveBar = document.createElement('div');
-      saveBar.className = 'z-local-save-bar';
-      saveBar.innerHTML = '<button type="submit" class="btn primary">💾 حفظ إعدادات الترحيب</button>';
-      welcomeForm.appendChild(saveBar);
-      settingsForm.after(welcomeForm);
-      settingsGroups.delete('welcome');
-    }
+    // Welcome and Overview stay inside the main settings form so section navigation
+    // can continue to show/hide them normally. Their save buttons use formAction
+    // to post to the dedicated routes without moving the section out of the hub.
   }
 
   // Move channel selectors to the pages where they belong while keeping them inside the same settings form.
@@ -294,29 +353,7 @@
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
-  // Main/overview also gets its own save route. This avoids the legacy giant
-  // settings POST from dropping fields after the dashboard moves controls around.
-  if (settingsForm) {
-    const overviewGroup = settingsGroups.get('overview');
-    if (overviewGroup) {
-      overviewGroup.querySelectorAll('.z-local-save-bar').forEach(el => el.remove());
-      const overviewForm = document.createElement('form');
-      overviewForm.method = 'post';
-      overviewForm.action = `/dashboard/${guildId}/overview/save`;
-      overviewForm.className = 'panel z-overview-dedicated-form';
-      overviewForm.dataset.zPage = 'overview';
-      overviewForm.noValidate = true;
-      const csrfCopy = settingsForm.querySelector(':scope > input[name="_csrf"]')?.cloneNode(true);
-      if (csrfCopy) overviewForm.appendChild(csrfCopy);
-      overviewForm.appendChild(overviewGroup);
-      const saveBar = document.createElement('div');
-      saveBar.className = 'z-local-save-bar';
-      saveBar.innerHTML = '<button type="submit" class="btn primary">💾 حفظ الرئيسية</button>';
-      overviewForm.appendChild(saveBar);
-      settingsForm.after(overviewForm);
-      settingsGroups.delete('overview');
-    }
-  }
+  // Overview remains inside the settings hub; its save button uses formAction.
 
 
   // سرقة البنك: اختيار الرتبة يظهر فقط عند استخدام منشن رتبة.
@@ -657,6 +694,7 @@
 
   window.addEventListener('popstate', () => render(currentFromUrl()));
   render(currentFromUrl());
+  hardRenderSection(currentFromUrl());
 
   const qs = new URLSearchParams(location.search);
   if (qs.get('saved') === '1') {
