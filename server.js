@@ -500,7 +500,7 @@ async function guildPage(req){
     cfg.welcome={...(cfg.welcome||{}),...dedicatedWelcome};
   }
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
-  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=featureAllowed(site,cfg,'customBotProfile'),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة متاحة فقط للسيرفرات المشتركة Premium أو Premium+.';
+  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=featureAllowed(site,cfg,'customBotProfile'),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ويمكن لمالك السيرفر أو من لديه Administrator / Manage Server تعديلها.';
   const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates'),musicQueueLimit=maxFor(req,cfg,site,'musicQueueSize'),musicVolumeLimit=maxFor(req,cfg,site,'musicMaxVolume'),musicTrackLimit=maxFor(req,cfg,site,'musicMaxTrackMinutes');
   const products=cfg.store.products||[],items=cfg.rolePanel.items||[],ticketTypes=cfg.tickets.types||[],guideItems=cfg.serverGuide?.items||[],directorTemplates=cfg.cityDirector?.templates||[];
   const legacyWarningRoles=Array.isArray(cfg.warnings?.roleIds)?cfg.warnings.roleIds:[cfg.warnings?.role1Id||'',cfg.warnings?.role2Id||'',cfg.warnings?.role3Id||''];
@@ -827,7 +827,7 @@ async function guildPage(req){
 
   <section class="panel"><h2>🧾 إدارة أرصدة الأعضاء ${lockedNote(canEconomyAdmin)}</h2><form class="inline-form" method="post" action="/dashboard/${guild.id}/economy/user"><input type="hidden" name="_csrf" value="${token}"><input name="userId" placeholder="User ID" required ${disabled(canEconomyAdmin)}><select name="account" ${disabled(canEconomyAdmin)}><option value="wallet">المحفظة</option><option value="bank">البنك</option></select><select name="action" ${disabled(canEconomyAdmin)}><option value="set">تعيين</option><option value="add">إضافة</option><option value="remove">خصم</option></select><input type="number" name="amount" min="0" required ${disabled(canEconomyAdmin)}><button class="btn" ${disabled(canEconomyAdmin)}>تنفيذ</button></form><div class="table-wrap"><table><thead><tr><th>User ID</th><th>المحفظة</th><th>البنك</th><th>Level</th></tr></thead><tbody>${topUsers}</tbody></table></div></section>
 
-  <section class="panel premium-bot-profile"><h2>🤖 تخصيص هوية ZOMBI — Premium / Premium+ ${lockedNote(canBotProfile,profileLockText)}</h2><p>غيّر Nickname البوت الفعلي داخل السيرفر، وLogo/Banner/Bio المستخدم في لوحات ZOMBI لهذا السيرفر. هذه الميزة للمشتركين فقط، ويمكن لأي شخص لديه صلاحية إدارة السيرفر من الداشبورد تعديلها.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/bot-profile"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="premium"><div class="form-grid"><label>Nickname البوت داخل السيرفر<input name="botNickname" maxlength="32" value="${esc(cfg.branding.botNickname||'')}" placeholder="ZOMBI" ${disabled(canBotProfile)}></label><label class="wide">رابط Logo اللوحات<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">رابط Banner اللوحات<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio اللوحات<textarea name="botBio" maxlength="190" placeholder="نبذة تظهر في بروفايل البوت داخل السيرفر" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label></div><div class="warn small">💎 التخصيص حسب خطة السيرفر، ومتاح لمن لديه صلاحية إدارة السيرفر. Nickname يتغير فعليًا داخل Discord؛ روابط Logo/Banner/Bio تُستخدم في لوحات وEmbeds ZOMBI الخاصة بهذا السيرفر.</div><div class="card-actions"><button class="btn primary" type="submit" name="profileMode" value="save" ${disabled(canBotProfile)}>💾 حفظ وتطبيق التغييرات</button><button class="btn" type="submit" name="profileMode" value="force" ${disabled(canBotProfile)}>🔄 إعادة تطبيق الكل</button><button class="btn danger" type="submit" name="profileMode" value="reset" ${disabled(canBotProfile)} onclick="return confirm('إرجاع Nickname والصورة والبنر وBio للوضع الافتراضي لهذا السيرفر؟')">↩️ إعادة الافتراضي</button></div></form></section>
+  <section class="panel premium-bot-profile"><h2>🤖 تخصيص هوية ZOMBI — للمشتركين ${lockedNote(canBotProfile,profileLockText)}</h2><p>غيّر Nickname البوت الفعلي داخل السيرفر، وLogo/Banner/Bio المستخدم في لوحات ZOMBI لهذا السيرفر. هذه الميزة للمشتركين، ويمكن لمالك السيرفر أو من لديه صلاحية Administrator / Manage Server تعديلها.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/bot-profile"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="premium"><div class="form-grid"><label>Nickname البوت داخل السيرفر<input name="botNickname" maxlength="32" value="${esc(cfg.branding.botNickname||'')}" placeholder="ZOMBI" ${disabled(canBotProfile)}></label><label class="wide">رابط Logo اللوحات<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">رابط Banner اللوحات<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio اللوحات<textarea name="botBio" maxlength="190" placeholder="نبذة تظهر في بروفايل البوت داخل السيرفر" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label></div><div class="warn small">💎 التخصيص حسب خطة السيرفر، ومتاح لمالك السيرفر أو من لديه Administrator / Manage Server. Nickname يتغير فعليًا داخل Discord؛ روابط Logo/Banner/Bio تُستخدم في لوحات وEmbeds ZOMBI الخاصة بهذا السيرفر.</div><div class="card-actions"><button class="btn primary" type="submit" name="profileMode" value="save" ${disabled(canBotProfile)}>💾 حفظ وتطبيق التغييرات</button><button class="btn" type="submit" name="profileMode" value="force" ${disabled(canBotProfile)}>📨 إرسال / تحديث التغييرات</button><button class="btn danger" type="submit" name="profileMode" value="reset" ${disabled(canBotProfile)} onclick="return confirm('إرجاع Nickname والصورة والبنر وBio للوضع الافتراضي لهذا السيرفر؟')">↩️ إعادة الافتراضي</button></div></form></section>
 
   <div class="two"><section class="panel"><h2>💎 Premium / Premium+</h2><a class="btn primary" href="/premium">مقارنة الخطط والاشتراك</a><p>${store.isPremium(cfg)?`مفعّل حتى <b>${new Date(cfg.premiumUntil).toLocaleDateString('ar-JO')}</b>`:'الخطة الحالية مجانية.'}</p><form method="post" action="/dashboard/${guild.id}/redeem"><input type="hidden" name="_csrf" value="${token}"><input name="code" placeholder="ZOMBI-XXXXXXXXXXXX"><button class="btn">تفعيل كود</button></form></section><section class="panel"><h2>📌 حدود الخطة</h2>${LIMIT_DEFS.map(d=>`<p>${esc(d.label)}: <b>${maxFor(req,cfg,site,d.key).toLocaleString()}</b></p>`).join('')}</section></div>`,site,cfg,owner);
 }
@@ -1051,16 +1051,6 @@ async function start(){
   // Secure bot <-> website fallback sync. Used only when a shared DATABASE_URL is not configured on both hosts.
   app.get('/api/bot-sync/global',requireBotSync,async(_req,res,next)=>{try{res.json({ok:true,global:await store.getGlobalConfig(),source:(await store.health()).mode});}catch(e){next(e);}});
   app.get('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{res.json({ok:true,config:await store.getConfig(req.params.guildId),source:(await store.health()).mode});}catch(e){next(e);}});
-  // Lightweight subscription endpoint used by the bot to reconcile Premium status even
-  // when the bot and dashboard are accidentally pointed at different database instances.
-  app.get('/api/bot-sync/guild/:guildId/subscription',requireBotSync,async(req,res,next)=>{try{
-    const cfg=await store.getConfig(req.params.guildId);
-    res.json({ok:true,subscription:{
-      plan:planNameForConfig(cfg),
-      premiumUntil:Number(cfg.premiumUntil||0),
-      updatedAt:Number(cfg.subscriptionUpdatedAt||0)
-    }});
-  }catch(e){next(e);}});
   app.put('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{const input=req.body?.config||req.body||{};const config=await store.saveConfig(req.params.guildId,input);res.json({ok:true,config});}catch(e){next(e);}});
   app.get('/api/bot-sync/guild/:guildId/data/:name',requireBotSync,async(req,res,next)=>{try{const name=String(req.params.name||'').trim();if(!/^[a-zA-Z0-9._-]{1,120}$/.test(name))return res.status(400).json({ok:false,error:'اسم ملف البيانات غير صالح.'});const data=await store.data(req.params.guildId,name,{});res.json({ok:true,data});}catch(e){next(e);}});
   app.put('/api/bot-sync/guild/:guildId/data/:name',requireBotSync,async(req,res,next)=>{try{const name=String(req.params.name||'').trim();if(!/^[a-zA-Z0-9._-]{1,120}$/.test(name))return res.status(400).json({ok:false,error:'اسم ملف البيانات غير صالح.'});const data=await store.saveData(req.params.guildId,name,req.body?.data??req.body??{});res.json({ok:true,data});}catch(e){next(e);}});
@@ -1196,12 +1186,7 @@ async function start(){
     const apiWarning=presence.error&&!presence.heartbeat?`<section class="panel"><b>⚠️ تعذر فحص ZOMBI Bot من Discord.</b><p class="hint">${esc(presence.error?.message||'تحقق من BOT_TOKEN / OAUTH Proxy في إعدادات الاستضافة.')}</p></section>`:'';
     res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section>${apiWarning}<div class="servers">${cards||(!unknownCards?'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>':'')}</div>${unknownCards?`<h2>حالة غير مؤكدة</h2><div class="servers">${unknownCards}</div>`:''}${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));
   }catch(e){next(e);}});
-  // Every manageable guild uses the same full dashboard. The setup wizard remains
-  // available as an optional first-run helper, but it no longer replaces the dashboard.
-  // This keeps secondary servers on the exact same control surface as the main ZOMBI server.
-  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
-    res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));
-  }catch(e){next(e);}});
+  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/role-manager/state',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
     const cfg=await store.getConfig(req.params.guildId),{guild,roles,channels}=req.bundle;
@@ -1385,7 +1370,7 @@ async function start(){
         cfg.branding.customName=String(req.body.customName||'').slice(0,80);
         cfg.branding.customFooter=String(req.body.customFooter||'').slice(0,160);
       }
-      if(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')){
+      if(featureAllowed(site,cfg,'customBotProfile')){
         cfg.branding.botNickname=String(req.body.botNickname||'').slice(0,32);
         cfg.branding.avatarUrl=String(req.body.avatarUrl||'').trim();
         cfg.branding.bannerUrl=String(req.body.bannerUrl||'').trim();
@@ -1866,7 +1851,7 @@ async function start(){
       await syncRoleBanPermissionsViaApi(req.params.guildId,req.bundle,saved.moderation).catch(e=>console.warn('⚠️ role ban dashboard sync:',e?.message||e));
     }
 
-    if(saves('overview')&&isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')){
+    if(saves('overview')&&featureAllowed(site,saved,'customBotProfile')){
       const forceProfile=String(req.body.forceBotProfile||'')==='1';
       const nickChanged=forceProfile||oldBotProfile.botNickname!==String(saved.branding.botNickname||'');
       if(nickChanged){
@@ -1904,7 +1889,7 @@ async function start(){
       if(req.body.customName!==undefined)next.branding.customName=String(req.body.customName||'').slice(0,80);
       if(req.body.customFooter!==undefined)next.branding.customFooter=String(req.body.customFooter||'').slice(0,160);
     }
-    if(isGuildOwner(req)&&featureAllowed(site,current,'customBotProfile')){
+    if(featureAllowed(site,current,'customBotProfile')){
       if(req.body.botNickname!==undefined)next.branding.botNickname=String(req.body.botNickname||'').slice(0,32);
       if(req.body.avatarUrl!==undefined)next.branding.avatarUrl=String(req.body.avatarUrl||'').trim();
       if(req.body.bannerUrl!==undefined)next.branding.bannerUrl=String(req.body.bannerUrl||'').trim();
@@ -1931,7 +1916,7 @@ async function start(){
     for(const key of ['system','features','branding','channels']){
       if(JSON.stringify(stable(verify[key]))!==JSON.stringify(stable(saved[key])))throw new Error(`فشل التحقق من حفظ الرئيسية (${key}).`);
     }
-    if(isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')&&req.body.botNickname!==undefined){
+    if(featureAllowed(site,saved,'customBotProfile')&&req.body.botNickname!==undefined){
       await botFetch(`/guilds/${gid}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding?.botNickname||null})}).catch(()=>{});
     }
     return res.redirect(`/dashboard/${gid}?section=overview&saved=1`);
@@ -2108,7 +2093,7 @@ async function start(){
 
   app.post('/dashboard/:guildId/bot-profile',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
-    if(!featureAllowed(site,cfg,'customBotProfile'))return res.status(403).send(layout('Premium',`<section class="login"><h1>🔒 Premium / Premium+ فقط</h1><p>تخصيص Nickname ولوجو وبنر ZOMBI متاح للسيرفرات المشتركة فقط.</p><a class="btn" href="/dashboard/${req.params.guildId}?section=premium">رجوع</a></section>`,req.user));
+    if(!featureAllowed(site,cfg,'customBotProfile'))return res.status(403).send(layout('Premium',`<section class="login"><h1>🔒 Premium مطلوب</h1><p>تخصيص Nickname ولوجو وبنر ZOMBI متاح للمشتركين فقط.</p><a class="btn" href="/dashboard/${req.params.guildId}?section=premium">رجوع</a></section>`,req.user));
     const mode=['save','force','reset'].includes(String(req.body.profileMode||''))?String(req.body.profileMode):'save';
     const old={botNickname:String(cfg.branding?.botNickname||''),avatarUrl:String(cfg.branding?.avatarUrl||''),bannerUrl:String(cfg.branding?.bannerUrl||''),bio:String(cfg.branding?.bio||'')};
     const nextProfile=mode==='reset'?{botNickname:'',avatarUrl:'',bannerUrl:'',bio:''}:{botNickname:String(req.body.botNickname||'').trim().slice(0,32),avatarUrl:String(req.body.avatarUrl||'').trim(),bannerUrl:String(req.body.bannerUrl||'').trim(),bio:String(req.body.botBio||'').trim().slice(0,190)};
@@ -2325,7 +2310,7 @@ async function start(){
         </section>
         <section class="panel owner-section owner-rules-card">
           <div class="owner-section-head"><div><span class="owner-section-icon">🔐</span><div><h2>قواعد الحماية</h2><p>قواعد ثابتة لا تتجاوزها Dashboard السيرفر.</p></div></div></div>
-          <ul><li>تغيير Nickname وصورة/Banner لوحات البوت: <b>للمشتركين فقط</b>.</li><li>تعديل هوية البوت: <b>مالك السيرفر فقط</b>.</li><li>حساب Owner لا يتجاوز اشتراك السيرفر داخل Dashboard.</li><li>القيم فوق Limits لا تُحفظ؛ تظهر رسالة ترقية.</li></ul>
+          <ul><li>تغيير Nickname وصورة/Banner لوحات البوت: <b>للمشتركين فقط</b>.</li><li>تعديل هوية البوت: <b>مالك السيرفر أو Administrator / Manage Server</b>.</li><li>حساب Owner لا يتجاوز اشتراك السيرفر داخل Dashboard.</li><li>القيم فوق Limits لا تُحفظ؛ تظهر رسالة ترقية.</li></ul>
         </section>
       </div>
 
@@ -2358,18 +2343,7 @@ async function start(){
 
   app.post('/owner/plans',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const plans=Object.fromEntries(PLAN_IDS.map(p=>[p,{features:{},games:{},heistGames:{},limits:{}}]));const current=await store.getGlobalConfig();for(const p of PLAN_IDS){for(const f of FEATURE_DEFS)plans[p].features[f.key]=(p==='free'&&f.key==='customBotProfile')?false:Boolean(req.body[`${p}_feature_${f.key}`]);for(const g of GAME_DEFS)plans[p].games[g.id]=g.publicSupported?Boolean(req.body[`${p}_game_${g.id}`]):Boolean(current.plans?.[p]?.games?.[g.id]);for(const g of HEIST_GAME_DEFS)plans[p].heistGames[g.id]=Boolean(req.body[`${p}_heist_${g.id}`]);for(const d of LIMIT_DEFS)plans[p].limits[d.key]=int(req.body[`${p}_limit_${d.key}`],d.min,d.min,d.max);}await store.saveGlobalConfig({plans:normalizePlans(plans)});res.redirect('/owner');});
   app.post('/owner/guilds/:guildId/leave',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{try{const guildId=String(req.params.guildId||'').trim();if(!/^\d{15,25}$/.test(guildId))throw new Error('Guild ID غير صالح.');const guild=await getBotGuild(guildId);if(!guild)throw new Error('البوت غير موجود في هذا السيرفر.');await botFetch(`/users/@me/guilds/${guildId}`,{method:'DELETE'});res.redirect('/owner?left=1');}catch(e){next(e);}});
-  app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{try{
-    const guildId=String(req.body.guildId||'').trim();
-    if(!/^\d{15,25}$/.test(guildId))throw new Error('Guild ID غير صالح.');
-    const days=Number(req.body.days||0),plan=['premium','premium_plus'].includes(String(req.body.plan))?String(req.body.plan):'premium';
-    if(days>0)await store.setPremium(guildId,days,plan);else await store.removePremium(guildId);
-    // Read-after-write verification prevents the Owner panel from claiming success when
-    // the subscription was written to a different/failed storage backend.
-    const saved=await store.getConfig(guildId),actual=planNameForConfig(saved);
-    if(days>0&&actual!==plan)throw new Error(`فشل تثبيت الخطة للسيرفر. المتوقع ${PLAN_LABELS[plan]} والمحفوظ ${PLAN_LABELS[actual]||actual}.`);
-    if(days<=0&&actual!=='free')throw new Error('فشل إلغاء الاشتراك للسيرفر.');
-    res.redirect('/owner?premiumUpdated=1');
-  }catch(e){next(e);}});
+  app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const days=Number(req.body.days||0);if(days>0)await store.setPremium(req.body.guildId,days,req.body.plan||'premium');else await store.removePremium(req.body.guildId);res.redirect('/owner');});
   app.post('/owner/codes',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.createCode(Number(req.body.days||30),req.body.plan||'premium');res.redirect('/owner');});
   app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,zainCash:{enabled:Boolean(req.body.zainCashEnabled),walletNumber:String(req.body.zainWalletNumber||'').trim(),walletName:String(req.body.zainWalletName||'').trim(),premiumAmount:Number(req.body.zainPremiumAmount||4.99),premiumPlusAmount:Number(req.body.zainPremiumPlusAmount||7.99),premiumDays:int(req.body.zainPremiumDays,30,1,3650),premiumPlusDays:int(req.body.zainPremiumPlusDays,30,1,3650),instructions:req.body.zainInstructions},premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
 
