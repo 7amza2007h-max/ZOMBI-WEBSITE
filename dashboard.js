@@ -290,8 +290,6 @@
         localSave.dataset.page = pageId;
         localSave.name = '_saveSection';
         localSave.value = pageId;
-        if (pageId === 'welcome') localSave.formAction = `/dashboard/${guildId}/welcome/save`;
-        else if (pageId === 'overview') localSave.formAction = `/dashboard/${guildId}/overview/save`;
         localSave.textContent = `💾 حفظ ${pageDefs[pageId]?.label || 'القسم'}`;
         localBar.appendChild(localSave);
         w.appendChild(localBar);
@@ -352,6 +350,19 @@
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
+
+  // Keep identity/branding controls together under Premium instead of mixing them
+  // with Overview. This also makes the section-scoped save deterministic.
+  moveControl('brandColor', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('customName', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('customFooter', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('botNickname', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('avatarUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('bannerUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('botBio', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('panelLogoUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('panelBannerUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('lineUrl', 'premium', 'هوية وتصميم هذا السيرفر');
 
   // Overview remains inside the settings hub; its save button uses formAction.
 
@@ -666,19 +677,14 @@
       showNode(settingsForm, hasSettings);
       settingsGroups.forEach((group, key) => showNode(group, key === section));
       const globalSaveBar = settingsForm.querySelector('.z-save-bar');
-      if (globalSaveBar) showNode(globalSaveBar, section !== 'permissions');
-      const saveBtn = settingsForm.querySelector('.z-save-bar button[type="submit"]:not([name="forceBotProfile"])');
-      if (saveBtn) {
-        saveBtn.dataset.page = section;
-        saveBtn.name = '_saveSection';
-        saveBtn.value = section;
-        saveBtn.textContent = section === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${def.label}`;
-      }
+      // Every page has its own local save button. The old global bar submitted
+      // mixed fields from multiple hidden sections and made saves look broken.
+      if (globalSaveBar) showNode(globalSaveBar, false);
       settingsForm.querySelectorAll('.z-local-save').forEach(btn => {
         btn.textContent = btn.dataset.page === 'roles' ? '💾 حفظ وتحديث إعدادات اللوحة' : `💾 حفظ ${pageDefs[btn.dataset.page]?.label || 'القسم'}`;
       });
       const profileBtn = settingsForm.querySelector('.z-save-bar button[name="forceBotProfile"]');
-      if (profileBtn) profileBtn.classList.toggle('z-section-hidden', section !== 'overview');
+      if (profileBtn) profileBtn.classList.toggle('z-section-hidden', section !== 'premium');
     }
 
     [...content.querySelectorAll('[data-z-page]')].forEach(el => {
