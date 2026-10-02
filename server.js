@@ -1051,6 +1051,16 @@ async function start(){
   // Secure bot <-> website fallback sync. Used only when a shared DATABASE_URL is not configured on both hosts.
   app.get('/api/bot-sync/global',requireBotSync,async(_req,res,next)=>{try{res.json({ok:true,global:await store.getGlobalConfig(),source:(await store.health()).mode});}catch(e){next(e);}});
   app.get('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{res.json({ok:true,config:await store.getConfig(req.params.guildId),source:(await store.health()).mode});}catch(e){next(e);}});
+  // Lightweight subscription endpoint used by the bot to reconcile Premium status even
+  // when the bot and dashboard are accidentally pointed at different database instances.
+  app.get('/api/bot-sync/guild/:guildId/subscription',requireBotSync,async(req,res,next)=>{try{
+    const cfg=await store.getConfig(req.params.guildId);
+    res.json({ok:true,subscription:{
+      plan:planNameForConfig(cfg),
+      premiumUntil:Number(cfg.premiumUntil||0),
+      updatedAt:Number(cfg.subscriptionUpdatedAt||0)
+    }});
+  }catch(e){next(e);}});
   app.put('/api/bot-sync/guild/:guildId',requireBotSync,async(req,res,next)=>{try{const input=req.body?.config||req.body||{};const config=await store.saveConfig(req.params.guildId,input);res.json({ok:true,config});}catch(e){next(e);}});
   app.get('/api/bot-sync/guild/:guildId/data/:name',requireBotSync,async(req,res,next)=>{try{const name=String(req.params.name||'').trim();if(!/^[a-zA-Z0-9._-]{1,120}$/.test(name))return res.status(400).json({ok:false,error:'اسم ملف البيانات غير صالح.'});const data=await store.data(req.params.guildId,name,{});res.json({ok:true,data});}catch(e){next(e);}});
   app.put('/api/bot-sync/guild/:guildId/data/:name',requireBotSync,async(req,res,next)=>{try{const name=String(req.params.name||'').trim();if(!/^[a-zA-Z0-9._-]{1,120}$/.test(name))return res.status(400).json({ok:false,error:'اسم ملف البيانات غير صالح.'});const data=await store.saveData(req.params.guildId,name,req.body?.data??req.body??{});res.json({ok:true,data});}catch(e){next(e);}});
@@ -1186,7 +1196,12 @@ async function start(){
     const apiWarning=presence.error&&!presence.heartbeat?`<section class="panel"><b>⚠️ تعذر فحص ZOMBI Bot من Discord.</b><p class="hint">${esc(presence.error?.message||'تحقق من BOT_TOKEN / OAUTH Proxy في إعدادات الاستضافة.')}</p></section>`:'';
     res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section>${apiWarning}<div class="servers">${cards||(!unknownCards?'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>':'')}</div>${unknownCards?`<h2>حالة غير مؤكدة</h2><div class="servers">${unknownCards}</div>`:''}${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));
   }catch(e){next(e);}});
-  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
+  // Every manageable guild uses the same full dashboard. The setup wizard remains
+  // available as an optional first-run helper, but it no longer replaces the dashboard.
+  // This keeps secondary servers on the exact same control surface as the main ZOMBI server.
+  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
+    res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));
+  }catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/role-manager/state',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
     const cfg=await store.getConfig(req.params.guildId),{guild,roles,channels}=req.bundle;
@@ -2343,7 +2358,18 @@ async function start(){
 
   app.post('/owner/plans',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const plans=Object.fromEntries(PLAN_IDS.map(p=>[p,{features:{},games:{},heistGames:{},limits:{}}]));const current=await store.getGlobalConfig();for(const p of PLAN_IDS){for(const f of FEATURE_DEFS)plans[p].features[f.key]=(p==='free'&&f.key==='customBotProfile')?false:Boolean(req.body[`${p}_feature_${f.key}`]);for(const g of GAME_DEFS)plans[p].games[g.id]=g.publicSupported?Boolean(req.body[`${p}_game_${g.id}`]):Boolean(current.plans?.[p]?.games?.[g.id]);for(const g of HEIST_GAME_DEFS)plans[p].heistGames[g.id]=Boolean(req.body[`${p}_heist_${g.id}`]);for(const d of LIMIT_DEFS)plans[p].limits[d.key]=int(req.body[`${p}_limit_${d.key}`],d.min,d.min,d.max);}await store.saveGlobalConfig({plans:normalizePlans(plans)});res.redirect('/owner');});
   app.post('/owner/guilds/:guildId/leave',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{try{const guildId=String(req.params.guildId||'').trim();if(!/^\d{15,25}$/.test(guildId))throw new Error('Guild ID غير صالح.');const guild=await getBotGuild(guildId);if(!guild)throw new Error('البوت غير موجود في هذا السيرفر.');await botFetch(`/users/@me/guilds/${guildId}`,{method:'DELETE'});res.redirect('/owner?left=1');}catch(e){next(e);}});
-  app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res)=>{const days=Number(req.body.days||0);if(days>0)await store.setPremium(req.body.guildId,days,req.body.plan||'premium');else await store.removePremium(req.body.guildId);res.redirect('/owner');});
+  app.post('/owner/premium',requireLogin,requireOwner,checkCsrf,async(req,res,next)=>{try{
+    const guildId=String(req.body.guildId||'').trim();
+    if(!/^\d{15,25}$/.test(guildId))throw new Error('Guild ID غير صالح.');
+    const days=Number(req.body.days||0),plan=['premium','premium_plus'].includes(String(req.body.plan))?String(req.body.plan):'premium';
+    if(days>0)await store.setPremium(guildId,days,plan);else await store.removePremium(guildId);
+    // Read-after-write verification prevents the Owner panel from claiming success when
+    // the subscription was written to a different/failed storage backend.
+    const saved=await store.getConfig(guildId),actual=planNameForConfig(saved);
+    if(days>0&&actual!==plan)throw new Error(`فشل تثبيت الخطة للسيرفر. المتوقع ${PLAN_LABELS[plan]} والمحفوظ ${PLAN_LABELS[actual]||actual}.`);
+    if(days<=0&&actual!=='free')throw new Error('فشل إلغاء الاشتراك للسيرفر.');
+    res.redirect('/owner?premiumUpdated=1');
+  }catch(e){next(e);}});
   app.post('/owner/codes',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.createCode(Number(req.body.days||30),req.body.plan||'premium');res.redirect('/owner');});
   app.post('/owner/site',requireLogin,requireOwner,checkCsrf,async(req,res)=>{await store.saveGlobalConfig({premiumPrice:req.body.premiumPrice,premiumPlusPrice:req.body.premiumPlusPrice,premiumPlusPurchaseUrl:req.body.premiumPlusPurchaseUrl,purchaseUrl:req.body.purchaseUrl,supportUrl:req.body.supportUrl,announcement:req.body.announcement,zainCash:{enabled:Boolean(req.body.zainCashEnabled),walletNumber:String(req.body.zainWalletNumber||'').trim(),walletName:String(req.body.zainWalletName||'').trim(),premiumAmount:Number(req.body.zainPremiumAmount||4.99),premiumPlusAmount:Number(req.body.zainPremiumPlusAmount||7.99),premiumDays:int(req.body.zainPremiumDays,30,1,3650),premiumPlusDays:int(req.body.zainPremiumPlusDays,30,1,3650),instructions:req.body.zainInstructions},premiumPromo:{enabled:Boolean(req.body.premiumPromoEnabled),chancePercent:int(req.body.premiumPromoChance,40,0,100),cooldownMinutes:int(req.body.premiumPromoCooldown,10,1,1440),text:req.body.premiumPromoText}});res.redirect('/owner');});
 
