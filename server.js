@@ -331,7 +331,13 @@ async function requireGuildAccess(req,res,next){
     }
     if(req.method==='POST'){
       const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
-      let keys=access.routeRequirements(req.path);if(req.path.endsWith('/settings'))keys=Object.keys(req.body||{}).flatMap(access.requirements);
+      let keys=access.routeRequirements(req.path);
+      // IMPORTANT: /settings is one large HTML form that contains controls from
+      // multiple dashboard sections. The route itself performs section-scoped
+      // plan checks and restoreLocked() protection. Checking every posted field
+      // here makes saving an unrelated section fail just because another hidden
+      // section contains a Premium/Premium+ field. Do not pre-block /settings.
+      if(req.path.endsWith('/settings')) keys=[];
       const denied=access.missing(site,cfg,keys);if(denied.length)return upgradeResponse(req,res,site,denied);
     }
     next();
@@ -500,7 +506,7 @@ async function guildPage(req){
     cfg.welcome={...(cfg.welcome||{}),...dedicatedWelcome};
   }
   const token=csrf(req),owner=isOwner(req.user),homeId=String(process.env.HOME_GUILD_ID||legacyPreset?.guildId||'');
-  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=featureAllowed(site,cfg,'customBotProfile'),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ويمكن لمالك السيرفر أو من لديه Administrator / Manage Server تعديلها.';
+  const canFeature=k=>featureAllowed(site,cfg,k), canGameSettings=canFeature('gameSettings'),canQuestions=canFeature('gameQuestions'),canBrand=canFeature('customBranding'),canCurrency=canFeature('customCurrency'),canBotProfile=(isGuildOwner(req)&&featureAllowed(site,cfg,'customBotProfile')),canEconomyAdmin=canFeature('economyAdmin'),canPanelDesign=store.isPremium(cfg),canMusic=canFeature('music'),canMusicQueue=canFeature('musicQueue'),canMusicLoop=canFeature('musicLoop'),canMusicSearch=canFeature('musicSearch'),profileLockText='هذه الميزة للمشتركين فقط، ولا يستطيع تعديل هوية البوت إلا مالك السيرفر.';
   const storeLimit=maxFor(req,cfg,site,'storeProducts'),roleLimit=maxFor(req,cfg,site,'selfRoles'),ticketLimit=maxFor(req,cfg,site,'ticketTypes'),questionLimit=maxFor(req,cfg,site,'questionsPerGame'),killerLimit=maxFor(req,cfg,site,'killerCases'),missionLimit=maxFor(req,cfg,site,'gangMissionTemplates'),guideLimit=maxFor(req,cfg,site,'serverGuideButtons'),directorTemplateLimit=maxFor(req,cfg,site,'cityDirectorTemplates'),musicQueueLimit=maxFor(req,cfg,site,'musicQueueSize'),musicVolumeLimit=maxFor(req,cfg,site,'musicMaxVolume'),musicTrackLimit=maxFor(req,cfg,site,'musicMaxTrackMinutes');
   const products=cfg.store.products||[],items=cfg.rolePanel.items||[],ticketTypes=cfg.tickets.types||[],guideItems=cfg.serverGuide?.items||[],directorTemplates=cfg.cityDirector?.templates||[];
   const legacyWarningRoles=Array.isArray(cfg.warnings?.roleIds)?cfg.warnings.roleIds:[cfg.warnings?.role1Id||'',cfg.warnings?.role2Id||'',cfg.warnings?.role3Id||''];
@@ -827,7 +833,7 @@ async function guildPage(req){
 
   <section class="panel"><h2>🧾 إدارة أرصدة الأعضاء ${lockedNote(canEconomyAdmin)}</h2><form class="inline-form" method="post" action="/dashboard/${guild.id}/economy/user"><input type="hidden" name="_csrf" value="${token}"><input name="userId" placeholder="User ID" required ${disabled(canEconomyAdmin)}><select name="account" ${disabled(canEconomyAdmin)}><option value="wallet">المحفظة</option><option value="bank">البنك</option></select><select name="action" ${disabled(canEconomyAdmin)}><option value="set">تعيين</option><option value="add">إضافة</option><option value="remove">خصم</option></select><input type="number" name="amount" min="0" required ${disabled(canEconomyAdmin)}><button class="btn" ${disabled(canEconomyAdmin)}>تنفيذ</button></form><div class="table-wrap"><table><thead><tr><th>User ID</th><th>المحفظة</th><th>البنك</th><th>Level</th></tr></thead><tbody>${topUsers}</tbody></table></div></section>
 
-  <section class="panel premium-bot-profile"><h2>🤖 تخصيص هوية ZOMBI — للمشتركين ${lockedNote(canBotProfile,profileLockText)}</h2><p>غيّر Nickname البوت الفعلي داخل السيرفر، وLogo/Banner/Bio المستخدم في لوحات ZOMBI لهذا السيرفر. هذه الميزة للمشتركين، ويمكن لمالك السيرفر أو من لديه صلاحية Administrator / Manage Server تعديلها.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/bot-profile"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="premium"><div class="form-grid"><label>Nickname البوت داخل السيرفر<input name="botNickname" maxlength="32" value="${esc(cfg.branding.botNickname||'')}" placeholder="ZOMBI" ${disabled(canBotProfile)}></label><label class="wide">رابط Logo اللوحات<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">رابط Banner اللوحات<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio اللوحات<textarea name="botBio" maxlength="190" placeholder="نبذة تظهر في بروفايل البوت داخل السيرفر" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label></div><div class="warn small">💎 التخصيص حسب خطة السيرفر، ومتاح لمالك السيرفر أو من لديه Administrator / Manage Server. Nickname يتغير فعليًا داخل Discord؛ روابط Logo/Banner/Bio تُستخدم في لوحات وEmbeds ZOMBI الخاصة بهذا السيرفر.</div><div class="card-actions"><button class="btn primary" type="submit" name="profileMode" value="save" ${disabled(canBotProfile)}>💾 حفظ وتطبيق التغييرات</button><button class="btn" type="submit" name="profileMode" value="force" ${disabled(canBotProfile)}>📨 إرسال / تحديث التغييرات</button><button class="btn danger" type="submit" name="profileMode" value="reset" ${disabled(canBotProfile)} onclick="return confirm('إرجاع Nickname والصورة والبنر وBio للوضع الافتراضي لهذا السيرفر؟')">↩️ إعادة الافتراضي</button></div></form></section>
+  <section class="panel premium-bot-profile"><h2>🤖 تخصيص هوية ZOMBI — اشتراك + مالك السيرفر ${lockedNote(canBotProfile,profileLockText)}</h2><p>غيّر Nickname البوت الفعلي داخل السيرفر، وLogo/Banner/Bio المستخدم في لوحات ZOMBI لهذا السيرفر. هذه الميزة للمشتركين فقط ويعدلها مالك السيرفر.</p><form class="config-card" method="post" action="/dashboard/${guild.id}/bot-profile"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="premium"><div class="form-grid"><label>Nickname البوت داخل السيرفر<input name="botNickname" maxlength="32" value="${esc(cfg.branding.botNickname||'')}" placeholder="ZOMBI" ${disabled(canBotProfile)}></label><label class="wide">رابط Logo اللوحات<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">رابط Banner اللوحات<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio اللوحات<textarea name="botBio" maxlength="190" placeholder="نبذة تظهر في بروفايل البوت داخل السيرفر" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label></div><div class="warn small">💎 التخصيص حسب خطة السيرفر ومالك السيرفر فقط. Nickname يتغير فعليًا داخل Discord؛ روابط Logo/Banner/Bio تُستخدم في لوحات وEmbeds ZOMBI الخاصة بهذا السيرفر.</div><div class="card-actions"><button class="btn primary" type="submit" name="profileMode" value="save" ${disabled(canBotProfile)}>💾 حفظ وتطبيق التغييرات</button><button class="btn" type="submit" name="profileMode" value="force" ${disabled(canBotProfile)}>🔄 إعادة تطبيق الكل</button><button class="btn danger" type="submit" name="profileMode" value="reset" ${disabled(canBotProfile)} onclick="return confirm('إرجاع Nickname والصورة والبنر وBio للوضع الافتراضي لهذا السيرفر؟')">↩️ إعادة الافتراضي</button></div></form></section>
 
   <div class="two"><section class="panel"><h2>💎 Premium / Premium+</h2><a class="btn primary" href="/premium">مقارنة الخطط والاشتراك</a><p>${store.isPremium(cfg)?`مفعّل حتى <b>${new Date(cfg.premiumUntil).toLocaleDateString('ar-JO')}</b>`:'الخطة الحالية مجانية.'}</p><form method="post" action="/dashboard/${guild.id}/redeem"><input type="hidden" name="_csrf" value="${token}"><input name="code" placeholder="ZOMBI-XXXXXXXXXXXX"><button class="btn">تفعيل كود</button></form></section><section class="panel"><h2>📌 حدود الخطة</h2>${LIMIT_DEFS.map(d=>`<p>${esc(d.label)}: <b>${maxFor(req,cfg,site,d.key).toLocaleString()}</b></p>`).join('')}</section></div>`,site,cfg,owner);
 }
@@ -1229,7 +1235,7 @@ async function start(){
     const rawSaveSection=Array.isArray(req.body?._saveSection)?req.body._saveSection.at(-1):req.body?._saveSection;
     const rawSettingsSection=Array.isArray(req.body?._settingsSection)?req.body._settingsSection.at(-1):req.body?._settingsSection;
     const requestedSection=String(rawSaveSection||rawSettingsSection||'overview').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'overview';
-    const knownSections=new Set(['all','permissions','warnings','logs','overview','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
+    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
     const settingsSection=knownSections.has(requestedSection)?requestedSection:'overview';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
@@ -1916,7 +1922,7 @@ async function start(){
     for(const key of ['system','features','branding','channels']){
       if(JSON.stringify(stable(verify[key]))!==JSON.stringify(stable(saved[key])))throw new Error(`فشل التحقق من حفظ الرئيسية (${key}).`);
     }
-    if(featureAllowed(site,saved,'customBotProfile')&&req.body.botNickname!==undefined){
+    if(isGuildOwner(req)&&featureAllowed(site,saved,'customBotProfile')&&req.body.botNickname!==undefined){
       await botFetch(`/guilds/${gid}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding?.botNickname||null})}).catch(()=>{});
     }
     return res.redirect(`/dashboard/${gid}?section=overview&saved=1`);
@@ -2093,7 +2099,7 @@ async function start(){
 
   app.post('/dashboard/:guildId/bot-profile',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);
-    if(!featureAllowed(site,cfg,'customBotProfile'))return res.status(403).send(layout('Premium',`<section class="login"><h1>🔒 Premium مطلوب</h1><p>تخصيص Nickname ولوجو وبنر ZOMBI متاح للمشتركين فقط.</p><a class="btn" href="/dashboard/${req.params.guildId}?section=premium">رجوع</a></section>`,req.user));
+    if(!featureAllowed(site,cfg,'customBotProfile'))return res.status(403).send(layout('Premium',`<section class="login"><h1>🔒 Premium</h1><p>تخصيص Nickname ولوجو وبنر البوت متاح حسب خطة السيرفر.</p><a class="btn" href="/dashboard/${req.params.guildId}?section=premium">رجوع</a></section>`,req.user));
     const mode=['save','force','reset'].includes(String(req.body.profileMode||''))?String(req.body.profileMode):'save';
     const old={botNickname:String(cfg.branding?.botNickname||''),avatarUrl:String(cfg.branding?.avatarUrl||''),bannerUrl:String(cfg.branding?.bannerUrl||''),bio:String(cfg.branding?.bio||'')};
     const nextProfile=mode==='reset'?{botNickname:'',avatarUrl:'',bannerUrl:'',bio:''}:{botNickname:String(req.body.botNickname||'').trim().slice(0,32),avatarUrl:String(req.body.avatarUrl||'').trim(),bannerUrl:String(req.body.bannerUrl||'').trim(),bio:String(req.body.botBio||'').trim().slice(0,190)};
@@ -2310,7 +2316,7 @@ async function start(){
         </section>
         <section class="panel owner-section owner-rules-card">
           <div class="owner-section-head"><div><span class="owner-section-icon">🔐</span><div><h2>قواعد الحماية</h2><p>قواعد ثابتة لا تتجاوزها Dashboard السيرفر.</p></div></div></div>
-          <ul><li>تغيير Nickname وصورة/Banner لوحات البوت: <b>للمشتركين فقط</b>.</li><li>تعديل هوية البوت: <b>مالك السيرفر أو Administrator / Manage Server</b>.</li><li>حساب Owner لا يتجاوز اشتراك السيرفر داخل Dashboard.</li><li>القيم فوق Limits لا تُحفظ؛ تظهر رسالة ترقية.</li></ul>
+          <ul><li>تغيير Nickname وصورة/Banner لوحات البوت: <b>للمشتركين فقط</b>.</li><li>تعديل هوية البوت: <b>مالك السيرفر فقط</b>.</li><li>حساب Owner لا يتجاوز اشتراك السيرفر داخل Dashboard.</li><li>القيم فوق Limits لا تُحفظ؛ تظهر رسالة ترقية.</li></ul>
         </section>
       </div>
 
