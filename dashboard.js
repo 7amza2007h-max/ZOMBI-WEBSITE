@@ -348,6 +348,28 @@
   moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
   moveControl('cityDirector', 'director', 'قناة أحداث City Director');
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
+  moveControl('zom', 'economy', 'قناة الاقتصاد / ZOM');
+  moveControl('logBank', 'logs', 'لوج البنك');
+  moveControl('logEconomy', 'logs', 'لوج الاقتصاد');
+  moveControl('logGangs', 'logs', 'لوج العصابات');
+  moveControl('logRobbery', 'logs', 'لوج النهب والسرقات');
+  moveControl('logTickets', 'logs', 'لوج التذاكر');
+  moveControl('logStore', 'logs', 'لوج المتجر');
+  moveControl('logWarnings', 'logs', 'لوج التحذيرات');
+  moveControl('logGames', 'logs', 'لوج الألعاب');
+  moveControl('logLevels', 'logs', 'لوج المستويات');
+  moveControl('logVoice', 'logs', 'لوج الصوت');
+  moveControl('logMusic', 'logs', 'لوج الموسيقى');
+  moveControl('logModeration', 'logs', 'لوج الإدارة');
+  moveControl('logMessages', 'logs', 'لوج الرسائل');
+  moveControl('logMembers', 'logs', 'لوج الأعضاء');
+  moveControl('logCommands', 'logs', 'لوج الأوامر');
+  moveControl('logPanels', 'logs', 'لوج اللوحات');
+  moveControl('logRoles', 'logs', 'لوج الرتب');
+  moveControl('logNameChange', 'logs', 'لوج تغيير الاسم');
+  moveControl('logPremium', 'logs', 'لوج Premium');
+  moveControl('logEvent', 'event', 'لوج الإيفنت');
+  moveControl('logSystem', 'logs', 'لوج النظام');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
