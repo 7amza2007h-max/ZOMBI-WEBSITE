@@ -99,5 +99,11 @@ const commands=[
     {type:1,name:'synccommands',description:'إعادة تسجيل أوامر ZOMBI في هذا السيرفر'}
   ]}
 ];
-function publicCommandPayload(){return JSON.parse(JSON.stringify(commands));}
-module.exports={publicCommandPayload};
+function currencyCommandName(name=''){return String(name||'').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^\p{L}\p{N}_-]/gu,'').slice(0,32);}
+function publicCommandPayload(currencyName=''){
+  const out=JSON.parse(JSON.stringify(commands));
+  const alias=currencyCommandName(currencyName);
+  if(alias&&!out.some(x=>String(x.name)===alias))out.push({name:alias,description:`عرض رصيد ${String(currencyName||'العملة').slice(0,60)}`,options:[{type:6,name:'user',description:'العضو',required:false}]});
+  return out;
+}
+module.exports={publicCommandPayload,currencyCommandName};
