@@ -348,28 +348,23 @@
   moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
   moveControl('cityDirector', 'director', 'قناة أحداث City Director');
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
-  moveControl('zom', 'economy', 'قناة الاقتصاد / ZOM');
-  moveControl('logBank', 'logs', 'لوج البنك');
-  moveControl('logEconomy', 'logs', 'لوج الاقتصاد');
-  moveControl('logGangs', 'logs', 'لوج العصابات');
-  moveControl('logRobbery', 'logs', 'لوج النهب والسرقات');
-  moveControl('logTickets', 'logs', 'لوج التذاكر');
-  moveControl('logStore', 'logs', 'لوج المتجر');
-  moveControl('logWarnings', 'logs', 'لوج التحذيرات');
-  moveControl('logGames', 'logs', 'لوج الألعاب');
-  moveControl('logLevels', 'logs', 'لوج المستويات');
-  moveControl('logVoice', 'logs', 'لوج الصوت');
-  moveControl('logMusic', 'logs', 'لوج الموسيقى');
-  moveControl('logModeration', 'logs', 'لوج الإدارة');
-  moveControl('logMessages', 'logs', 'لوج الرسائل');
-  moveControl('logMembers', 'logs', 'لوج الأعضاء');
-  moveControl('logCommands', 'logs', 'لوج الأوامر');
-  moveControl('logPanels', 'logs', 'لوج اللوحات');
-  moveControl('logRoles', 'logs', 'لوج الرتب');
-  moveControl('logNameChange', 'logs', 'لوج تغيير الاسم');
-  moveControl('logPremium', 'logs', 'لوج Premium');
-  moveControl('logEvent', 'event', 'لوج الإيفنت');
-  moveControl('logSystem', 'logs', 'لوج النظام');
+  moveControl('zom', 'economy', 'قناة أوامر ورصيد ZOM');
+  moveControl('logEconomy', 'economy', 'لوق الاقتصاد');
+  moveControl('logBank', 'city', 'لوق البنك');
+  moveControl('logGangs', 'gangs', 'لوق العصابات');
+  moveControl('logRobbery', 'robbery', 'لوق السرقة والنهب');
+  moveControl('logTickets', 'tickets', 'لوق التذاكر');
+  moveControl('logStore', 'store', 'لوق المتجر');
+  moveControl('logWarnings', 'warnings', 'لوق التحذيرات');
+  moveControl('logGames', 'games', 'لوق الألعاب');
+  moveControl('logLevels', 'xp', 'لوق XP والمستويات');
+  moveControl('logVoice', 'voice', 'لوق الرومات الصوتية');
+  moveControl('logMusic', 'music', 'لوق الموسيقى');
+  moveControl('logModeration', 'members', 'لوق الإدارة والمودريشن');
+  moveControl('logRoles', 'roles', 'لوق الرتب');
+  moveControl('logNameChange', 'name', 'لوق تغيير الاسم');
+  moveControl('logPremium', 'premium', 'لوق Premium');
+  moveControl('logEvent', 'event', 'لوق الإيفنت');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
@@ -502,7 +497,8 @@
     store: actionFor('/send/store'),
     roles: actionFor('/send/roles'),
     guide: actionFor('/send/guide'),
-    rules: actionFor('/send/rules')
+    rules: actionFor('/send/rules'),
+    voice: actionFor('/send/voice')
   };
 
   const extraByPage = new Map();
@@ -539,6 +535,21 @@
     bar.appendChild(clone);
     ensureExtra(page).appendChild(bar);
   });
+
+  // Voice Rooms has a dedicated refresh route. It bumps a refresh token; the bot
+  // sees it through the shared/remote config and rebuilds the voice control panel.
+  if (settingsForm && !actionTargets.voice) {
+    const csrfValue = settingsForm.querySelector('input[name="_csrf"]')?.value || '';
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = `/dashboard/${guildId}/send/voice`;
+    form.className = 'z-panel-send-form';
+    form.innerHTML = `<input type="hidden" name="_csrf" value="${csrfValue}"><button class="btn">🎙️ إرسال / تحديث لوحة الرومات المؤقتة</button>`;
+    const bar = document.createElement('div');
+    bar.className = 'z-section-actionbar';
+    bar.appendChild(form);
+    ensureExtra('voice').appendChild(bar);
+  }
 
   // Name Change now has its own send/update route.
   if (settingsForm) {
