@@ -1253,7 +1253,7 @@ async function start(){
     const rawSaveSection=Array.isArray(req.body?._saveSection)?req.body._saveSection.at(-1):req.body?._saveSection;
     const rawSettingsSection=Array.isArray(req.body?._settingsSection)?req.body._settingsSection.at(-1):req.body?._settingsSection;
     const requestedSection=String(rawSaveSection||rawSettingsSection||'overview').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'overview';
-    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
+    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','line','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
     const settingsSection=knownSections.has(requestedSection)?requestedSection:'overview';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
@@ -1396,7 +1396,7 @@ async function start(){
     // Branding / bot identity lives in the Premium section in the UI.
     // Keep overview compatible with older dashboard builds, but only touch fields
     // that were actually posted so saving one section never wipes another one.
-    if(saves('overview','premium')){
+    if(saves('overview','premium','line')){
       if(featureAllowed(site,cfg,'customBranding')){
         if(has('brandColor'))cfg.branding.color=String(req.body.brandColor||cfg.branding.color);
         if(has('customName'))cfg.branding.customName=String(req.body.customName||'').slice(0,80);

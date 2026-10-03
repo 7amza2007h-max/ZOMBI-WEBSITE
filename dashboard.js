@@ -15,6 +15,7 @@
     warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
+    line: { label: 'الخط', icon: '➖', desc: 'غيّر صورة الخط وحدد الرتب المسموح لها باستخدام أمر خط لكل سيرفر.' },
     welcome: { label: 'الترحيب', icon: '👋', desc: 'صورة الترحيب، روم الترحيب، روم القوانين وروابط الأقسام للعضو الجديد.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
@@ -50,7 +51,7 @@
 
   const groups = [
     ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'members']],
-    ['المجتمع واللوحات', ['welcome', 'rules', 'guide', 'roles', 'name', 'tickets', 'suggestions', 'applications']],
+    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'name', 'tickets', 'suggestions', 'applications']],
     ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
     ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
@@ -278,6 +279,8 @@
       else if (node.classList?.contains('event-system-panel')) page = 'event';
       ensureSettingsGroup(page).appendChild(node);
     }
+    // Dedicated Line section exists even though its controls originate from the legacy branding block.
+    ensureSettingsGroup('line');
     settingsGroups.forEach((w, pageId) => {
       // The advanced permissions page has its own sticky save/apply button.
       // Do not add a second generic settings submit there because it cannot
@@ -388,7 +391,8 @@
   moveControl('botBio', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('panelLogoUrl', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('panelBannerUrl', 'premium', 'هوية وتصميم هذا السيرفر');
-  moveControl('lineUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('lineUrl', 'line', 'إعدادات الخط');
+  moveControl('lineRoleIds', 'line', 'الرتب المسموح لها باستخدام أمر خط');
 
   // The old all-in-one channel block is now only a source container.
   // Remove it once its selectors have been moved into the matching system pages.
