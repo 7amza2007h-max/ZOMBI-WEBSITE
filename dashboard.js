@@ -49,11 +49,12 @@
   };
 
   const groups = [
-    ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
-    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery', 'director', 'suggestions', 'event']],
-    ['الأنظمة', ['permissions', 'warnings', 'logs', 'welcome', 'rules', 'guide', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
-    ['إدارة الطاقم', ['staff-stats', 'staff-insights', 'staff-duty', 'staff-admin', 'staff-event', 'staff-leave', 'staff-event-leave']],
-    ['الاشتراك', ['premium']]
+    ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'members']],
+    ['المجتمع واللوحات', ['welcome', 'rules', 'guide', 'roles', 'name', 'tickets', 'suggestions', 'applications']],
+    ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
+    ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
+    ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
+    ['الاشتراك والتخصيص', ['premium']]
   ];
 
   const currentFromUrl = () => {
@@ -310,28 +311,36 @@
   }
 
   // Move channel selectors to the pages where they belong while keeping them inside the same settings form.
-  const moveControl = (name, targetPage, title = 'الروم الخاص بالقسم') => {
+  // Move controls into the exact section AND the exact sub-group they belong to.
+  // Older builds used one shared box per page, which mixed unrelated controls
+  // (for example Currency + Economy Logs under the same heading).
+  const moveControl = (name, targetPage, title = 'إعدادات القسم') => {
     if (!settingsForm) return;
     const field = settingsForm.querySelector(`[name="${CSS.escape(name)}"]`);
     const label = field?.closest('label');
     if (!label) return;
     const target = ensureSettingsGroup(targetPage);
-    let box = target.querySelector(`.z-section-channels[data-channel-page="${targetPage}"]`);
+    const groupKey = `${targetPage}:${title}`;
+    let box = [...target.querySelectorAll('.z-section-channels')]
+      .find(el => el.dataset.channelGroup === groupKey);
     if (!box) {
       box = document.createElement('div');
       box.className = 'z-section-channels';
       box.dataset.channelPage = targetPage;
+      box.dataset.channelGroup = groupKey;
       box.innerHTML = `<h4>${title}</h4><div class="form-grid"></div>`;
-      const firstGrid = target.querySelector('.form-grid, .checks, .table-wrap');
-      if (firstGrid) target.insertBefore(box, firstGrid);
-      else target.appendChild(box);
+      // Keep these quick selectors at the top of the section, in the order
+      // they are declared below, instead of mixing them into legacy grids.
+      const lastQuickBox = [...target.querySelectorAll(':scope > .z-section-channels')].at(-1);
+      if (lastQuickBox) lastQuickBox.after(box);
+      else target.prepend(box);
     }
     box.querySelector('.form-grid').appendChild(label);
   };
 
   moveControl('logs', 'logs', 'روم سجل السيرفر');
   moveControl('logBank', 'city', 'Logs البنك');
-  moveControl('logEconomy', 'economy', 'Logs الاقتصاد');
+  moveControl('logEconomy', 'economy', 'سجل الاقتصاد');
   moveControl('logGangs', 'gangs', 'Logs العصابات');
   moveControl('logRobbery', 'robbery', 'Logs السرقة');
   moveControl('logTickets', 'tickets', 'Logs التذاكر');
@@ -363,9 +372,10 @@
   moveControl('nameChangePanel', 'name', 'قناة لوحة تغيير الاسم');
   moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
   moveControl('cityDirector', 'director', 'قناة أحداث City Director');
-  moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
-  moveControl('currencyName', 'economy', 'العملة');
-  moveControl('currencyEmoji', 'economy', 'العملة');
+  moveControl('zom', 'economy', 'شات الكوين وأوامر العملة');
+  moveControl('messageChannelIds', 'economy', 'رومات مكافآت الرسائل');
+  moveControl('currencyName', 'economy', 'اسم وشكل العملة');
+  moveControl('currencyEmoji', 'economy', 'اسم وشكل العملة');
 
   // Keep identity/branding controls together under Premium instead of mixing them
   // with Overview. This also makes the section-scoped save deterministic.
