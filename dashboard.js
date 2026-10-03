@@ -330,6 +330,22 @@
   };
 
   moveControl('logs', 'logs', 'روم سجل السيرفر');
+  moveControl('logBank', 'city', 'Logs البنك');
+  moveControl('logEconomy', 'economy', 'Logs الاقتصاد');
+  moveControl('logGangs', 'gangs', 'Logs العصابات');
+  moveControl('logRobbery', 'robbery', 'Logs السرقة');
+  moveControl('logTickets', 'tickets', 'Logs التذاكر');
+  moveControl('logStore', 'store', 'Logs المتجر');
+  moveControl('logWarnings', 'warnings', 'Logs التحذيرات');
+  moveControl('logGames', 'games', 'Logs الألعاب');
+  moveControl('logLevels', 'xp', 'Logs XP / Levels');
+  moveControl('logVoice', 'voice', 'Logs الفويس');
+  moveControl('logMusic', 'music', 'Logs الموسيقى');
+  moveControl('logModeration', 'members', 'Logs الإدارة');
+  moveControl('logRoles', 'roles', 'Logs الرتب');
+  moveControl('logNameChange', 'name', 'Logs تغيير الاسم');
+  moveControl('logPremium', 'premium', 'Logs Premium');
+  moveControl('logEvent', 'event', 'Logs الإيفنت');
   moveControl('gamePanel', 'games', 'قناة لوحة الألعاب');
   moveControl('ticketPanel', 'tickets', 'قنوات التذاكر');
   moveControl('ticketCategory', 'tickets', 'قنوات التذاكر');
@@ -348,23 +364,6 @@
   moveControl('serverGuidePanel', 'guide', 'قناة لوحة دليل السيرفر');
   moveControl('cityDirector', 'director', 'قناة أحداث City Director');
   moveControl('messageChannelIds', 'economy', 'قنوات مكافآت الرسائل');
-  moveControl('zom', 'economy', 'قناة أوامر ورصيد ZOM');
-  moveControl('logEconomy', 'economy', 'لوق الاقتصاد');
-  moveControl('logBank', 'city', 'لوق البنك');
-  moveControl('logGangs', 'gangs', 'لوق العصابات');
-  moveControl('logRobbery', 'robbery', 'لوق السرقة والنهب');
-  moveControl('logTickets', 'tickets', 'لوق التذاكر');
-  moveControl('logStore', 'store', 'لوق المتجر');
-  moveControl('logWarnings', 'warnings', 'لوق التحذيرات');
-  moveControl('logGames', 'games', 'لوق الألعاب');
-  moveControl('logLevels', 'xp', 'لوق XP والمستويات');
-  moveControl('logVoice', 'voice', 'لوق الرومات الصوتية');
-  moveControl('logMusic', 'music', 'لوق الموسيقى');
-  moveControl('logModeration', 'members', 'لوق الإدارة والمودريشن');
-  moveControl('logRoles', 'roles', 'لوق الرتب');
-  moveControl('logNameChange', 'name', 'لوق تغيير الاسم');
-  moveControl('logPremium', 'premium', 'لوق Premium');
-  moveControl('logEvent', 'event', 'لوق الإيفنت');
   moveControl('currencyName', 'economy', 'العملة');
   moveControl('currencyEmoji', 'economy', 'العملة');
 
@@ -380,6 +379,17 @@
   moveControl('panelLogoUrl', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('panelBannerUrl', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('lineUrl', 'premium', 'هوية وتصميم هذا السيرفر');
+
+  // The old all-in-one channel block is now only a source container.
+  // Remove it once its selectors have been moved into the matching system pages.
+  if (settingsForm) {
+    const allRoomHeading=[...settingsForm.querySelectorAll('h3')].find(h=>String(h.textContent||'').includes('تحديد كل الرومات'));
+    const allRoomGrid=allRoomHeading?.nextElementSibling;
+    if (allRoomHeading && allRoomGrid?.classList?.contains('form-grid') && !allRoomGrid.querySelector('label')) {
+      allRoomHeading.remove();
+      allRoomGrid.remove();
+    }
+  }
 
   // Overview remains inside the settings hub; its save button uses formAction.
 
@@ -496,6 +506,7 @@
     tickets: actionFor('/send/tickets'),
     store: actionFor('/send/store'),
     roles: actionFor('/send/roles'),
+    name: actionFor('/send/name'),
     guide: actionFor('/send/guide'),
     rules: actionFor('/send/rules'),
     voice: actionFor('/send/voice')
@@ -529,27 +540,12 @@
     const clone = form.cloneNode(true);
     clone.classList.add('z-panel-send-form');
     const btn = clone.querySelector('button');
-    if (btn) btn.textContent = page === 'guide' ? '🧭 إرسال / تحديث دليل السيرفر' : page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : btn.textContent;
+    if (btn) btn.textContent = page === 'guide' ? '🧭 إرسال / تحديث دليل السيرفر' : page === 'roles' ? 'إعادة إرسال / تحديث اللوحة' : page === 'city' ? '🏦 إرسال / تحديث لوحة البنك' : page === 'voice' ? '🎙️ إرسال / تحديث لوحة الرومات المؤقتة' : btn.textContent;
     const bar = document.createElement('div');
     bar.className = 'z-section-actionbar';
     bar.appendChild(clone);
     ensureExtra(page).appendChild(bar);
   });
-
-  // Voice Rooms has a dedicated refresh route. It bumps a refresh token; the bot
-  // sees it through the shared/remote config and rebuilds the voice control panel.
-  if (settingsForm && !actionTargets.voice) {
-    const csrfValue = settingsForm.querySelector('input[name="_csrf"]')?.value || '';
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = `/dashboard/${guildId}/send/voice`;
-    form.className = 'z-panel-send-form';
-    form.innerHTML = `<input type="hidden" name="_csrf" value="${csrfValue}"><button class="btn">🎙️ إرسال / تحديث لوحة الرومات المؤقتة</button>`;
-    const bar = document.createElement('div');
-    bar.className = 'z-section-actionbar';
-    bar.appendChild(form);
-    ensureExtra('voice').appendChild(bar);
-  }
 
   // Name Change now has its own send/update route.
   if (settingsForm) {
@@ -636,7 +632,7 @@
     const markSection = button => {
       const page = resolvePage(button);
       sectionInput.value = page;
-      if (button) { button.dataset.page = page; if (button.name === '_saveSection' || button.classList.contains('z-local-save') || button.closest('.z-save-bar')) { button.name = '_saveSection'; button.value = page; } }
+      if (button) { button.dataset.page = page; if (button.name !== 'forceBotProfile' && (button.name === '_saveSection' || button.classList.contains('z-local-save') || button.closest('.z-save-bar'))) { button.name = '_saveSection'; button.value = page; } }
       return page;
     };
 

@@ -57,7 +57,7 @@ async function resolveEntitlement(p,gid,rawCfg){
 }
 function applyRecovered(cfg,ent){if(!ent)return cfg;const current=planNameForConfig(cfg),until=premiumUntilForConfig(cfg)||explicitLegacyLifetime(cfg);if(planRank(ent.plan)>planRank(current)||(planRank(ent.plan)===planRank(current)&&Number(ent.premiumUntil)>Number(until))){cfg.plan=normalizePlanId(ent.plan);cfg.premiumUntil=Number(ent.premiumUntil);}return cfg;}
 async function getConfig(guildId){if(!dbEnabled())return local.getConfig(guildId);const p=await ensureDb(),id=String(guildId),r=await p.query('SELECT config FROM zombi_guild_config WHERE guild_id=$1',[id]),raw=r.rows[0]?.config||local.defaults(id),ent=await resolveEntitlement(p,id,raw),cfg=local.normalizeConfig(applyRecovered(local.normalizeConfig(raw,id),ent),id);if(!sameJson(raw,cfg))await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(cfg),Date.now()]);const e=entitlementFromConfig(cfg);if(e)await putEntitlement(p,id,e.plan,e.premiumUntil,Number(cfg.subscriptionUpdatedAt||0)||Date.now());return clone(cfg);}
-async function saveConfig(guildId,input){if(!dbEnabled())return local.saveConfig(guildId,input);const p=await ensureDb(),id=String(guildId),cfg=local.normalizeConfig(input,id);await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(cfg),Date.now()]);const e=entitlementFromConfig(cfg);if(e)await putEntitlement(p,id,e.plan,e.premiumUntil,Number(cfg.subscriptionUpdatedAt||0)||Date.now());return clone(cfg);}
+async function saveConfig(guildId,input){if(!dbEnabled())return local.saveConfig(guildId,input);const p=await ensureDb(),id=String(guildId),cfg=local.normalizeConfig({...input,updatedAt:Date.now()},id);await p.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(cfg),Date.now()]);const e=entitlementFromConfig(cfg);if(e)await putEntitlement(p,id,e.plan,e.premiumUntil,Number(cfg.subscriptionUpdatedAt||0)||Date.now());return clone(cfg);}
 
 function deepDelta(before,after){
   if(sameJson(before,after))return undefined;
@@ -93,7 +93,7 @@ async function saveConfigDelta(guildId,before,input){
     const latest=local.normalizeConfig(r.rows[0]?.config||local.defaults(id),id);
     const normalizedBefore=local.normalizeConfig(before,id),normalizedInput=local.normalizeConfig(input,id);
     const delta=deepDelta(normalizedBefore,normalizedInput);
-    const merged=local.normalizeConfig(applyDelta(latest,delta),id);
+    const merged=local.normalizeConfig({...applyDelta(latest,delta),updatedAt:Date.now()},id);
     await c.query(`INSERT INTO zombi_guild_config(guild_id,config,updated_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=EXCLUDED.updated_at`,[id,jsonParam(merged),Date.now()]);
     const e=entitlementFromConfig(merged);if(e)await putEntitlement(c,id,e.plan,e.premiumUntil,Number(merged.subscriptionUpdatedAt||0)||Date.now());
     await c.query('COMMIT');

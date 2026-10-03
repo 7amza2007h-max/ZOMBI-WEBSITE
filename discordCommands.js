@@ -17,6 +17,21 @@ const commands=[
   {name:'خط',description:'إرسال خط الزخرفة المضبوط من الداشبورد',default_member_permissions:'8'},
   {name:'ق',description:'قفل الروم الحالي',default_member_permissions:MANAGE_GUILD},
   {name:'ف',description:'فتح الروم الحالي',default_member_permissions:MANAGE_GUILD},
+  {name:'تحكم',description:'مركز تحكم السيرفر من داخل Discord',default_member_permissions:MANAGE_GUILD},
+  {name:'لوحة',description:'إرسال أو تحديث لوحات أنظمة هذا السيرفر',default_member_permissions:MANAGE_GUILD,options:[
+    {type:1,name:'ارسال',description:'إرسال/تحديث لوحة نظام في روم تختاره',options:[
+      {type:3,name:'النظام',description:'النظام',required:true,choices:[
+        {name:'🏦 البنك',value:'bank'},{name:'🎮 الألعاب',value:'games'},{name:'🎫 التذاكر',value:'tickets'},
+        {name:'🛒 المتجر',value:'store'},{name:'🔔 الرتب',value:'roles'},{name:'🧭 دليل السيرفر',value:'guide'},{name:'🎙️ الرومات المؤقتة',value:'voice'},{name:'✏️ تغيير الاسم',value:'name'},{name:'📜 القوانين',value:'rules'},{name:'🧑‍💼 لوحات الإدارة',value:'staff'}]},
+      {type:7,name:'الروم',description:'الروم؛ اتركه فارغًا لاستخدام الروم المحفوظ',required:false}
+    ]},
+    {type:1,name:'تحديث',description:'تحديث لوحة نظام في مكانها الحالي',options:[
+      {type:3,name:'النظام',description:'النظام',required:true,choices:[
+        {name:'🏦 البنك',value:'bank'},{name:'🎮 الألعاب',value:'games'},{name:'🎫 التذاكر',value:'tickets'},
+        {name:'🛒 المتجر',value:'store'},{name:'🔔 الرتب',value:'roles'},{name:'🧭 دليل السيرفر',value:'guide'},{name:'🎙️ الرومات المؤقتة',value:'voice'},{name:'✏️ تغيير الاسم',value:'name'},{name:'📜 القوانين',value:'rules'},{name:'🧑‍💼 لوحات الإدارة',value:'staff'}]}
+    ]},
+    {type:1,name:'تحديث-الكل',description:'تحديث جميع اللوحات المحفوظة لهذا السيرفر فقط'}
+  ]},
   {name:'داشبورد',description:'فتح لوحة تحكم ZOMBI الخاصة بهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'setup',description:'إعداد ZOMBI لهذا السيرفر',default_member_permissions:MANAGE_GUILD},
   {name:'balance',description:'عرض رصيدك أو رصيد عضو',options:[{type:6,name:'user',description:'العضو',required:false}]},
