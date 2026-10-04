@@ -1267,7 +1267,7 @@ async function start(){
     const rawSaveSection=Array.isArray(req.body?._saveSection)?req.body._saveSection.at(-1):req.body?._saveSection;
     const rawSettingsSection=Array.isArray(req.body?._settingsSection)?req.body._settingsSection.at(-1):req.body?._settingsSection;
     const requestedSection=String(rawSaveSection||rawSettingsSection||'overview').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'overview';
-    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','line','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
+    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','line','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event','bot-commands']);
     const settingsSection=knownSections.has(requestedSection)?requestedSection:'overview';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
@@ -1900,7 +1900,7 @@ async function start(){
       overview:['system','features','branding'], welcome:['welcome'], economy:['currency','economy','channels'], members:['moderation','autoRole','roleSecurity'], xp:['levels','channels'],
       store:['store','channels','panelMedia'], games:['games','channels','panelMedia'], city:['bank','channels','panelMedia'], heist:['bank'], gangs:['gangs','channels'], robbery:['robbery','channels'],
       roles:['rolePanel','channels','panelMedia'], name:['nameChange','channels','panelMedia'], tickets:['tickets','channels','panelMedia'], voice:['voiceRooms','channels','economy'], guide:['serverGuide','channels','panelMedia'],
-      director:['cityDirector','channels'], suggestions:['suggestions'], rules:['rules','panelMedia'], music:['music'], logs:['logging','moderation','channels'], warnings:['warnings'], permissions:['roleSecurity']
+      director:['cityDirector','channels'], suggestions:['suggestions'], rules:['rules','panelMedia'], music:['music'], logs:['logging','moderation','channels'], warnings:['warnings'], permissions:['roleSecurity'], 'bot-commands':['botCommands','channels']
     };
     const keys=settingsSection==='all'?Object.keys(cfg):verifyKeys[settingsSection]||[];
     const stableValue=value=>{
