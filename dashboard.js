@@ -33,6 +33,7 @@
     suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
     event: { label: 'الإيفنت', icon: '🎉', desc: 'نقاط الإيفنت ونقاط الترقية المستقلة، الشاتات والرتب وحد الترقية.' },
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
+    reactionroles: { label: 'رتب الرياكشن', icon: '⭐', desc: 'ربط إيموجي من السيرفر برسالة موجودة لإعطاء وإزالة رتبة تلقائيًا.' },
     name: { label: 'تغيير الاسم', icon: '✏️', desc: 'لوحة تغيير الاسم ونافذة إدخال الاسم داخل السيرفر.' },
     tickets: { label: 'التذاكر', icon: '▣', desc: 'لوحة التذاكر، أنواعها، الرتب والصلاحيات.' },
     applications: { label: 'التقديمات', icon: '📝', desc: 'إنشاء نماذج تقديم متعددة، تحديد الشاتات والأسئلة ورتب المراجعة.' },
@@ -51,7 +52,7 @@
 
   const groups = [
     ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'members']],
-    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'name', 'tickets', 'suggestions', 'applications']],
+    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'applications']],
     ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
     ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
