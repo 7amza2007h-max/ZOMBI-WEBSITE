@@ -325,6 +325,29 @@
     const label = field?.closest('label');
     if (!label) return;
     const target = ensureSettingsGroup(targetPage);
+
+    // بعض الصفحات (مثل أوامر البوت) يتم إنشاؤها لأول مرة هنا بعد أن
+    // تكون مجموعات الإعدادات الأصلية قد أُضيفت للفورم. إذا لم نربطها
+    // بالفورم فعلياً ستظهر الصفحة في القائمة لكن محتواها يبقى فارغاً.
+    if (!target.isConnected) {
+      if (targetPage !== 'permissions' && !target.querySelector(':scope > .z-local-save-bar')) {
+        const localBar = document.createElement('div');
+        localBar.className = 'z-local-save-bar';
+        const localSave = document.createElement('button');
+        localSave.type = 'submit';
+        localSave.className = 'btn primary z-local-save';
+        localSave.dataset.page = targetPage;
+        localSave.name = '_saveSection';
+        localSave.value = targetPage;
+        localSave.textContent = `💾 حفظ ${pageDefs[targetPage]?.label || 'القسم'}`;
+        localBar.appendChild(localSave);
+        target.appendChild(localBar);
+      }
+      const saveBar = settingsForm.querySelector(':scope > .z-save-bar');
+      if (saveBar) settingsForm.insertBefore(target, saveBar);
+      else settingsForm.appendChild(target);
+    }
+
     const groupKey = `${targetPage}:${title}`;
     let box = [...target.querySelectorAll('.z-section-channels')]
       .find(el => el.dataset.channelGroup === groupKey);
