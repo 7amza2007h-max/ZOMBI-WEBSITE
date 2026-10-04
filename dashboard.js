@@ -17,10 +17,10 @@
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     line: { label: 'الخط', icon: '➖', desc: 'غيّر صورة الخط وحدد الرتب المسموح لها باستخدام أمر خط لكل سيرفر.' },
     welcome: { label: 'الترحيب', icon: '👋', desc: 'صورة الترحيب، روم الترحيب، روم القوانين وروابط الأقسام للعضو الجديد.' },
-    'jc-welcome': { label: 'ترحيب JC', icon: '💠', desc: 'ترحيب Justice||Community مستقل: صورة العضو داخل الدائرة، اسمه تحتها، والمنشن فوق الصورة.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
-    xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإعدادات #p و#top.' },
+    xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإشعارات ارتفاع المستوى.' },
+    'bot-commands': { label: 'أوامر البوت', icon: '⌨️', desc: 'حدد الشات المخصص لأوامر البوت مثل #P و#top و#lb.' },
     store: { label: 'المتجر', icon: '◆', desc: 'متجر الرتب، الأسعار، المميزات وشكل لوحة المتجر.' },
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
     'game-content': { label: 'محتوى الألعاب', icon: '▤', desc: 'الأسئلة والكلمات والمحتوى الذي تستخدمه الألعاب.' },
@@ -52,8 +52,8 @@
   };
 
   const groups = [
-    ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'members']],
-    ['المجتمع واللوحات', ['welcome', 'jc-welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'applications']],
+    ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'bot-commands', 'members']],
+    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'applications']],
     ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
     ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
@@ -366,6 +366,7 @@
   moveControl('storePanel', 'store', 'قناة لوحة المتجر');
   moveControl('rolePanel', 'roles', 'القناة التي تُرسل فيها لوحة رتب الإشعارات');
   moveControl('levelUp', 'xp', 'قناة إشعارات المستويات');
+  moveControl('botCommandsLevel', 'bot-commands', 'شات أوامر البوت');
   moveControl('bankPanel', 'city', 'قنوات ZOMBI City');
   moveControl('centralBank', 'robbery', 'قنوات ZOMBI City');
   moveControl('gangCategory', 'gangs', 'قنوات ZOMBI City');
