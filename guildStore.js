@@ -112,7 +112,7 @@ function defaults(guildId){return{
   voiceRooms:{enabled:false,createChannelId:'',controlChannelId:'',categoryId:'',roomName:'🎙️・{username}',userLimit:0,bitrate:64000,controlMessageId:'',bannerUrl:'',thumbnailUrl:''},
   music:{enabled:true,channelIds:[],allowEveryone:true,controllerRoleIds:[],defaultVolume:60,autoLeaveSeconds:180,announceNowPlaying:true},
   nameChange:{enabled:false,panelChannelId:'',title:'تغيير اسمك في السيرفر',description:'اضغط الزر لتغيير اسمك داخل السيرفر.',buttonLabel:'تغيير اسمي',buttonEmoji:'✏️',modalTitle:'تغيير اسمك في السيرفر',inputLabel:'ضع الاسم الجديد',inputPlaceholder:'اكتب اسمك الجديد هنا...',successMessage:'✅ تم تغيير اسمك بنجاح إلى **{name}**.',cooldownSeconds:30,color:'#8B5CF6',bannerUrl:'',panelMessageId:''},
-  botCommands:{levelChannelId:''},
+  botCommands:{levelChannelId:'',utilityChannelIds:[],utilityRoleIds:[]},
   levels:{levelUpChannelId:'',xpPerMessage:10,xpCooldownSeconds:30,voiceXpPerMinute:5,voiceMinMembers:1,voiceIgnoreMuted:false,voiceIgnoreDeafened:true,baseXp:100,growth:50,seasonEnabled:true,seasonId:'season-1',seasonName:'Season 1',roleRewardMode:'cumulative',roleRewards:[],bannerUrl:'',thumbnailUrl:''},
   tickets:{panelChannelId:'',categoryId:'',title:'🎫 ZOMBI Support',description:'اختر نوع التذكرة من الأزرار بالأسفل.',buttonLabel:'فتح تذكرة',buttonEmoji:'🎫',supportRoleIds:[],types:defaultTicketTypes(),panelMessageId:'',controlThumbnailUrl:''},
   store:{panelChannelId:'',title:'🏙️ ZOMBI CITY STORE',description:'اختر الرتبة لعرض تفاصيلها ثم شراءها باستخدام رصيدك.',footer:'ZOMBI • ZOM Store',accentColor:'#7c3aed',thumbnailUrl:'',bannerUrl:'',detailBannerUrl:'',products:[],panelMessageId:''},

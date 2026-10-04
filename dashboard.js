@@ -20,7 +20,7 @@
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
     xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإشعارات ارتفاع المستوى.' },
-    'bot-commands': { label: 'أوامر البوت', icon: '⌨️', desc: 'حدد الشات المخصص لأوامر البوت مثل #P و#top و#lb.' },
+    'bot-commands': { label: 'أوامر البوت', icon: '⌨️', desc: 'تحكم بشات P / A / U / T وشاتات ورتب PERMS / R / ROLE.' },
     store: { label: 'المتجر', icon: '◆', desc: 'متجر الرتب، الأسعار، المميزات وشكل لوحة المتجر.' },
     games: { label: 'الألعاب', icon: '◉', desc: 'تشغيل الألعاب، الجولات، الوقت، الجوائز والروليت.' },
     'game-content': { label: 'محتوى الألعاب', icon: '▤', desc: 'الأسئلة والكلمات والمحتوى الذي تستخدمه الألعاب.' },
@@ -325,29 +325,6 @@
     const label = field?.closest('label');
     if (!label) return;
     const target = ensureSettingsGroup(targetPage);
-
-    // بعض الصفحات (مثل أوامر البوت) يتم إنشاؤها لأول مرة هنا بعد أن
-    // تكون مجموعات الإعدادات الأصلية قد أُضيفت للفورم. إذا لم نربطها
-    // بالفورم فعلياً ستظهر الصفحة في القائمة لكن محتواها يبقى فارغاً.
-    if (!target.isConnected) {
-      if (targetPage !== 'permissions' && !target.querySelector(':scope > .z-local-save-bar')) {
-        const localBar = document.createElement('div');
-        localBar.className = 'z-local-save-bar';
-        const localSave = document.createElement('button');
-        localSave.type = 'submit';
-        localSave.className = 'btn primary z-local-save';
-        localSave.dataset.page = targetPage;
-        localSave.name = '_saveSection';
-        localSave.value = targetPage;
-        localSave.textContent = `💾 حفظ ${pageDefs[targetPage]?.label || 'القسم'}`;
-        localBar.appendChild(localSave);
-        target.appendChild(localBar);
-      }
-      const saveBar = settingsForm.querySelector(':scope > .z-save-bar');
-      if (saveBar) settingsForm.insertBefore(target, saveBar);
-      else settingsForm.appendChild(target);
-    }
-
     const groupKey = `${targetPage}:${title}`;
     let box = [...target.querySelectorAll('.z-section-channels')]
       .find(el => el.dataset.channelGroup === groupKey);
@@ -390,6 +367,8 @@
   moveControl('rolePanel', 'roles', 'القناة التي تُرسل فيها لوحة رتب الإشعارات');
   moveControl('levelUp', 'xp', 'قناة إشعارات المستويات');
   moveControl('botCommandsLevel', 'bot-commands', 'شات أوامر البوت');
+  moveControl('botUtilityChannelIds', 'bot-commands', 'شاتات أوامر الرتب');
+  moveControl('botUtilityRoleIds', 'bot-commands', 'الرتب المسموح لها');
   moveControl('bankPanel', 'city', 'قنوات ZOMBI City');
   moveControl('centralBank', 'robbery', 'قنوات ZOMBI City');
   moveControl('gangCategory', 'gangs', 'قنوات ZOMBI City');
