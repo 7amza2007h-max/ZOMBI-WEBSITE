@@ -281,8 +281,11 @@
       else if (node.classList?.contains('event-system-panel')) page = 'event';
       ensureSettingsGroup(page).appendChild(node);
     }
-    // Dedicated Line section exists even though its controls originate from the legacy branding block.
+    // Dedicated sections whose controls originate from other legacy blocks
+    // must exist BEFORE we append settingsGroups to the form.
+    // Otherwise moveControl() creates a detached group later and the page looks empty.
     ensureSettingsGroup('line');
+    ensureSettingsGroup('bot-commands');
     settingsGroups.forEach((w, pageId) => {
       // The advanced permissions page has its own sticky save/apply button.
       // Do not add a second generic settings submit there because it cannot
