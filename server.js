@@ -372,7 +372,7 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=10.0.7"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=10.0.7"></script><script defer src="/site/role-manager.js?v=10.0.7"></script><script defer src="/site/upgrade.js?v=10.0.7"></script><script defer src="/site/operations-ui.js?v=10.0.7"></script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=10.0.7"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main>${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=10.0.8"></script><script defer src="/site/role-manager.js?v=10.0.7"></script><script defer src="/site/upgrade.js?v=10.0.7"></script><script defer src="/site/operations-ui.js?v=10.0.7"></script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_BOT_CLIENT_ID||process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="features"><h2>كل الأدوات في مكان واحد</h2><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
@@ -566,6 +566,18 @@ async function guildPage(req){
   return decorateDashboard(`<section class="dash-head"><div><a href="/dashboard">← السيرفرات</a><h1>${esc(guild.name)}</h1><p><code>${guild.id}</code> • ${planBadge(cfg)} ${owner?'• 👑 Owner':''}</p></div>${iconUrl(guild)?`<img class="guild-icon" src="${iconUrl(guild)}">`:''}</section>
   ${discordCacheNotice}<div class="tabs-note">✅ كل إعداد هنا يخص هذا السيرفر فقط. الـOwner يحدد من لوحة Owner ما هو مجاني وما هو Premium.</div>${site.announcement?`<div class="warn">📢 ${esc(site.announcement)}</div>`:''}
   ${owner&&guild.id===homeId?`<section class="panel legacy-panel"><h2>🧰 إعدادات سيرفر ZOMBI الأصلي</h2><p>هذه الصفحة مرتبطة بنسخة السيرفر القديم. إذا أردت إعادة كل إعدادات النسخة الاحتياطية كما كانت اضغط الزر التالي.</p><form method="post" action="/dashboard/${guild.id}/restore-legacy" onsubmit="return confirm('إرجاع إعدادات النسخة الاحتياطية لسيرفرك فقط؟')"><input type="hidden" name="_csrf" value="${token}"><button class="btn danger">♻️ استرجاع إعدادات سيرفري القديمة</button></form></section>`:''}
+
+  <form class="panel z-welcome-standalone" data-z-page="jc-welcome" method="post" action="/dashboard/${guild.id}/jc-welcome/save"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="jc-welcome">
+    <h2>💠 ترحيب JC</h2>
+    <p class="hint">نظام مستقل بالكامل عن الترحيب القديم. يضع صورة العضو داخل دائرة تصميم Justice||Community، ويكتب اسمه تحت الصورة، ويرسل منشن العضو فوق الصورة.</p>
+    <div class="form-grid">
+      <label><input type="checkbox" name="jcWelcomeEnabled" ${cfg.jcWelcome?.enabled?'checked':''}> تفعيل ترحيب JC عند دخول عضو جديد</label>
+      <label>روم ترحيب JC<select name="jcWelcomeChannel"><option value="">— اختر الشات —</option>${textChannels(channels,cfg.jcWelcome?.channelId||'')}</select></label>
+      <label class="wide">رابط صورة JC اختياري<input type="url" name="jcWelcomeBannerUrl" value="${esc(cfg.jcWelcome?.bannerUrl||'')}" placeholder="https://.../jc-welcome.png"><small>اتركه فارغًا لاستخدام صورة Justice||Community المضافة داخل البوت. إذا غيرت الصورة، حافظ على نفس أماكن الدائرة ولوحة الاسم.</small></label>
+    </div>
+    <div class="warn small">✅ ترتيب الرسالة: <b>منشن العضو فوق الصورة</b> ← ثم صورة الترحيب، وداخلها صورة العضو + اسمه.</div>
+    <div class="card-actions"><button type="submit" class="btn primary">💾 حفظ ترحيب JC</button></div>
+  </form>
 
   <form class="panel z-welcome-standalone" data-z-page="welcome" method="post" action="/dashboard/${guild.id}/welcome/save"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="welcome">
     <h2>👋 نظام الترحيب</h2>
@@ -1267,7 +1279,7 @@ async function start(){
     const rawSaveSection=Array.isArray(req.body?._saveSection)?req.body._saveSection.at(-1):req.body?._saveSection;
     const rawSettingsSection=Array.isArray(req.body?._settingsSection)?req.body._settingsSection.at(-1):req.body?._settingsSection;
     const requestedSection=String(rawSaveSection||rawSettingsSection||'overview').replace(/[^a-z0-9_-]/gi,'').slice(0,40)||'overview';
-    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','line','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
+    const knownSections=new Set(['all','permissions','warnings','logs','overview','welcome','jc-welcome','line','economy','members','xp','store','games','city','heist','gangs','robbery','roles','name','tickets','voice','guide','director','suggestions','rules','music','premium','event']);
     const settingsSection=knownSections.has(requestedSection)?requestedSection:'overview';
     const saves=(...names)=>settingsSection==='all'||names.includes(settingsSection);
     const has=name=>Object.prototype.hasOwnProperty.call(req.body||{},name);
@@ -2012,6 +2024,26 @@ async function start(){
       await botFetch(`/guilds/${gid}/members/@me`,{method:'PATCH',body:JSON.stringify({nick:saved.branding?.botNickname||null})}).catch(()=>{});
     }
     return res.redirect(`/dashboard/${gid}?section=overview&saved=1`);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/jc-welcome/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const gid=req.params.guildId;
+    const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===String(id)&&[0,5].includes(Number(c.type)));
+    const channelId=String(req.body.jcWelcomeChannel||'').trim();
+    if(!validText(channelId))throw new Error('روم ترحيب JC غير صالح لهذا السيرفر.');
+    if(Boolean(req.body.jcWelcomeEnabled)&&!channelId)throw new Error('اختر روم ترحيب JC قبل تفعيل النظام.');
+    const current=await store.getConfig(gid);
+    const nextJcWelcome={
+      ...(current.jcWelcome||{}),
+      enabled:Boolean(req.body.jcWelcomeEnabled),
+      channelId,
+      bannerUrl:String(req.body.jcWelcomeBannerUrl||'').trim()
+    };
+    const saved=await store.patchConfig(gid,{jcWelcome:nextJcWelcome});
+    const verify=await store.getConfig(gid);
+    const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
+    if(JSON.stringify(stable(verify.jcWelcome))!==JSON.stringify(stable(saved.jcWelcome)))throw new Error('فشل التحقق من حفظ إعدادات ترحيب JC.');
+    return res.redirect(`/dashboard/${gid}?section=jc-welcome&saved=1&jcWelcomeSaved=1`);
   }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/welcome/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
