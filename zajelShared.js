@@ -1,0 +1,9 @@
+'use strict';
+const CONFIG_KEY='zajel-settings.json';
+function url(value){const s=String(value||'').trim();if(!s)return '';try{const u=new URL(s);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?s.slice(0,1000):'';}catch{return '';}}
+function normalize(raw={}){return {enabled:raw.enabled===true,channelId:String(raw.channelId||''),viewerRoleIds:[...new Set((Array.isArray(raw.viewerRoleIds)?raw.viewerRoleIds:[]).map(String))].filter(s=>/^\d{15,25}$/.test(s)).slice(0,50),panelBannerUrl:url(raw.panelBannerUrl),panelThumbnailUrl:url(raw.panelThumbnailUrl),messageBannerUrl:url(raw.messageBannerUrl),messageThumbnailUrl:url(raw.messageThumbnailUrl),color:/^#[0-9a-f]{6}$/i.test(raw.color||'')?raw.color:'#d4af37',cooldownSeconds:Math.max(0,Math.min(3600,Math.floor(Number(raw.cooldownSeconds) || 0))),panelMessageId:String(raw.panelMessageId||''),panelChannelId:String(raw.panelChannelId||'')};}
+function embed(cfg,receipt=false){const e={title:receipt?'📨 رسالة مجهولة':'📨 زاجل',description:receipt?'لديك رسالة مجهولة، اضغط على زر عرض الرسالة.':'أرسل رسالة مجهولة لأحد أعضاء السيرفر. اضغط زاجل واختر الشخص ثم اكتب رسالتك.',color:parseInt(cfg.color.slice(1),16),footer:{text:'الرسالة مراقبة، يمنع استخدام النظام للإساءة'}};const banner=receipt?cfg.messageBannerUrl:cfg.panelBannerUrl,thumbnail=receipt?cfg.messageThumbnailUrl:cfg.panelThumbnailUrl;if(banner)e.image={url:banner};if(thumbnail)e.thumbnail={url:thumbnail};return e;}
+function button(id,label){return {type:2,style:2,custom_id:id,label};}
+function panel(cfg){return {embeds:[embed(cfg)],components:[{type:1,components:[button('zajel:open','📨 زاجل')]}],allowed_mentions:{parse:[]}};}
+function receipt(cfg,uid,key){return {content:`<@${uid}>`,embeds:[embed(cfg,true)],components:[{type:1,components:[button('zajel:view:'+key,'👁️ عرض الرسالة'),button('zajel:open','📨 زاجل')]}],allowedMentions:{parse:[],users:[uid]}};}
+module.exports={CONFIG_KEY,normalize,url,panel,receipt};
