@@ -15,25 +15,26 @@ function mount(app,{store,requireLogin,requireGuildAccess,checkCsrf,csrf,layout,
   ${bundle._degraded?'<p class="zajel-note">تعذّر تحميل الرومات والرتب مؤقتًا. أعد تحميل الصفحة قبل الحفظ.</p>':''}
   <form method="post" action="/dashboard/${gid}/zajel/save"><input type="hidden" name="_csrf" value="${esc(csrf(req))}">
   <label><input type="checkbox" name="enabled" ${cfg.enabled?'checked':''}> تفعيل إرسال رسائل زاجل</label>
-  <div class="zajel-grid"><label>روم لوحة زاجل واستقبال الرسائل<select name="channelId" required><option value="">اختر الروم</option>${channels.map(c=>`<option value="${esc(c.id)}" ${String(c.id)===cfg.channelId?'selected':''}># ${esc(c.name)}</option>`).join('')}</select></label><label>لون الرسالة<input type="color" name="color" value="${cfg.color}"></label><label>الفاصل بين رسائل الشخص بالثواني (0 بدون انتظار)<input type="number" min="0" max="3600" name="cooldownSeconds" value="${cfg.cooldownSeconds}"></label></div>
+  <div class="zajel-grid"><label>روم لوحة زاجل واستقبال الرسائل<select name="channelId" required><option value="">اختر الروم</option>${channels.map(c=>`<option value="${esc(c.id)}" ${String(c.id)===cfg.channelId?'selected':''}># ${esc(c.name)}</option>`).join('')}</select></label><label>روم لوق زاجل<select name="logChannelId"><option value="">بدون لوق</option>${channels.map(c=>`<option value="${esc(c.id)}" ${String(c.id)===cfg.logChannelId?'selected':''}># ${esc(c.name)}</option>`).join('')}</select></label><label>لون الرسالة<input type="color" name="color" value="${cfg.color}"></label><label>الفاصل بين رسائل الشخص بالثواني (0 بدون انتظار)<input type="number" min="0" max="3600" name="cooldownSeconds" value="${cfg.cooldownSeconds}"></label></div>
   <h2>رتب عرض الرسائل</h2><p>المستلم يستطيع عرض رسالته دائمًا. الرتب المختارة تستطيع عرض كل رسائل زاجل في هذا السيرفر. صلاحية Administrator وحدها لا تفتح الرسالة.</p>
   <div class="zajel-roles">${roles.map(r=>`<label><input type="checkbox" name="viewerRoleIds" value="${esc(r.id)}" ${cfg.viewerRoleIds.includes(String(r.id))?'checked':''}> ${esc(r.name)}</label>`).join('')||'لا توجد رتب متاحة.'}</div>
   <h2>صور اللوحة الرئيسية</h2><div class="zajel-grid">${urlInput('panelBannerUrl','البنر الكبير للوحة زاجل')}${urlInput('panelThumbnailUrl','الصورة الصغيرة للوحة زاجل')}</div>
   <h2>صور إشعار الرسالة المجهولة</h2><div class="zajel-grid">${urlInput('messageBannerUrl','البنر الكبير للرسائل')}${urlInput('messageThumbnailUrl','الصورة الصغيرة للرسائل')}</div>
-  <p class="zajel-note">تظهر الرسالة العامة مع منشن للمستلم وزري «عرض الرسالة» و«زاجل». المحتوى يظهر للمصرح له فقط. تغيير الصور يطبق على الإشعارات الجديدة؛ استخدم نشر / تحديث لتحديث اللوحة الرئيسية.</p>
+  <p class="zajel-note">تظهر الرسالة العامة مع منشن للمستلم وزري «عرض الرسالة» و«زاجل». المحتوى يظهر للمصرح له فقط. ويمكنك تحديد روم لوق منفصل يظهر فيه المرسل والمستلم ومحتوى الرسالة كاملًا. تغيير الصور يطبق على الإشعارات الجديدة؛ استخدم نشر / تحديث لتحديث اللوحة الرئيسية.</p>
   <div class="zajel-actions"><button class="btn primary" name="action" value="save" ${bundle._degraded?'disabled':''}>💾 حفظ الإعدادات</button><button class="btn" name="action" value="publish" ${bundle._degraded?'disabled':''}>📨 حفظ ونشر / تحديث اللوحة</button></div></form></section>`;
   res.send(layout('زاجل',html,req.user));
  }catch(e){next(e);}});
  app.post(route+'/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
   if(req.bundle._degraded)return res.status(503).send('أعد تحميل الرومات والرتب ثم حاول مجددًا.');
   const gid=String(req.params.guildId),old=await get(gid),b=req.body||{};
-  const channelId=String(b.channelId||'');
+  const channelId=String(b.channelId||''),logChannelId=String(b.logChannelId||'');
   if(!req.bundle.channels.some(c=>String(c.id)===channelId&&[0,5].includes(Number(c.type))))return res.status(400).send('اختر رومًا نصيًا صحيحًا من هذا السيرفر.');
+  if(logChannelId&&!req.bundle.channels.some(c=>String(c.id)===logChannelId&&[0,5].includes(Number(c.type))))return res.status(400).send('اختر روم لوق صحيحًا من هذا السيرفر.');
   const roleIds=Array.isArray(b.viewerRoleIds)?b.viewerRoleIds:b.viewerRoleIds?[b.viewerRoleIds]:[];
   const validRoles=new Set(req.bundle.roles.map(r=>String(r.id)).filter(id=>id!==gid));
   if(roleIds.some(id=>!validRoles.has(String(id))))return res.status(400).send('إحدى الرتب المختارة غير صالحة.');
   for(const k of ['panelBannerUrl','panelThumbnailUrl','messageBannerUrl','messageThumbnailUrl'])if(String(b[k]||'').trim()&&!S.url(b[k]))return res.status(400).send('رابط الصورة غير صالح. استخدم رابط HTTP أو HTTPS مباشر للصورة.');
-  const cfg=S.normalize({...old,enabled:b.enabled==='on',channelId,viewerRoleIds:roleIds,color:b.color,cooldownSeconds:b.cooldownSeconds,panelBannerUrl:b.panelBannerUrl,panelThumbnailUrl:b.panelThumbnailUrl,messageBannerUrl:b.messageBannerUrl,messageThumbnailUrl:b.messageThumbnailUrl});
+  const cfg=S.normalize({...old,enabled:b.enabled==='on',channelId,logChannelId,viewerRoleIds:roleIds,color:b.color,cooldownSeconds:b.cooldownSeconds,panelBannerUrl:b.panelBannerUrl,panelThumbnailUrl:b.panelThumbnailUrl,messageBannerUrl:b.messageBannerUrl,messageThumbnailUrl:b.messageThumbnailUrl});
   await store.saveData(gid,S.CONFIG_KEY,cfg);
   if(b.action==='publish'){
    if(!cfg.enabled)return res.status(400).send('تم حفظ الإعدادات. فعّل زاجل قبل نشر اللوحة.');
