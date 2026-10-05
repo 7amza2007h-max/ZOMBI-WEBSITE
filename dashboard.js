@@ -32,6 +32,7 @@
     director: { label: 'City Director', icon: '🌆', desc: 'أحداث مدينة حية، تشغيل تلقائي، جوائز وقوالب أحداث قابلة للتعديل.' },
     rules: { label: 'القوانين', icon: '📜', desc: 'لوحة قوانين تفاعلية؛ كل نوع يعرض قوانينه برسالة خاصة للعضو فقط.' },
     suggestions: { label: 'الاقتراحات', icon: '💡', desc: 'عدة شاتات للاقتراحات، نوع مستقل لكل شات، Modal وتصويت ولوحات ZOMBI.' },
+    zajel: { label: 'زاجل', icon: '📨', desc: 'لوحة زاجل، صور البنر، روم الإرسال ورتب عرض الرسائل الخاصة.', external: true },
     event: { label: 'الإيفنت', icon: '🎉', desc: 'نقاط الإيفنت ونقاط الترقية المستقلة، الشاتات والرتب وحد الترقية.' },
     roles: { label: 'الرتب', icon: '🔔', desc: 'Self Roles + رتبة تلقائية للعضو الجديد عند دخوله السيرفر.' },
     reactionroles: { label: 'رتب الرياكشن', icon: '⭐', desc: 'ربط إيموجي من السيرفر برسالة موجودة لإعطاء وإزالة رتبة تلقائيًا.' },
@@ -53,7 +54,7 @@
 
   const groups = [
     ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'bot-commands', 'members']],
-    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'applications']],
+    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'zajel', 'applications']],
     ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
     ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
@@ -93,10 +94,10 @@
     ids.forEach(id => {
       const def = pageDefs[id];
       const a = document.createElement('a');
-      a.href = `/dashboard/${guildId}?section=${id}`;
-      a.dataset.section = id;
+      a.href = def.external ? `/dashboard/${guildId}/${id}` : `/dashboard/${guildId}?section=${id}`;
+      if (!def.external) a.dataset.section = id;
       a.innerHTML = `<span class="z-nav-icon">${def.icon}</span><b>${def.label}</b>`;
-      a.addEventListener('click', ev => {
+      if (!def.external) a.addEventListener('click', ev => {
         ev.preventDefault();
         history.pushState({}, '', a.href);
         render(id);
