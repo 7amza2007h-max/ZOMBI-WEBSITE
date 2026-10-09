@@ -49,6 +49,49 @@ for (const spec of specialistTemplates) {
  templates.push({id:spec.id,name:spec.name,category:spec.category,plan:spec.plan,icon:spec.icon,description:spec.description,features:['رتب متخصصة','قنوات نصية وفويسات','أقسام خاصة بصلاحيات'],roles,categories:cats});
 }
 
+
+// Expanded shared systems. Each template receives only relevant shared modules;
+// private categories use role overwrites rather than relying on channel names.
+const toText = names => names.trim().split(/\s+/).map(n => text(n));
+const toVoice = names => names.trim().split(/\s+/).map(n => voice(n));
+const hasRole = (t,n) => t.roles.some(r=>r.name.toLowerCase()===n.toLowerCase());
+const ensureRole = (t,n,color='#7f8c8d',permissions=[]) => { if(!hasRole(t,n)) t.roles.push(role(n,color,permissions)); };
+const staffNames = ['Owner','Co Owner','Management','Admin','Moderator','Manager','Server Manager','Head Admin','Support Manager','Support','Support Agent','Ticket Team','Application Reviewer','Event Manager','Partnership Manager','Log Viewer'];
+const privateAccess = t => Object.fromEntries(staffNames.filter(n=>hasRole(t,n)).map(n=>[n,['ViewChannel']]));
+const addCat = (t,name,channels,priv=false) => { if(!t.categories.some(c=>c.name===name)) t.categories.push(cat(name,channels,priv?privateAccess(t):{})); };
+for (const t of templates) {
+  // Shared roles are data definitions only; dangerous Administrator is never granted automatically here.
+  ensureRole(t,'Co Owner','#c0392b',['ManageChannels','ManageRoles']);
+  ensureRole(t,'Management','#8e44ad',['ManageMessages','ViewAuditLog']);
+  ensureRole(t,'Senior Moderator','#2980b9',['ManageMessages']);
+  ensureRole(t,'Support Agent','#16a085',['ManageMessages']);
+  ensureRole(t,'Ticket Team','#1abc9c',[]);
+  ensureRole(t,'Application Reviewer','#f39c12',[]);
+  ensureRole(t,'Log Viewer','#95a5a6',[]);
+  ensureRole(t,'Muted','#555555',[]);
+  addCat(t,'🔐・الإدارة العليا',toText('owner-room co-owner-room executive-management management-chat management-announcements management-decisions management-meetings management-planning staff-chat staff-announcements staff-discussion staff-suggestions staff-requests staff-complaints staff-reports staff-attendance staff-leave-requests staff-promotions staff-demotions staff-evaluations staff-training staff-recruitment staff-interviews staff-accepted staff-rejected staff-private-meetings staff-activity staff-performance staff-archive'),true);
+  addCat(t,'⚠️・العقوبات والتحذيرات',toText('warning-system warning-logs active-warnings expired-warnings warning-appeals verbal-warnings official-warnings staff-warnings staff-strikes member-strikes timeout-logs mute-logs kick-logs ban-logs unban-logs blacklist-logs punishment-appeals punishment-review disciplinary-reports evidence-submissions case-review repeat-offenders moderation-decisions'),true);
+  addCat(t,'📑・السجلات Logs',toText('member-join-logs member-leave-logs member-kick-logs member-ban-logs member-unban-logs member-timeout-logs member-warning-logs member-nickname-logs member-role-add-logs member-role-remove-logs message-delete-logs message-edit-logs bulk-delete-logs channel-create-logs channel-delete-logs channel-update-logs category-logs role-create-logs role-delete-logs role-update-logs permission-change-logs voice-join-logs voice-leave-logs voice-move-logs voice-mute-logs voice-deafen-logs invite-logs ticket-logs application-logs bot-command-logs security-logs template-logs system-errors'),true);
+  const shopLike=/store|shop|design|digital|support/.test(t.id+' '+t.category);
+  const roleplay=/fivem|police|ems|gang/.test(t.id+' '+t.name);
+  const eventLike=/event|gaming|valorant|minecraft|roblox|community|large/.test(t.id+' '+t.category);
+  const ticketNames = shopLike ? 'ticket-panel ticket-information ticket-rules ticket-announcements ticket-staff-chat ticket-staff-requests ticket-escalation ticket-reviews ticket-transcripts ticket-statistics ticket-logs' : 'ticket-panel ticket-information ticket-rules ticket-announcements ticket-staff-chat ticket-staff-requests ticket-escalation ticket-reviews ticket-transcripts ticket-statistics ticket-logs';
+  addCat(t,'🎫・مركز التكتات',toText(ticketNames),true);
+  addCat(t,'📝・التقديمات والقبول',toText('applications-panel applications-information applications-open applications-review applications-interviews applications-accepted applications-rejected applications-pending applications-archive applications-logs staff-recruitment partnership-applications event-staff-applications creator-applications department-applications'),true);
+  addCat(t,'👥・خدمات الأعضاء',toText('member-support member-questions member-reports member-appeals member-feedback member-suggestions member-polls member-activities member-achievements member-events member-roles-info member-verification member-requests member-help member-guides member-faq'));
+  addCat(t,'💡・الاقتراحات والتصويت',toText('suggestions-panel suggestions-pending suggestions-approved suggestions-rejected suggestions-implemented suggestions-discussion suggestions-logs community-polls staff-polls event-polls'),true);
+  if(eventLike || roleplay) addCat(t,'🏆・الفعاليات والمسابقات',toText('event-announcements event-calendar event-registration event-questions event-planning event-staff-chat event-staff-logs event-participants event-teams event-brackets event-results event-winners event-prizes event-disputes event-reports event-gallery event-feedback'),true);
+  addCat(t,'🤝・الشراكات والعلاقات',toText('partnership-info partnership-rules partnership-requests partnership-review partnership-announcements partner-server-info partner-chat partnership-logs public-relations advertising-requests'),true);
+  addCat(t,'🔊・الفويسات الإضافية',toVoice('Waiting-Room General-Voice-1 General-Voice-2 General-Voice-3 Gaming-Room-1 Gaming-Room-2 Gaming-Room-3 Team-Voice-1 Team-Voice-2 Team-Voice-3 Event-Voice Study-Room Music-Room Support-Room Interview-Room Staff-Room Management-Room Private-Meeting AFK'));
+  if(eventLike) addCat(t,'📈・المستويات والاقتصاد',toText('economy-guide currency-information economy-chat daily-rewards-info economy-leaderboards level-information level-leaderboards member-achievements reward-information economy-logs'),true);
+  if(roleplay) addCat(t,'🚨・الأقسام الميدانية',toText('department-announcements duty-roster shift-reports operation-planning incident-reports evidence-room training-schedule promotion-requests leave-requests'),true);
+  if(shopLike) addCat(t,'🛍️・الطلبات والعملاء',toText('store-catalog products pricing payment-methods delivery-information how-to-order new-orders order-status order-tracking completed-orders customer-reviews refund-requests replacement-requests order-management inventory finance-reports customer-issues'),true);
+  if(t.id==='programming' || /program/.test(t.id+' '+t.name)) addCat(t,'💻・المطورون',toText('frontend backend apis code-review bug-reports project-showcase collaboration looking-for-developers open-source dev-team project-planning technical-decisions'),true);
+  // Template metadata used by preview/UI; handlers must not claim modules are active unless bot integrations exist.
+  t.version = 2;
+  t.modules = { moderation:true, logs:true, applications:true, suggestions:true, tickets:'channel-structure-only', events:eventLike?'channel-structure-only':false, economy:eventLike?'requires-existing-bot-module':false };
+}
+
 const byId = new Map(templates.map(t => [t.id, t]));
 function cloneTemplate(id) { const t = byId.get(String(id)); return t ? JSON.parse(JSON.stringify(t)) : null; }
 module.exports = { templates, cloneTemplate };
