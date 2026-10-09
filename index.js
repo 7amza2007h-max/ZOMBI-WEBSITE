@@ -919,6 +919,8 @@ const client =
 
             GatewayIntentBits.GuildVoiceStates,
 
+            GatewayIntentBits.GuildScheduledEvents,
+
             GatewayIntentBits.DirectMessages
 
         ]
@@ -929,6 +931,7 @@ const client =
 // PUBLIC MULTI-SERVER CORE
 // ==========================================================
 
+require('./temporaryVoiceRooms').install(client);
 require('./public/operations').install(client);
 require('./public/serverLogs').install(client);
 

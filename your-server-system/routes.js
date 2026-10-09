@@ -27,6 +27,7 @@ function mount(app, deps) {
  const SETTINGS = 'your-server-settings.json';
  const HISTORY = 'your-server-history.json';
  const MANIFEST = 'your-server-managed.json';
+ const CUSTOM = 'your-server-template-customization.json';
  async function getManifest(gid){ return store.data(gid, MANIFEST, {templateId:null, templateName:null, roles:[], channels:[]}); }
  async function saveManifest(gid, data){ return store.saveData(gid, MANIFEST, data); }
  async function deletePreviousManaged(gid, manifest, entry){
@@ -38,10 +39,19 @@ function mount(app, deps) {
    }
  }
  async function settings(){ return store.data('site', SETTINGS, {templates:{}}); }
- async function effectiveTemplate(id){
+ async function effectiveTemplate(id, gid=null){
    const t=cloneTemplate(id); if(!t) return null;
-   const s=await settings(), o=s.templates?.[id]||{};
-   return {...t, plan:['free','premium','premium_plus'].includes(o.plan)?o.plan:t.plan, enabled:o.enabled!==false, visible:o.visible!==false};
+   const sd=await settings(), o=sd.templates?.[id]||{};
+   if(gid){const saved=await store.data(String(gid),CUSTOM,{templates:{}}), custom=saved.templates?.[id]; if(custom){
+     for(let ci=0;ci<t.categories.length;ci++){const cat=t.categories[ci],cc=custom.categories?.[ci];if(!cc)continue;
+       if(typeof cc.name==='string'&&cc.name.trim())cat.name=cc.name.trim().slice(0,90);if(cc.enabled===false)cat._disabled=true;
+       for(let hi=0;hi<cat.channels.length;hi++){const ch=cat.channels[hi],hc=cc.channels?.[hi];if(!hc)continue;
+         if(typeof hc.name==='string'&&hc.name.trim())ch.name=hc.name.trim().slice(0,100);
+         if(typeof hc.accessRoles==='string'){const raw=hc.accessRoles.trim();if(raw.toUpperCase()==='PUBLIC'){ch.roleAccess={};ch.public=true;delete ch.customRolePermissions;}else if(raw){const safe=new Set(['ViewChannel','ReadMessageHistory','SendMessages','AddReactions','AttachFiles','EmbedLinks','Connect','Speak','ManageMessages','MoveMembers','MuteMembers','UseVAD']);if(raw.includes('=')){ch.roleAccess=Object.fromEntries(raw.split(';').map(x=>x.trim()).filter(Boolean).map(part=>{const ix=part.indexOf('=');const roleName=part.slice(0,ix).trim();const perms=part.slice(ix+1).split('+').map(x=>x.trim()).filter(x=>safe.has(x));return [roleName,perms];}).filter(([n,perms])=>n&&perms.length));ch.customRolePermissions=true;}else{ch.roleAccess=Object.fromEntries(raw.split(',').map(x=>x.trim()).filter(Boolean).map(n=>[n,['ViewChannel']]));delete ch.customRolePermissions;}ch.public=false;}else{delete ch.roleAccess;delete ch.customRolePermissions;ch.public=false;}}
+       }
+     }
+   }}
+   return {...t,plan:['free','premium','premium_plus'].includes(o.plan)?o.plan:t.plan,enabled:o.enabled!==false,visible:o.visible!==false};
  }
  async function addHistory(gid, entry){
    const data=await store.data(gid,HISTORY,{items:[]});
@@ -62,17 +72,31 @@ function mount(app, deps) {
  });
  app.get('/dashboard/:guildId/your-server/:templateId', requireLogin, requireGuildAccess, async(req,res,next)=>{
   try{
-   const t=await effectiveTemplate(req.params.templateId); if(!t||!t.visible||!t.enabled)return res.status(404).send('القالب غير متاح.');
+   const t=await effectiveTemplate(req.params.templateId,req.params.guildId); if(!t||!t.visible||!t.enabled)return res.status(404).send('القالب غير متاح.');
    const plan=planNameForConfig(await store.getConfig(req.params.guildId)); const rank={free:0,premium:1,premium_plus:2}; const canUse=(rank[plan]||0)>=(rank[t.plan]||0);
    const roleHtml=t.roles.map(r=>`<li><b style="color:${esc(r.color)}">${esc(r.name)}</b> — ${r.permissions.length?r.permissions.map(esc).join(', '):'صلاحيات عادية'}</li>`).join('');
-   const cats=t.categories.map(c=>`<section class="ys-card"><h3>${esc(c.name)}</h3><ul class="ys-list">${c.channels.map(ch=>`<li>${ch.type===2?'🔊':'#'} ${esc(ch.name)} ${ch.type===2?'(فويس)':'(كتابي)'}</li>`).join('')}</ul>${Object.keys(c.roleAccess||{}).length?`<p class="ys-muted">الوصول الخاص: ${Object.entries(c.roleAccess).map(([r,p])=>`${esc(r)}: ${p.map(esc).join(', ')}`).join(' • ')}</p>`:'<p class="ys-muted">قسم عام للأعضاء.</p>'}</section>`).join('');
-   res.send(page(t.name,`<main class="ys-wrap"><section class="ys-hero"><a class="ys-btn" href="/dashboard/${esc(req.params.guildId)}/your-server">← جميع القوالب</a><h1>${esc(t.icon)} ${esc(t.name)}</h1><p class="ys-muted">${esc(t.description)}</p><span class="ys-badge">الخطة المطلوبة: ${t.plan==='free'?'Free':t.plan==='premium'?'Premium':'Premium+'}</span>${!canUse?'<p class="ys-danger">خطتك الحالية لا تسمح بتطبيق هذا القالب.</p>':''}<p class="ys-muted">المعاينة لا تعدّل أي شيء. أثناء التنفيذ سيُعاد استخدام العناصر المطابقة بالاسم، ولن تُحذف العناصر الحالية أو تُعدّل صلاحياتها.</p><div class="ys-actions"><button class="ys-btn primary" ${canUse?'':'disabled'} onclick="document.getElementById('ys-confirm').showModal()">إنشاء سيرفري</button></div></section><section class="ys-panel"><h2>الرتب</h2><ul class="ys-list">${roleHtml}</ul></section><section class="ys-columns">${cats}</section><dialog id="ys-confirm" style="max-width:480px;background:#0c121d;color:#eee;border:1px solid #475569;border-radius:14px;padding:24px"><h2>تأكيد إنشاء الهيكل</h2><p>عند تبديل القالب سيحذف النظام العناصر التي سبق أن سجلها من القالب السابق، ثم ينشئ الهيكل الجديد. لا يحذف العناصر اليدوية غير المسجلة. قد تتخطى العملية العناصر التي تتجاوز صلاحيات البوت أو رتبة البوت.</p><form method="post" action="/dashboard/${esc(req.params.guildId)}/your-server/${encodeURIComponent(t.id)}/apply"><input type="hidden" name="_csrf" value="${esc(csrf(req))}"><button class="ys-btn primary" type="submit">أؤكد الإنشاء</button><button class="ys-btn" type="button" onclick="document.getElementById('ys-confirm').close()">إلغاء</button></form></dialog></main>`,req.user));
+   const cats=t.categories.map(c=>`<section class="ys-card"><h3>${esc(c.name)}</h3><ul class="ys-list">${c.channels.map(ch=>{const access=ch.roleAccess===null?{}:(ch.roleAccess||c.roleAccess||{});const roles=ch.publicReadOnly?(ch.writeRoles||[]):Object.keys(access);const perms=ch.type===2?'ViewChannel, Connect, Speak':'ViewChannel, ReadMessageHistory, SendMessages';return `<li>${ch.type===2?'🔊':'#'} <b>${esc(ch.name)}</b> ${ch.type===2?'(فويس)':'(كتابي)'}<div class="ys-muted">${ch.publicReadOnly?`المشاهدة: الجميع · الكتابة: ${roles.length?roles.map(esc).join('، '):'لا توجد رتبة محددة'}`:(roles.length?`الرتب: ${roles.map(esc).join('، ')}`:'عام حسب صلاحيات القسم')} · الصلاحيات الأساسية: ${perms}${ch.deny?.length?` · ممنوع: ${ch.deny.map(esc).join('، ')}`:''}</div></li>`}).join('')}</ul>${Object.keys(c.roleAccess||{}).length?`<p class="ys-muted">الوصول الافتراضي للقسم: ${Object.entries(c.roleAccess).map(([r,p])=>`${esc(r)}: ${p.map(esc).join(', ')}`).join(' • ')}</p>`:'<p class="ys-muted">قسم عام ما لم تحدد القناة صلاحيات مستقلة.</p>'}</section>`).join('');
+   res.send(page(t.name,`<main class="ys-wrap"><section class="ys-hero"><a class="ys-btn" href="/dashboard/${esc(req.params.guildId)}/your-server">← جميع القوالب</a><h1>${esc(t.icon)} ${esc(t.name)}</h1><p class="ys-muted">${esc(t.description)}</p><span class="ys-badge">الخطة المطلوبة: ${t.plan==='free'?'Free':t.plan==='premium'?'Premium':'Premium+'}</span>${!canUse?'<p class="ys-danger">خطتك الحالية لا تسمح بتطبيق هذا القالب.</p>':''}<p class="ys-muted">المعاينة لا تعدّل أي شيء. أثناء التنفيذ سيُعاد استخدام العناصر المطابقة بالاسم، ولن تُحذف العناصر الحالية أو تُعدّل صلاحياتها.</p><div class="ys-actions"><a class="ys-btn" href="/dashboard/${esc(req.params.guildId)}/your-server/${encodeURIComponent(t.id)}/configure">⚙️ تخصيص الأقسام والقنوات والصلاحيات</a><button class="ys-btn primary" ${canUse?'':'disabled'} onclick="document.getElementById('ys-confirm').showModal()">إنشاء سيرفري</button></div></section><section class="ys-panel"><h2>الرتب</h2><ul class="ys-list">${roleHtml}</ul></section><section class="ys-columns">${cats}</section><dialog id="ys-confirm" style="max-width:480px;background:#0c121d;color:#eee;border:1px solid #475569;border-radius:14px;padding:24px"><h2>تأكيد إنشاء الهيكل</h2><p>سيُنشئ النظام العناصر المطلوبة ويعيد استخدام المطابق منها. لن يحذف أو يغيّر أي قناة أو رتبة موجودة مسبقًا تلقائيًا. راجع الصلاحيات قبل التأكيد.</p><form method="post" action="/dashboard/${esc(req.params.guildId)}/your-server/${encodeURIComponent(t.id)}/apply"><input type="hidden" name="_csrf" value="${esc(csrf(req))}"><button class="ys-btn primary" type="submit">أؤكد الإنشاء</button><button class="ys-btn" type="button" onclick="document.getElementById('ys-confirm').close()">إلغاء</button></form></dialog></main>`,req.user));
+  }catch(e){next(e);}
+ });
+ app.get('/dashboard/:guildId/your-server/:templateId/configure', requireLogin, requireGuildAccess, async(req,res,next)=>{
+  try{const gid=String(req.params.guildId),id=String(req.params.templateId),t=await effectiveTemplate(id,gid);if(!t||!t.enabled||!t.visible)return res.status(404).send('القالب غير متاح.');
+   const saved=await store.data(gid,CUSTOM,{templates:{}}),cfg=saved.templates?.[id]||{};
+   const sections=t.categories.map((c,ci)=>{const cc=cfg.categories?.[ci]||{};const channels=c.channels.map((ch,hi)=>{const hc=cc.channels?.[hi]||{},inherited=Object.keys(ch.roleAccess||c.roleAccess||{}).join(', '),access=hc.accessRoles!==undefined?hc.accessRoles:(ch.publicReadOnly||ch.roleAccess===null?'PUBLIC':inherited);
+    return `<li><b>${ch.type===2?'🔊':'#'} ${esc(ch.name)}</b><div class="ys-muted">الرتب الحالية: ${esc(access||'توريث صلاحيات القسم')} · ${ch.type===2?'ViewChannel, Connect, Speak':'ViewChannel, ReadMessageHistory, SendMessages'}</div><label>اسم القناة <input style="width:100%;padding:7px;background:#111827;color:#eee;border:1px solid #475569;border-radius:7px" name="channelName[${ci}][${hi}]" value="${esc(hc.name||ch.name)}" maxlength="100"></label><label>الرتب والصلاحيات: Owner,Admin أو Owner=ViewChannel+ReadMessageHistory;Admin=ViewChannel+SendMessages؛ PUBLIC لقناة عامة <input style="width:100%;padding:7px;background:#111827;color:#eee;border:1px solid #475569;border-radius:7px" name="accessRoles[${ci}][${hi}]" value="${esc(access)}" maxlength="500"></label></li>`;}).join('');
+    return `<section class="ys-card"><label><input type="checkbox" name="catEnabled[${ci}]" value="1" ${cc.enabled===false?'':'checked'}> تفعيل القسم</label><p><label>اسم القسم <input style="width:100%;padding:8px;background:#111827;color:#eee;border:1px solid #475569;border-radius:7px" name="catName[${ci}]" value="${esc(cc.name||c.name)}" maxlength="90"></label></p><h3>${esc(c.name)}</h3><ul class="ys-list">${channels}</ul></section>`;}).join('');
+   res.send(page('تخصيص القالب',`<main class="ys-wrap"><section class="ys-hero"><a class="ys-btn" href="/dashboard/${esc(gid)}/your-server/${encodeURIComponent(id)}">← رجوع للمعاينة</a><h1>⚙️ تخصيص ${esc(t.name)}</h1><p class="ys-muted">الإعدادات محفوظة لهذا السيرفر فقط. أسماء الرتب يجب أن تطابق الرتب الموجودة أو التي ينشئها القالب. استخدم Role=ViewChannel+ReadMessageHistory;Admin=ViewChannel+SendMessages لتحديد صلاحيات كل رتبة. الصلاحيات الخطرة مثل Administrator وManageRoles غير متاحة هنا. اكتب PUBLIC لجعل القناة عامة، أو اترك الحقل فارغًا لتوريث صلاحيات القسم.</p></section><form method="post" action="/dashboard/${esc(gid)}/your-server/${encodeURIComponent(id)}/configure"><input type="hidden" name="_csrf" value="${esc(csrf(req))}">${sections}<button class="ys-btn primary" type="submit">حفظ التخصيص</button></form></main>`,req.user));
+  }catch(e){next(e);}
+ });
+ app.post('/dashboard/:guildId/your-server/:templateId/configure', requireLogin, requireGuildAccess, checkCsrf, async(req,res,next)=>{
+  try{const gid=String(req.params.guildId),id=String(req.params.templateId),t=cloneTemplate(id);if(!t)return res.status(404).send('القالب غير موجود.');const saved=await store.data(gid,CUSTOM,{templates:{}}),config={categories:[]};
+   for(let ci=0;ci<t.categories.length;ci++){const cat=t.categories[ci],c={enabled:req.body.catEnabled?.[ci]==='1',name:String(req.body.catName?.[ci]||cat.name).trim().slice(0,90),channels:[]};for(let hi=0;hi<cat.channels.length;hi++){const ch=cat.channels[hi];c.channels.push({name:String(req.body.channelName?.[ci]?.[hi]||ch.name).trim().slice(0,100),accessRoles:String(req.body.accessRoles?.[ci]?.[hi]??'').trim().slice(0,500)});}config.categories.push(c);}saved.templates=saved.templates||{};saved.templates[id]=config;await store.saveData(gid,CUSTOM,saved);res.redirect(`/dashboard/${encodeURIComponent(gid)}/your-server/${encodeURIComponent(id)}`);
   }catch(e){next(e);}
  });
  app.post('/dashboard/:guildId/your-server/:templateId/apply', requireLogin, requireGuildAccess, checkCsrf, async(req,res,next)=>{
   const gid=String(req.params.guildId), id=String(req.params.templateId); const runKey=`${gid}:${id}`; if(activeRuns.has(runKey))return res.status(409).send('هناك عملية إنشاء جارية لهذا القالب على هذا السيرفر.'); activeRuns.add(runKey); let entry={id:require('crypto').randomUUID(),templateId:id,status:'running',createdAt:Date.now(),created:[],reused:[],deleted:[],skipped:[],errors:[]};
   try{
-   const t=await effectiveTemplate(id); if(!t||!t.enabled||!t.visible)throw new Error('القالب غير متاح.');
+   const t=await effectiveTemplate(id,gid); if(!t||!t.enabled||!t.visible)throw new Error('القالب غير متاح.');
    const cfg=await store.getConfig(gid), plan=planNameForConfig(cfg), rank={free:0,premium:1,premium_plus:2};
    if((rank[plan]||0)<(rank[t.plan]||0))throw new Error(`هذا القالب يتطلب خطة ${t.plan==='premium_plus'?'Premium+':'Premium'} فعّالة.`);
    // requireGuildAccess verified OAuth Manage Server; verify current Discord permissions too.
@@ -90,7 +114,8 @@ function mount(app, deps) {
    const has=(key)=>hasAdmin||(botPerms&(PERMISSIONS[key]||0n))!==0n;
    if(!has('ManageChannels')||!has('ManageRoles'))throw new Error('يحتاج البوت إلى Manage Channels وManage Roles لإنشاء القالب.');
    const oldManifest=await getManifest(gid);
-   if(oldManifest.templateId && oldManifest.templateId!==id){ await deletePreviousManaged(gid,oldManifest,entry); await saveManifest(gid,{templateId:null,templateName:null,roles:[],channels:[]}); }
+   // Safety: changing templates must never delete existing channels or roles without explicit approval.
+   // Keep prior managed IDs in the manifest so a later, separately confirmed cleanup can be implemented safely.
    const [existingRoles,existingChannels]=await Promise.all([botFetch(`/guilds/${gid}/roles`),botFetch(`/guilds/${gid}/channels`)]);
    const owned={roles:[],channels:[]};
    const roleMap=new Map((existingRoles||[]).map(r=>[r.name,r]));
@@ -113,29 +138,32 @@ function mount(app, deps) {
     positionChanges.push({id:String(rid),position:target});
    }
    if(positionChanges.length){try{await botFetch(`/guilds/${gid}/roles`,{method:'PATCH',body:JSON.stringify(positionChanges)});}catch(e){entry.errors.push(`تعذر ترتيب الرتب الجديدة: ${e.message}`);}}
-   const everyoneId=gid;
+   const everyoneId=gid; const missingRoleWarnings=new Set();
    const makeOverwrites=(c)=>{
     const allowed=new Map(), denied=new Map();
     const allow=(id,keys)=>allowed.set(String(id),(allowed.get(String(id))||0n)|keys.reduce((n,k)=>n|(PERMISSIONS[k]||0n),0n));
     const deny=(id,keys)=>denied.set(String(id),(denied.get(String(id))||0n)|keys.reduce((n,k)=>n|(PERMISSIONS[k]||0n),0n));
     const privateSection=Object.keys(c.roleAccess||{}).length>0;
-    if(privateSection){deny(everyoneId,['ViewChannel']);for(const [roleName,perms] of Object.entries(c.roleAccess)){const rid=roleIds[roleName]||roleMap.get(roleName)?.id;if(rid){const channelPerms=c.type===4?perms:(c.type===2?['ViewChannel','Connect','Speak'] : ['ViewChannel','ReadMessageHistory','SendMessages']);allow(rid,[...new Set([...perms,...channelPerms])]);}}}
-    else allow(everyoneId,['ViewChannel','ReadMessageHistory',...(c.type===2?['Connect']:['SendMessages','AddReactions','AttachFiles','EmbedLinks'])]);
+    if(privateSection && !c.publicReadOnly){deny(everyoneId,['ViewChannel']);for(const [roleName,perms] of Object.entries(c.roleAccess)){const rid=roleIds[roleName]||roleMap.get(roleName)?.id;if(!rid){const warning=`رتبة الوصول المطلوبة غير موجودة: ${roleName}`;if(!missingRoleWarnings.has(warning)){missingRoleWarnings.add(warning);entry.errors.push(warning);}}if(rid){const channelPerms=c.type===4||c.customRolePermissions?[]:(c.type===2?['ViewChannel','Connect','Speak'] : (c.readOnly?['ViewChannel','ReadMessageHistory']:['ViewChannel','ReadMessageHistory','SendMessages']));allow(rid,[...new Set([...perms,...channelPerms])]);}}}
+    else allow(everyoneId,['ViewChannel','ReadMessageHistory',...(c.type===2?['Connect']:c.publicReadOnly?[]:['SendMessages','AddReactions','AttachFiles','EmbedLinks'])]);
+    if(/logs|سجلات|اللوقات|ticket-logs|ticket-transcripts/i.test(String(c.name||'')) && validId(botUser.id)) allow(String(botUser.id),['ViewChannel','ReadMessageHistory','SendMessages','EmbedLinks','AttachFiles']);
+    if(c.publicReadOnly){deny(everyoneId,['SendMessages']);for(const roleName of (c.writeRoles||[])){const rid=roleIds[roleName]||roleMap.get(roleName)?.id;if(rid)allow(rid,['ViewChannel','ReadMessageHistory','SendMessages']);}}
     for(const [id,bits] of denied){const a=allowed.get(id)||0n;allowed.set(id,a&~bits);}
-    return [...new Set([...allowed.keys(),...denied.keys()])].map(id=>({id,type:id===everyoneId?0:0,allow:(allowed.get(id)||0n).toString(),deny:(denied.get(id)||0n).toString()}));
+    return [...new Set([...allowed.keys(),...denied.keys()])].map(id=>({id,type:id===String(botUser.id)?1:0,allow:(allowed.get(id)||0n).toString(),deny:(denied.get(id)||0n).toString()}));
    };
    const channelsNow=await botFetch(`/guilds/${gid}/channels`); const channelMap=new Map((channelsNow||[]).map(c=>[`${c.type}:${c.name}:${c.parent_id||''}`,c]));
    for(const category of t.categories){
+    if(category._disabled)continue;
     let categoryId=''; const existingCat=(channelsNow||[]).find(c=>c.type===4&&c.name===category.name);
     if(existingCat){categoryId=existingCat.id;entry.reused.push(`تصنيف: ${category.name}`);}else{
-     try{const pseudo={type:4,roleAccess:category.roleAccess||{}};const made=await botFetch(`/guilds/${gid}/channels`,{method:'POST',body:JSON.stringify({name:category.name,type:4,permission_overwrites:makeOverwrites(pseudo)})});categoryId=made.id;owned.channels.push({id:String(made.id),name:category.name,type:4});entry.created.push(`تصنيف: ${category.name}`);await wait(180);}catch(e){entry.errors.push(`تعذر إنشاء التصنيف ${category.name}: ${e.message}`);continue;}
+     try{const pseudo={type:4,name:category.name,roleAccess:category.roleAccess||{}};const made=await botFetch(`/guilds/${gid}/channels`,{method:'POST',body:JSON.stringify({name:category.name,type:4,permission_overwrites:makeOverwrites(pseudo)})});categoryId=made.id;owned.channels.push({id:String(made.id),name:category.name,type:4});entry.created.push(`تصنيف: ${category.name}`);await wait(180);}catch(e){entry.errors.push(`تعذر إنشاء التصنيف ${category.name}: ${e.message}`);continue;}
     }
     for(const ch of category.channels){
      const found=(channelsNow||[]).find(c=>c.type===ch.type&&c.name===ch.name&&String(c.parent_id||'')===String(categoryId));
      if(found){entry.reused.push(`قناة: ${category.name}/${ch.name}`);continue;}
      try{
       const privateSection=Object.keys(category.roleAccess||{}).length>0;
-      const access={...category, type:ch.type, roleAccess:category.roleAccess||{}};
+      const explicitlyPublic=ch.public===true; const access={...category, ...ch, type:ch.type, roleAccess:explicitlyPublic?{}:(ch.roleAccess||category.roleAccess||{}), readOnly:!!ch.readOnly, publicReadOnly:!!ch.publicReadOnly, writeRoles:ch.writeRoles||[]};
       const overrides=makeOverwrites(access);
       // For a public section, the category-level defaults apply. Per-channel deny/allow rules are supported too.
       if(ch.deny?.length){const ow=overrides.find(x=>x.id===everyoneId)||{id:everyoneId,type:0,allow:'0',deny:'0'};ow.deny=(BigInt(ow.deny)|ch.deny.reduce((n,k)=>n|(PERMISSIONS[k]||0n),0n)).toString();if(!overrides.includes(ow))overrides.push(ow);}
@@ -146,10 +174,14 @@ function mount(app, deps) {
     }
    }
    entry.status=entry.errors.length?'partial':'success';
-   if(entry.status==='success'){ await saveManifest(gid,{templateId:id,templateName:t.name,roles:owned.roles,channels:owned.channels,updatedAt:Date.now()}); }
+   if(entry.status!=='failed' && (owned.channels.length||owned.roles.length)){
+    const previous=oldManifest||{roles:[],channels:[]};
+    const mergeById=(a,b)=>[...new Map([...(a||[]),...(b||[])].map(x=>[String(x.id),x])).values()];
+    await saveManifest(gid,{templateId:id,templateName:t.name,roles:mergeById(previous.roles,owned.roles),channels:mergeById(previous.channels,owned.channels),updatedAt:Date.now(),preservedPreviousTemplates:true});
+   }
    entry.summary=`حذف ${entry.deleted.length} عنصرًا قديمًا، إنشاء ${entry.created.length} عنصر، إعادة استخدام ${entry.reused.length}، وأخفق ${entry.errors.length}.`;
    await addHistory(gid,entry); activeRuns.delete(runKey);
-   res.send(page('نتيجة إنشاء القالب',`<main class="ys-wrap"><section class="ys-hero"><h1>${entry.status==='success'?'✅':'⚠️'} نتيجة إنشاء ${esc(t.name)}</h1><p>${esc(entry.summary)}</p><p class="ys-muted">تم حذف العناصر المسجلة من القالب السابق فقط. العناصر التي أُنشئت قبل تفعيل سجل العناصر لا يمكن تحديدها بأمان تلقائيًا.</p><h2>العناصر القديمة المحذوفة (${entry.deleted.length})</h2><ul class="ys-list">${entry.deleted.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا توجد عناصر مسجلة من قالب سابق.</li>'}</ul><a class="ys-btn primary" href="/dashboard/${esc(gid)}/your-server">العودة للقوالب</a></section><section class="ys-panel"><h2>تم إنشاؤه (${entry.created.length})</h2><ul class="ys-list">${entry.created.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul><h2>تمت إعادة استخدامه (${entry.reused.length})</h2><ul class="ys-list">${entry.reused.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul><h2 class="ys-danger">الأخطاء (${entry.errors.length})</h2><ul class="ys-list">${entry.errors.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul></section></main>`,req.user));
+   res.send(page('نتيجة إنشاء القالب',`<main class="ys-wrap"><section class="ys-hero"><h1>${entry.status==='success'?'✅':'⚠️'} نتيجة إنشاء ${esc(t.name)}</h1><p>${esc(entry.summary)}</p><p class="ys-muted">حافظ النظام على القنوات والرتب الموجودة مسبقًا ولم يحذفها تلقائيًا.</p><h2>العناصر القديمة المحذوفة (${entry.deleted.length})</h2><ul class="ys-list">${entry.deleted.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا توجد عناصر مسجلة من قالب سابق.</li>'}</ul><a class="ys-btn primary" href="/dashboard/${esc(gid)}/your-server">العودة للقوالب</a></section><section class="ys-panel"><h2>تم إنشاؤه (${entry.created.length})</h2><ul class="ys-list">${entry.created.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul><h2>تمت إعادة استخدامه (${entry.reused.length})</h2><ul class="ys-list">${entry.reused.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul><h2 class="ys-danger">الأخطاء (${entry.errors.length})</h2><ul class="ys-list">${entry.errors.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>لا يوجد</li>'}</ul></section></main>`,req.user));
   }catch(e){entry.status='failed';entry.summary=e.message;entry.errors.push(e.message);await addHistory(gid,entry).catch(()=>{});activeRuns.delete(runKey);res.status(400).send(page('تعذر إنشاء القالب',`<main class="ys-wrap"><section class="ys-hero"><h1>❌ تعذر إنشاء القالب</h1><p>${esc(e.message)}</p><a class="ys-btn" href="/dashboard/${esc(gid)}/your-server">رجوع</a></section></main>`,req.user));}
  });
  // Owner-only template plan and visibility control, stored using existing guild-data storage.
