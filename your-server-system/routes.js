@@ -25,12 +25,27 @@ function defaultCategoryOrder(category,index){const n=String(category?._baseName
 
 function mount(app, deps) {
  
+
+function mount(app, deps) {
+ const {
+   store,
+   requireLogin,
+   requireOwner,
+   requireGuildAccess,
+   checkCsrf,
+   csrf,
+   layout,
+   botFetch,
+   planNameForConfig,
+   isOwner
+ } = deps;
+
  app.get('/your-server', requireLogin, (req, res) => {
    const guilds = req.user?.guilds || [];
 
    const guild = guilds.find(g =>
      g.owner ||
-     ((BigInt(String(g.permissions || '0')) & 0x20n) !== 0n)
+     ((BigInt(String(g.permissions || '0')) & 0x28n) !== 0n)
    );
 
    if (!guild) {
@@ -44,7 +59,11 @@ function mount(app, deps) {
    );
  });
 
- const {store, requireLogin, requireOwner, requireGuildAccess, checkCsrf, csrf, layout, botFetch, planNameForConfig, isOwner} = deps;
+ const SETTINGS = 'your-server-settings.json';
+ const HISTORY = 'your-server-history.json';
+ const MANIFEST = 'your-server-managed.json';
+ const CUSTOM = 'your-server-template-customization.json';
+
  const SETTINGS = 'your-server-settings.json';
  const HISTORY = 'your-server-history.json';
  const MANIFEST = 'your-server-managed.json';
