@@ -1,7 +1,8 @@
 'use strict';
 
 // Templates are data-only. Permissions use Discord permission names and are
-// converted to bitfields by the executor; no destructive operations are used.
+// converted to Discord permission overwrites by the executor. Replacing a prior
+// managed template requires explicit confirmation in the dashboard.
 const role = (name, color, permissions = []) => ({ name, color, permissions });
 const text = (name, allow = [], deny = [], roleAccess = null) => ({ name, type: 0, allow, deny, ...(roleAccess ? { roleAccess } : {}) });
 const voice = (name, allow = [], deny = [], roleAccess = null) => ({ name, type: 2, allow, deny, ...(roleAccess ? { roleAccess } : {}) });
