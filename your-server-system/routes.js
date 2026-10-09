@@ -90,6 +90,28 @@ function mount(app, deps) {
    const hasAdmin=(botPerms&(1n<<3n))!==0n;
    const has=(key)=>hasAdmin||(botPerms&(PERMISSIONS[key]||0n))!==0n;
    if(!has('ManageChannels')||!has('ManageRoles'))throw new Error('يحتاج البوت إلى Manage Channels وManage Roles لإنشاء القالب.');
+   // Remove the previously managed template BEFORE creating the new one. This avoids
+   // accidentally reusing same-named channels from the old template and then deleting them.
+   const manifest=await getManifest(gid);
+   const previous=manifest.templates?.[manifest.activeTemplateId];
+   if(previous && manifest.activeTemplateId!==id){
+    const liveChannels=await botFetch(`/guilds/${gid}/channels`);
+    const liveRoles=await botFetch(`/guilds/${gid}/roles`);
+    const channelIds=new Set((liveChannels||[]).map(x=>String(x.id)));
+    const roleIdsLive=new Set((liveRoles||[]).map(x=>String(x.id)));
+    // Channels/categories first, then roles. Delete by recorded ID only, never by name.
+    for(const old of [...(previous.channels||[])].reverse()){
+     if(!validId(old.id)||!channelIds.has(String(old.id)))continue;
+     try{await botFetch(`/channels/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`قناة/تصنيف قديم: ${old.name}`);await wait(180);}
+     catch(e){entry.errors.push(`تعذر حذف العنصر القديم ${old.name}: ${e.message}`);}
+    }
+    for(const old of [...(previous.roles||[])].reverse()){
+     if(!validId(old.id)||!roleIdsLive.has(String(old.id)))continue;
+     try{await botFetch(`/guilds/${gid}/roles/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`رتبة قديمة: ${old.name}`);await wait(180);}
+     catch(e){entry.errors.push(`تعذر حذف الرتبة القديمة ${old.name}: ${e.message}`);}
+    }
+    if(entry.errors.length)throw new Error('لم يكتمل حذف القالب السابق؛ أوقفنا التبديل لتجنب إنشاء قالب فوق إعدادات غير مكتملة. راجع الأخطاء في سجل العملية.');
+   }
    const [existingRoles,existingChannels]=await Promise.all([botFetch(`/guilds/${gid}/roles`),botFetch(`/guilds/${gid}/channels`)]);
    const roleMap=new Map((existingRoles||[]).map(r=>[r.name,r]));
    const roleIds={};
@@ -143,26 +165,8 @@ function mount(app, deps) {
      }catch(e){entry.errors.push(`تعذر إنشاء القناة ${category.name}/${ch.name}: ${e.message}`);}
     }
    }
-   // Keep exact IDs of resources created by this system. Never delete by name.
-   const manifest=await getManifest(gid);
-   const previous=manifest.templates?.[manifest.activeTemplateId];
+   // Persist only resources created by this system. Reused/manual resources are never owned or deleted.
    if(!entry.errors.length){
-    if(previous && manifest.activeTemplateId!==id){
-     const currentChannels=await botFetch(`/guilds/${gid}/channels`);
-     const currentRoles=await botFetch(`/guilds/${gid}/roles`);
-     const liveChannelIds=new Set((currentChannels||[]).map(x=>String(x.id)));
-     const liveRoleIds=new Set((currentRoles||[]).map(x=>String(x.id)));
-     for(const old of [...(previous.channels||[])].reverse()){
-      if(!validId(old.id)||!liveChannelIds.has(String(old.id)))continue;
-      try{await botFetch(`/channels/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`قناة/تصنيف قديم: ${old.name}`);await wait(180);}
-      catch(e){entry.errors.push(`تعذر حذف العنصر القديم ${old.name}: ${e.message}`);}
-     }
-     for(const old of [...(previous.roles||[])].reverse()){
-      if(!validId(old.id)||!liveRoleIds.has(String(old.id)))continue;
-      try{await botFetch(`/guilds/${gid}/roles/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`رتبة قديمة: ${old.name}`);await wait(180);}
-      catch(e){entry.errors.push(`تعذر حذف الرتبة القديمة ${old.name}: ${e.message}`);}
-     }
-    }
     manifest.templates=manifest.templates||{};
     if(manifest.activeTemplateId===id && manifest.templates[id]){
      const prior=manifest.templates[id];
