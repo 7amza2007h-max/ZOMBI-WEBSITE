@@ -30,4 +30,45 @@ t('team-management','فريق عمل وإدارة','الإدارة','premium_plu
 t('private-server','سيرفر خاص بسيط','بسيط','free','سيرفر خاص minimal للأشخاص الموثوقين.',[r('Owner',0xe74c3c,P.ADMIN),r('Trusted',0x3498db,'0'),r('Bots',0x2ecc71,'0')],[['📌・الخاص',[ch('القوانين'),ch('العام'),ch('ملاحظات')]],['🔊・الصوت',[ch('فويس خاص','voice'),ch('AFK','voice')]],['🔒・المالك',[ch('ملاحظات المالك','text','staff')]]])
 ];
 const normalizePlan = p => ({free:'free',premium:'premium',premium_plus:'premium_plus','premium+':'premium_plus'}[String(p||'free').toLowerCase()]||'free');
-module.exports={templates,P,normalizePlan};
+// Compatibility adapter: keep the old templates and their channels/roles,
+// while exposing the schema expected by the current routes.js.
+const permissionNames = [
+  ['8','Administrator'],['16','ManageChannels'],['32','ManageGuild'],
+  ['2','KickMembers'],['4','BanMembers'],['268435456','ManageRoles'],
+  ['2048','SendMessages'],['1024','ViewChannel'],['65536','ReadMessageHistory'],
+  ['16384','EmbedLinks'],['32768','AttachFiles'],['131072','MentionEveryone'],
+  ['1048576','Connect'],['2097152','Speak'],['16777216','MoveMembers'],
+  ['1099511627776','ModerateMembers']
+];
+const compatibleTemplates = templates.map((item, index) => ({
+  id: item.id,
+  name: item.name,
+  category: item.category,
+  plan: normalizePlan(item.plan),
+  icon: ['🌐','👥','🎮','🚘','🌆','🛍️','🎮','🌍','🎫','🏆','📚','🧑‍💼','🔒'][index] || '🧩',
+  description: item.description || '',
+  features: ['قنوات كتابية وصوتية','رتب وصلاحيات','أقسام منظمة'],
+  roles: (Array.isArray(item.roles) ? item.roles : []).map(role => {
+    const bits = String(role.permissions ?? '0');
+    return { name: role.name, color: '#' + (Number(role.color || 0) >>> 0).toString(16).padStart(6,'0').slice(-6), permissions: permissionNames.filter(([bit]) => (BigInt(bits || '0') & BigInt(bit)) !== 0n).map(([,name]) => name) };
+  }),
+  categories: (Array.isArray(item.categories) ? item.categories : []).map((entry, ci) => {
+    const name = Array.isArray(entry) ? entry[0] : entry.name;
+    const sourceChannels = Array.isArray(entry) ? entry[1] : entry.channels;
+    const channels = (Array.isArray(sourceChannels) ? sourceChannels : []).map(channel => ({
+      name: channel.name,
+      type: channel.type === 'voice' || channel.type === 2 ? 2 : 0,
+      access: channel.access || 'all'
+    }));
+    const roleAccess = {};
+    for (const channel of (Array.isArray(sourceChannels) ? sourceChannels : [])) {
+      if (channel.access && channel.access !== 'all' && channel.access !== 'staff') roleAccess[channel.access] = ['ViewChannel','SendMessages'];
+    }
+    return { name: String(name || `قسم ${ci+1}`), channels, roleAccess };
+  })
+}));
+function cloneTemplate(id) {
+  const item = compatibleTemplates.find(t => t.id === String(id));
+  return item ? JSON.parse(JSON.stringify(item)) : null;
+}
+module.exports = { templates: compatibleTemplates, cloneTemplate, P, normalizePlan };
