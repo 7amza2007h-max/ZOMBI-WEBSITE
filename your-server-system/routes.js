@@ -90,30 +90,16 @@ function mount(app, deps) {
    const hasAdmin=(botPerms&(1n<<3n))!==0n;
    const has=(key)=>hasAdmin||(botPerms&(PERMISSIONS[key]||0n))!==0n;
    if(!has('ManageChannels')||!has('ManageRoles'))throw new Error('يحتاج البوت إلى Manage Channels وManage Roles لإنشاء القالب.');
-   // Remove the previously managed template BEFORE creating the new one. This avoids
-   // accidentally reusing same-named channels from the old template and then deleting them.
-   const manifest=await getManifest(gid);
-   const previous=manifest.templates?.[manifest.activeTemplateId];
-   if(previous && manifest.activeTemplateId!==id){
-    const liveChannels=await botFetch(`/guilds/${gid}/channels`);
-    const liveRoles=await botFetch(`/guilds/${gid}/roles`);
-    const channelIds=new Set((liveChannels||[]).map(x=>String(x.id)));
-    const roleIdsLive=new Set((liveRoles||[]).map(x=>String(x.id)));
-    // Channels/categories first, then roles. Delete by recorded ID only, never by name.
-    for(const old of [...(previous.channels||[])].reverse()){
-     if(!validId(old.id)||!channelIds.has(String(old.id)))continue;
-     try{await botFetch(`/channels/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`قناة/تصنيف قديم: ${old.name}`);await wait(180);}
-     catch(e){entry.errors.push(`تعذر حذف العنصر القديم ${old.name}: ${e.message}`);}
-    }
-    for(const old of [...(previous.roles||[])].reverse()){
-     if(!validId(old.id)||!roleIdsLive.has(String(old.id)))continue;
-     try{await botFetch(`/guilds/${gid}/roles/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`رتبة قديمة: ${old.name}`);await wait(180);}
-     catch(e){entry.errors.push(`تعذر حذف الرتبة القديمة ${old.name}: ${e.message}`);}
-    }
-    if(entry.errors.length)throw new Error('لم يكتمل حذف القالب السابق؛ أوقفنا التبديل لتجنب إنشاء قالب فوق إعدادات غير مكتملة. راجع الأخطاء في سجل العملية.');
-   }
    const [existingRoles,existingChannels]=await Promise.all([botFetch(`/guilds/${gid}/roles`),botFetch(`/guilds/${gid}/channels`)]);
-   const roleMap=new Map((existingRoles||[]).map(r=>[r.name,r]));
+   // Snapshot the active template BEFORE creating anything. When switching templates,
+   // do not reuse its tracked resources: otherwise cleanup would either leave old rooms
+   // behind or delete rooms now shared by the new template.
+   const manifestBefore=await getManifest(gid);
+   const previousTemplateId=manifestBefore.activeTemplateId;
+   const previousTemplate=previousTemplateId && previousTemplateId!==id ? manifestBefore.templates?.[previousTemplateId] : null;
+   const previousRoleIds=new Set((previousTemplate?.roles||[]).map(x=>String(x.id)));
+   const previousChannelIds=new Set((previousTemplate?.channels||[]).map(x=>String(x.id)));
+   const roleMap=new Map((existingRoles||[]).filter(r=>!previousRoleIds.has(String(r.id))).map(r=>[r.name,r]));
    const roleIds={};
    // Create/reuse roles. Existing roles are never modified. Role hierarchy is respected.
    for(const r of t.roles){
@@ -146,12 +132,12 @@ function mount(app, deps) {
    };
    const channelsNow=await botFetch(`/guilds/${gid}/channels`); const channelMap=new Map((channelsNow||[]).map(c=>[`${c.type}:${c.name}:${c.parent_id||''}`,c]));
    for(const category of t.categories){
-    let categoryId=''; const existingCat=(channelsNow||[]).find(c=>c.type===4&&c.name===category.name);
+    let categoryId=''; const existingCat=(channelsNow||[]).find(c=>!previousChannelIds.has(String(c.id))&&c.type===4&&c.name===category.name);
     if(existingCat){categoryId=existingCat.id;entry.reused.push(`تصنيف: ${category.name}`);}else{
      try{const pseudo={type:4,roleAccess:category.roleAccess||{}};const made=await botFetch(`/guilds/${gid}/channels`,{method:'POST',body:JSON.stringify({name:category.name,type:4,permission_overwrites:makeOverwrites(pseudo)})});categoryId=made.id;entry.created.push(`تصنيف: ${category.name}`);entry.manifest.channels.push({id:String(made.id),name:category.name,type:4});await wait(180);}catch(e){entry.errors.push(`تعذر إنشاء التصنيف ${category.name}: ${e.message}`);continue;}
     }
     for(const ch of category.channels){
-     const found=(channelsNow||[]).find(c=>c.type===ch.type&&c.name===ch.name&&String(c.parent_id||'')===String(categoryId));
+     const found=(channelsNow||[]).find(c=>!previousChannelIds.has(String(c.id))&&c.type===ch.type&&c.name===ch.name&&String(c.parent_id||'')===String(categoryId));
      if(found){entry.reused.push(`قناة: ${category.name}/${ch.name}`);continue;}
      try{
       const privateSection=Object.keys(category.roleAccess||{}).length>0;
@@ -165,8 +151,26 @@ function mount(app, deps) {
      }catch(e){entry.errors.push(`تعذر إنشاء القناة ${category.name}/${ch.name}: ${e.message}`);}
     }
    }
-   // Persist only resources created by this system. Reused/manual resources are never owned or deleted.
+   // Keep exact IDs of resources created by this system. Never delete by name.
+   const manifest=manifestBefore;
+   const previous=previousTemplate;
    if(!entry.errors.length){
+    if(previous && manifest.activeTemplateId!==id){
+     const currentChannels=await botFetch(`/guilds/${gid}/channels`);
+     const currentRoles=await botFetch(`/guilds/${gid}/roles`);
+     const liveChannelIds=new Set((currentChannels||[]).map(x=>String(x.id)));
+     const liveRoleIds=new Set((currentRoles||[]).map(x=>String(x.id)));
+     for(const old of [...(previous.channels||[])].reverse()){
+      if(!validId(old.id)||!liveChannelIds.has(String(old.id)))continue;
+      try{await botFetch(`/channels/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`قناة/تصنيف قديم: ${old.name}`);await wait(180);}
+      catch(e){entry.errors.push(`تعذر حذف العنصر القديم ${old.name}: ${e.message}`);}
+     }
+     for(const old of [...(previous.roles||[])].reverse()){
+      if(!validId(old.id)||!liveRoleIds.has(String(old.id)))continue;
+      try{await botFetch(`/guilds/${gid}/roles/${old.id}`,{method:'DELETE'});entry.deleted=(entry.deleted||[]).concat(`رتبة قديمة: ${old.name}`);await wait(180);}
+      catch(e){entry.errors.push(`تعذر حذف الرتبة القديمة ${old.name}: ${e.message}`);}
+     }
+    }
     manifest.templates=manifest.templates||{};
     if(manifest.activeTemplateId===id && manifest.templates[id]){
      const prior=manifest.templates[id];
