@@ -1251,7 +1251,7 @@ async function start(){
     const apiWarning=presence.error&&!presence.heartbeat?`<section class="panel"><b>⚠️ تعذر فحص ZOMBI Bot من Discord.</b><p class="hint">${esc(presence.error?.message||'تحقق من BOT_TOKEN / OAUTH Proxy في إعدادات الاستضافة.')}</p></section>`:'';
     res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div></section>${apiWarning}<div class="servers">${cards||(!unknownCards?'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>':'')}</div>${unknownCards?`<h2>حالة غير مؤكدة</h2><div class="servers">${unknownCards}</div>`:''}${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));
   }catch(e){next(e);}});
-  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);res.send(layout(req.bundle.guild.name,await guildPage(req),req.user));}catch(e){next(e);}});
+  app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);const content=await guildPage(req);res.send(layout(req.bundle.guild.name,`<div style="max-width:1200px;margin:12px auto;padding:0 16px"><a class="btn primary" href="/dashboard/${esc(req.params.guildId)}/your-server">🧰 نظام سيرفرك • قوالب جاهزة</a></div>${content}`,req.user));}catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/role-manager/state',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
     const cfg=await store.getConfig(req.params.guildId),{guild,roles,channels}=req.bundle;
@@ -2612,6 +2612,9 @@ async function start(){
 
   // ZOMBI-ZAJEL-DASHBOARD-20261005
   require('./zajelDashboard').mount(app,{store,requireLogin,requireGuildAccess,checkCsrf,csrf,layout,botFetch});
+
+  // ZOMBI-YOUR-SERVER-SYSTEM: isolated template builder routes.
+  require('./your-server-system/routes').mount(app,{store,requireLogin,requireOwner,requireGuildAccess,checkCsrf,csrf,layout,botFetch,planNameForConfig,isOwner});
 
   app.get('/health',async(_req,res)=>{const hb=await getRecentBotHeartbeat().catch(()=>null);res.json({ok:true,database:await store.health(),uptime:process.uptime(),discordProxy:Boolean(oauthProxyUrl()),botHeartbeat:hb?{ready:hb.ready!==false,guildCount:hb.guildCount||0,ageMs:Date.now()-Number(hb.at||0)}:null});});
   app.use((err,req,res,_next)=>{
