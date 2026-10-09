@@ -59,10 +59,7 @@ function mount(app, deps) {
    );
  });
 
- const SETTINGS = 'your-server-settings.json';
- const HISTORY = 'your-server-history.json';
- const MANIFEST = 'your-server-managed.json';
- const CUSTOM = 'your-server-template-customization.json';
+ 
 
  const SETTINGS = 'your-server-settings.json';
  const HISTORY = 'your-server-history.json';
