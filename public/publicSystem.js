@@ -3,7 +3,7 @@ const fullBank=require('./fullBank');
 'use strict';
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
-  ModalBuilder, TextInputBuilder, TextInputStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder,
   PermissionFlagsBits, ChannelType, MessageFlags
 } = require('discord.js');
 const store = require('./sharedStore');
@@ -548,19 +548,42 @@ async function openTicket(i,cfg,site){
   const tickets=await store.data(i.guild.id,'tickets.json',{}),maxOpen=Math.max(1,Number(type.maxOpenPerUser||1));
   const active=Object.values(tickets).filter(t=>t.userId===i.user.id&&t.typeId===type.id&&t.status==='open'&&i.guild.channels.cache.has(t.channelId));
   if(active.length>=maxOpen)return componentNotice(i,{content:`❌ لديك الحد الأقصى من هذا النوع (${maxOpen}): <#${active[0].channelId}>`});
-  const overwrites=[{id:i.guild.id,deny:[PermissionFlagsBits.ViewChannel]},{id:i.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]}];
+  const overwrites=[{id:i.guild.id,deny:[PermissionFlagsBits.ViewChannel]},{id:i.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},{id:i.client.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.ManageChannels]}];
   const roleLimit=limitFor(site,cfg,'ticketSupportRoles'),roleIds=[...new Set([...(cfg.tickets.supportRoleIds||[]),...(type.supportRoleIds||[]),...(type.viewRoleIds||[])])].slice(0,roleLimit);
   for(const rid of roleIds)overwrites.push({id:rid,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]});
   const base=(type.label||type.name||'ticket').toLowerCase().replace(/[^a-z0-9-_]/g,'').slice(0,25)||'ticket';
   const ch=await i.guild.channels.create({name:`${base}-${i.user.username}`.toLowerCase().replace(/[^a-z0-9-_]/g,'').slice(0,80)||`ticket-${i.user.id.slice(-6)}`,type:ChannelType.GuildText,parent:type.categoryId||cfg.channels.ticketCategory||null,permissionOverwrites:overwrites,reason:`ZOMBI ticket for ${i.user.tag}`});
   tickets[ch.id]={channelId:ch.id,userId:i.user.id,typeId:type.id,openedAt:Date.now(),status:'open'};await store.saveData(i.guild.id,'tickets.json',tickets);
+  void serverLogs.write(i.guild,'🎫 فتح تذكرة',`صاحب التذكرة: ${i.user.tag} (${i.user.id})\nالنوع: ${type.label||type.name||type.id}\nالقناة: #${ch.name} (${ch.id})`,'tickets');
   const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('pub:ticket:close').setStyle(ButtonStyle.Danger).setLabel('إغلاق التذكرة').setEmoji('🔒'));
   await ch.send({content:`مرحبًا ${i.user} 👋
 **النوع:** ${type.emoji||'🎫'} ${type.label||type.name}
 ${type.welcomeMessage||type.description||'اشرح طلبك وسيتم الرد عليك من الإدارة.'}`,components:[row]});
   return componentNotice(i,{content:`✅ تم فتح تذكرتك: ${ch}`});
 }
-async function closeTicket(i){const tickets=await store.data(i.guild.id,'tickets.json',{}),t=tickets[i.channel.id];if(!t)return componentNotice(i,{content:'❌ هذا الروم ليس تذكرة مسجلة.'});if(t.userId!==i.user.id&&!isAdmin(i))return componentNotice(i,{content:'❌ لا يمكنك إغلاق هذه التذكرة.'});t.status='closed';t.closedAt=Date.now();await store.saveData(i.guild.id,'tickets.json',tickets);await i.reply('🔒 سيتم حذف التذكرة بعد 5 ثوانٍ.').catch(()=>{});setTimeout(()=>i.channel.delete('ZOMBI ticket closed').catch(()=>{}),5000);}
+async function closeTicket(i){
+ const tickets=await store.data(i.guild.id,'tickets.json',{}),t=tickets[i.channel.id];
+ if(!t)return componentNotice(i,{content:'❌ هذا الروم ليس تذكرة مسجلة.'});
+ if(t.userId!==i.user.id&&!isAdmin(i))return componentNotice(i,{content:'❌ لا يمكنك إغلاق هذه التذكرة.'});
+ await i.deferReply({ephemeral:true}).catch(()=>{});
+ t.status='closed';t.closedAt=Date.now();t.closedBy=i.user.id;await store.saveData(i.guild.id,'tickets.json',tickets);
+ void serverLogs.write(i.guild,'🔒 إغلاق تذكرة',`صاحب التذكرة: ${t.userId}\nأغلقها: ${i.user.tag} (${i.user.id})\nالقناة: #${i.channel.name} (${i.channel.id})\nالنوع: ${t.typeId||'غير محدد'}`,'tickets');
+ try{
+  const map=await store.data(i.guild.id,'your-server-log-channels.json',{}).catch(()=>({}));
+  const transcriptId=map.transcripts||i.guild.channels.cache.find(ch=>ch.name==='ticket-transcripts'&&ch.isTextBased?.())?.id;
+  const transcriptChannel=transcriptId?(i.guild.channels.cache.get(String(transcriptId))||await i.guild.channels.fetch(String(transcriptId)).catch(()=>null)):null;
+  if(transcriptChannel?.isTextBased?.()){
+   const messages=await i.channel.messages.fetch({limit:100});
+   const ordered=[...messages.values()].sort((a,b)=>a.createdTimestamp-b.createdTimestamp);
+   const lines=[`ZOMBI TICKET TRANSCRIPT`,`Server: ${i.guild.name} (${i.guild.id})`,`Channel: ${i.channel.name} (${i.channel.id})`,`Ticket owner: ${t.userId}`,`Ticket type: ${t.typeId||'unknown'}`,`Opened: ${t.openedAt?new Date(t.openedAt).toISOString():'unknown'}`,`Closed: ${new Date(t.closedAt).toISOString()}`,`Closed by: ${i.user.tag} (${i.user.id})`,'','--- Messages ---'];
+   for(const m of ordered){lines.push(`[${new Date(m.createdTimestamp).toISOString()}] ${m.author?.tag||m.author?.username||'Unknown'} (${m.author?.id||'unknown'}): ${m.content||'[no text]'}`);for(const a of m.attachments.values())lines.push(`  Attachment: ${a.name||'file'} ${a.url}`);for(const e of m.embeds||[])if(e.title||e.description)lines.push(`  Embed: ${e.title||''} ${e.description||''}`);}
+   let transcript=lines.join('\n');if(Buffer.byteLength(transcript,'utf8')>1500000)transcript=Buffer.from(transcript,'utf8').subarray(0,1500000).toString('utf8')+'\n[Transcript truncated at 1.5 MB]';
+   await transcriptChannel.send({content:`📄 Transcript — <#${i.channel.id}> | owner <@${t.userId}>`,files:[new AttachmentBuilder(Buffer.from(transcript,'utf8'),{name:`ticket-${i.channel.id}.txt`})],allowedMentions:{parse:[]}});
+  }
+ }catch(e){console.error('[ZOMBI ticket transcript]',i.guild.id,e.code||e.message);}
+ await i.editReply('🔒 تم إغلاق التذكرة وحفظ نص المحادثة إن كانت قناة السجلات متاحة. سيتم حذف الروم بعد 5 ثوانٍ.').catch(()=>{});
+ setTimeout(()=>i.channel.delete('ZOMBI ticket closed').catch(()=>{}),5000);
+}
 async function sendStorePanel(guild,channel,cfg,siteArg=null){const site=siteArg||await siteConfig();if(!featureOn(cfg,site,'store'))throw new Error('المتجر غير متاح لهذه الخطة.');const products=(cfg.store.products||[]).slice(0,limitFor(site,cfg,'storeProducts'));if(!products.length)throw new Error('أضف منتجات من الداشبورد أولًا.');const target=channel||guild.channels.cache.get(cfg.channels.storePanel);if(!target?.isTextBased())throw new Error('حدد روم المتجر أو استخدم الأمر داخل روم نصي.');const select=new StringSelectMenuBuilder().setCustomId('pub:store:buy').setPlaceholder('اختر رتبة للشراء').addOptions(products.slice(0,25).map(p=>({label:(p.name||guild.roles.cache.get(p.roleId)?.name||'Role').slice(0,100),description:`${p.price.toLocaleString()} ${cfg.currency.name}`,value:p.roleId,emoji:p.emoji||undefined})));const msg=await target.send({embeds:[new EmbedBuilder().setColor(color(cfg)).setTitle(cfg.store.title).setDescription(cfg.store.description)],components:[new ActionRowBuilder().addComponents(select)]});await savePanelPointer(guild.id,'storePanel',target.id,'store',msg.id);return msg;}
 async function showStore(i,cfg,site){if(!featureOn(cfg,site,'store'))return safeReply(i,{content:deniedText(cfg,'Store'),ephemeral:true});const products=(cfg.store.products||[]).slice(0,limitFor(site,cfg,'storeProducts'));if(!products.length)return safeReply(i,{content:'🛒 المتجر فارغ حاليًا.',ephemeral:true});const select=new StringSelectMenuBuilder().setCustomId('pub:store:buy').setPlaceholder('اختر رتبة').addOptions(products.slice(0,25).map(p=>({label:(p.name||i.guild.roles.cache.get(p.roleId)?.name||'Role').slice(0,100),description:`${p.price.toLocaleString()} ${cfg.currency.name}`,value:p.roleId,emoji:p.emoji||undefined})));return safeReply(i,{embeds:[new EmbedBuilder().setColor(color(cfg)).setTitle(cfg.store.title).setDescription(cfg.store.description)],components:[new ActionRowBuilder().addComponents(select)],ephemeral:true});}
 async function buyStore(i,cfg,site){if(!featureOn(cfg,site,'store'))return componentNotice(i,{content:deniedText(cfg,'Store')});const roleId=i.values[0],p=(cfg.store.products||[]).slice(0,limitFor(site,cfg,'storeProducts')).find(x=>x.roleId===roleId);if(!p)return componentNotice(i,{content:'❌ المنتج غير موجود أو تجاوز حد الخطة.'});const role=i.guild.roles.cache.get(roleId);if(!role)return componentNotice(i,{content:'❌ الرتبة لم تعد موجودة.'});if(i.member.roles.cache.has(roleId))return componentNotice(i,{content:'❌ لديك هذه الرتبة بالفعل.'});const u=await store.getUser(i.guild.id,i.user.id);if(u.balance<p.price)return componentNotice(i,{content:'❌ رصيدك غير كافٍ.'});try{await i.member.roles.add(role,'ZOMBI store purchase');}catch{return componentNotice(i,{content:'❌ لم أستطع إعطاء الرتبة. تأكد أن رتبة البوت أعلى منها.'});}await store.updateUser(i.guild.id,i.user.id,x=>{x.balance-=p.price;x.purchases.push({roleId,price:p.price,at:Date.now()});});return componentNotice(i,{content:`✅ اشتريت ${role} مقابل **${p.price.toLocaleString()}** ${currency(cfg)}.`});}

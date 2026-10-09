@@ -13,12 +13,17 @@ async function write(guild, title, details, category='actions', channelId=null) 
     const cfg=await store.getConfig(guild.id);
     if (cfg.moderation?.logActions===false || cfg.logging?.[category]===false) return;
     const perType={members:'logs-members',messages:'logs-messages',voice:'logs-voice',tickets:'logs-tickets',events:'logs-events',commands:'logs-bot',games:'logs-bot'};
-    let targetId=perType[category];
+    const customLogs=await store.data(guild.id,'your-server-log-channels.json',{}).catch(()=>({}));
+    let targetKey=({members:'members',messages:'messages',voice:'voice',tickets:'tickets',events:'events',commands:'bot',games:'bot'})[category]||null;
+    let targetName=perType[category]||null;
     if(category==='audit'){
       const lower=String(title||'').toLowerCase();
-      targetId=/رتب|role/i.test(lower)?'logs-roles':/روم|قناة|channel/i.test(lower)?'logs-channels':/عقوب|حظر|طرد|timeout|ban|kick/i.test(lower)?'logs-moderation':'logs-bot';
+      targetKey=/رتب|role/i.test(lower)?'roles':/روم|قناة|channel/i.test(lower)?'channels':/عقوب|حظر|طرد|timeout|ban|kick/i.test(lower)?'moderation':'bot';
+      targetName=`logs-${targetKey}`;
     }
-    if(targetId){const candidate=guild.channels.cache.find(ch=>ch.name===targetId&&ch.isTextBased?.());if(candidate)targetId=candidate.id;else targetId=null;}
+    let targetId=targetKey?customLogs[targetKey]:null;
+    if(targetId&&!guild.channels.cache.has(String(targetId))){const fetched=await guild.channels.fetch(String(targetId)).catch(()=>null);if(!fetched)targetId=null;}
+    if(!targetId&&targetName){const candidate=guild.channels.cache.find(ch=>ch.name===targetName&&ch.isTextBased?.());if(candidate)targetId=candidate.id;}
     targetId=targetId||cfg.channels?.logs;
     if(!targetId || (channelId && channelId===targetId))return;
     let state=queues.get(guild.id);
@@ -30,7 +35,13 @@ async function write(guild, title, details, category='actions', channelId=null) 
       const ch=guild.channels.cache.get(targetId)||await guild.channels.fetch(targetId);
       if (!ch?.isTextBased?.()) throw new Error('Log channel unavailable');
       const skipped=state.dropped; state.dropped=0;
-      await ch.send({allowedMentions:{parse:[]},embeds:[{title:clip(title,256),description:clip(details,3800)+(skipped?`\n⚠️ لم تُسجّل ${skipped} أحداث بسبب ازدحام الطابور.`:''),color:0x8b5cf6,timestamp,footer:{text:'ZOMBI • SERVER LOG'}}]});
+      const embed={title:clip(title,256),description:clip(details,3800)+(skipped?`\n⚠️ لم تُسجّل ${skipped} أحداث بسبب ازدحام الطابور.`:''),color:0x8b5cf6,timestamp,footer:{text:'ZOMBI • SERVER LOG'}};
+      await ch.send({allowedMentions:{parse:[]},embeds:[embed]});
+      const ownerLogId=customLogs.owner;
+      if(ownerLogId&&String(ownerLogId)!==String(targetId)&&['audit','tickets','events'].includes(category)){
+        const ownerCh=guild.channels.cache.get(String(ownerLogId))||await guild.channels.fetch(String(ownerLogId)).catch(()=>null);
+        if(ownerCh?.isTextBased?.())await ownerCh.send({allowedMentions:{parse:[]},embeds:[{...embed,title:clip(`👑 ${title}`,256),footer:{text:'ZOMBI • OWNER SUMMARY'}}]});
+      }
     }).catch(e=>console.error('[ZOMBI logs]',guild.id,e.code||e.message)).finally(()=>{state.pending--;if(!state.pending)queues.delete(guild.id);});
   } catch(e) { console.error('[ZOMBI logs config]',guild.id,e.code||e.message); }
 }
