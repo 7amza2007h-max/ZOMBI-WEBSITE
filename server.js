@@ -2464,6 +2464,12 @@ async function start(){
         <div class="owner-hero-mark">Z</div>
       </section>
 
+      <section class="panel owner-section">
+        <div class="owner-section-head"><div><span class="owner-section-icon">🧰</span><div><h2>إدارة قوالب إنشاء السيرفرات</h2><p>اختر بنفسك لكل قالب هل هو مجاني أو يتطلب Premium أو Premium+، ويمكنك إخفاء القالب أو تعطيله.</p></div></div><span class="owner-section-pill">TEMPLATES</span></div>
+        <p class="hint">التغييرات تُحفظ من صفحة إدارة القوالب وتُطبّق عند معاينة القالب أو محاولة إنشائه، مع التحقق من الخطة في الخادم.</p>
+        <div class="owner-save-row"><a class="btn primary" href="/owner/your-server">⚙️ فتح إدارة القوالب وتحديد المجاني والمدفوع</a></div>
+      </section>
+
       <section class="owner-stat-grid">
         <article><span>🌐</span><div><small>كل السيرفرات</small><strong>${ids.length.toLocaleString()}</strong></div></article>
         <article><span>🆓</span><div><small>Free</small><strong>${freeCount.toLocaleString()}</strong></div></article>
