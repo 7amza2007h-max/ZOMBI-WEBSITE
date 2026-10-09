@@ -59,12 +59,12 @@ function mount(app, deps) {
    );
  });
 
- 
-
  const SETTINGS = 'your-server-settings.json';
- const HISTORY = 'your-server-history.json';
- const MANIFEST = 'your-server-managed.json';
- const CUSTOM = 'your-server-template-customization.json';
+const HISTORY = 'your-server-history.json';
+const MANIFEST = 'your-server-managed.json';
+const CUSTOM = 'your-server-template-customization.json';
+
+ 
  async function getManifest(gid){ return store.data(gid, MANIFEST, {templateId:null, templateName:null, roles:[], channels:[]}); }
  async function saveManifest(gid, data){ return store.saveData(gid, MANIFEST, data); }
  async function deletePreviousManaged(gid, manifest, entry){
