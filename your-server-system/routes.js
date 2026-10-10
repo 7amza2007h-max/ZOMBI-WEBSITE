@@ -24,47 +24,11 @@ const activeRuns = new Set();
 function defaultCategoryOrder(category,index){const n=String(category?._baseName||category?.name||'').toLowerCase();if(/owner/.test(n))return 0;if(/الإدارة العليا|management/.test(n))return 1;if(/المشرف|supervisor/.test(n))return 2;if(/الإدارة التنفيذية|admin/.test(n))return 3;if(/فعاليات|event/.test(n))return 4;if(/الدعم|support|ticket/.test(n))return 5;if(/اللوقات|سجلات|logs/.test(n))return 6;if(/temporary rooms|الرومات المؤقتة/.test(n))return 7;return 100+index;}
 
 function mount(app, deps) {
- 
-
-function mount(app, deps) {
- const {
-   store,
-   requireLogin,
-   requireOwner,
-   requireGuildAccess,
-   checkCsrf,
-   csrf,
-   layout,
-   botFetch,
-   planNameForConfig,
-   isOwner
- } = deps;
-
- app.get('/your-server', requireLogin, (req, res) => {
-   const guilds = req.user?.guilds || [];
-
-   const guild = guilds.find(g =>
-     g.owner ||
-     ((BigInt(String(g.permissions || '0')) & 0x28n) !== 0n)
-   );
-
-   if (!guild) {
-     return res.status(403).send(
-       'لا يوجد سيرفر تملك صلاحية إدارته.'
-     );
-   }
-
-   return res.redirect(
-     `/dashboard/${encodeURIComponent(guild.id)}/your-server`
-   );
- });
-
+ const {store, requireLogin, requireOwner, requireGuildAccess, checkCsrf, csrf, layout, botFetch, planNameForConfig, isOwner} = deps;
  const SETTINGS = 'your-server-settings.json';
-const HISTORY = 'your-server-history.json';
-const MANIFEST = 'your-server-managed.json';
-const CUSTOM = 'your-server-template-customization.json';
-
- 
+ const HISTORY = 'your-server-history.json';
+ const MANIFEST = 'your-server-managed.json';
+ const CUSTOM = 'your-server-template-customization.json';
  async function getManifest(gid){ return store.data(gid, MANIFEST, {templateId:null, templateName:null, roles:[], channels:[]}); }
  async function saveManifest(gid, data){ return store.saveData(gid, MANIFEST, data); }
  async function deletePreviousManaged(gid, manifest, entry){
