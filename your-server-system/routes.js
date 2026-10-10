@@ -99,6 +99,76 @@ function mount(app, deps) {
  function page(title, body, user){ return layout(title, `<style>
  .ys-wrap{max-width:1200px;margin:20px auto;padding:0 16px;color:#e7edf8}.ys-hero,.ys-card,.ys-panel{background:#0c121d;border:1px solid #263247;border-radius:16px;padding:20px;margin-bottom:16px}.ys-hero{background:linear-gradient(120deg,#25121b,#111827 65%);border-color:#522338}.ys-hero h1{margin:0 0 8px}.ys-muted{color:#9eabc0}.ys-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.ys-card h3{margin:7px 0}.ys-icon{font-size:30px}.ys-badge{display:inline-block;border:1px solid #39465d;border-radius:30px;padding:4px 9px;font-size:12px;margin:3px}.ys-btn{border:1px solid #3c4b63;border-radius:9px;padding:9px 13px;color:#f5f7fb;background:#172235;cursor:pointer;text-decoration:none;display:inline-block}.ys-btn.primary{background:#a51e39;border-color:#c52b4b}.ys-btn:disabled{opacity:.5}.ys-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ys-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.ys-list{padding-inline-start:22px}.ys-list li{margin:4px 0}.ys-danger{color:#fca5a5}.ys-success{color:#86efac}.ys-table{width:100%;border-collapse:collapse}.ys-table th,.ys-table td{padding:9px;border-bottom:1px solid #263247;text-align:right}.ys-table select{background:#111827;color:#eee;border:1px solid #475569;padding:7px;border-radius:7px}@media(max-width:600px){.ys-hero,.ys-card,.ys-panel{padding:14px}}
  </style>${body}`,user); }
+
+ // Guild-specific bot avatar via Discord's Modify Current Member endpoint.
+ const BOT_AVATAR_DATA = 'bot-guild-avatar.json';
+ async function readBotAvatarImage(rawUrl) {
+   let parsed;
+   try { parsed = new URL(String(rawUrl || '').trim()); } catch { throw new Error('رابط الصورة غير صالح.'); }
+   if (parsed.protocol !== 'https:' || parsed.username || parsed.password ||
+       !parsed.hostname || parsed.hostname === 'localhost' || parsed.hostname.endsWith('.localhost') ||
+       parsed.hostname.endsWith('.local') || /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname) ||
+       parsed.hostname.startsWith('[')) {
+     throw new Error('استخدم رابط HTTPS مباشرًا لصورة عامة بصيغة PNG أو JPG أو WEBP.');
+   }
+   let response;
+   try { response = await fetch(parsed.toString(), { redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Accept: 'image/png,image/jpeg,image/webp' } }); }
+   catch { throw new Error('تعذر تحميل الصورة من الرابط. تأكد أنه رابط مباشر ومتاح للعامة.'); }
+   if (!response.ok) throw new Error(`فشل تحميل الصورة (HTTP ${response.status}).`);
+   if (Number(response.headers.get('content-length') || 0) > 8 * 1024 * 1024) throw new Error('حجم الصورة يجب ألا يتجاوز 8 ميغابايت.');
+   const reader = response.body?.getReader();
+   if (!reader) throw new Error('تعذر قراءة ملف الصورة.');
+   const chunks = []; let total = 0;
+   try {
+     while (true) {
+       const { done, value } = await reader.read();
+       if (done) break;
+       total += value.byteLength;
+       if (total > 8 * 1024 * 1024) { await reader.cancel(); throw new Error('حجم الصورة يجب ألا يتجاوز 8 ميغابايت.'); }
+       chunks.push(Buffer.from(value));
+     }
+   } finally { try { reader.releaseLock(); } catch {} }
+   const data = Buffer.concat(chunks);
+   let mime = '';
+   if (data.length >= 8 && data.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) mime = 'image/png';
+   else if (data.length >= 3 && data[0]===0xff && data[1]===0xd8 && data[2]===0xff) mime = 'image/jpeg';
+   else if (data.length >= 12 && data.toString('ascii',0,4)==='RIFF' && data.toString('ascii',8,12)==='WEBP') mime = 'image/webp';
+   if (!mime) throw new Error('الملف ليس صورة PNG أو JPG أو WEBP صالحة.');
+   return `data:${mime};base64,${data.toString('base64')}`;
+ }
+ app.get('/dashboard/:guildId/bot-avatar', requireLogin, requireGuildAccess, async(req,res,next)=>{
+   try {
+     const saved = await store.data(req.params.guildId, BOT_AVATAR_DATA, { url: '' });
+     const url = String(saved?.url || ''), gid = esc(req.params.guildId);
+     res.send(page('صورة البوت الخاصة بالسيرفر', `<main class="ys-wrap"><section class="ys-hero"><h1>🖼️ صورة البوت الخاصة بالسيرفر</h1><p class="ys-muted">تُطبّق الصورة على ملف البوت داخل هذا السيرفر فقط، ولا تغيّر صورته العامة أو صورته في السيرفرات الأخرى.</p><a class="ys-btn" href="/dashboard/${gid}/your-server">العودة إلى نظام سيرفرك</a></section><section class="ys-panel"><form method="post" action="/dashboard/${gid}/bot-avatar"><input type="hidden" name="_csrf" value="${esc(csrf(req))}"><label for="botGuildAvatarUrl">رابط الصورة (HTTPS)</label><input id="botGuildAvatarUrl" name="imageUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://example.com/image.png" value="${esc(url)}" style="width:100%;box-sizing:border-box;margin:10px 0;padding:12px;border-radius:8px" oninput="document.getElementById('botGuildAvatarPreview').src=this.value"><p class="ys-muted">الصيغ المدعومة: PNG وJPG وWEBP، بحد أقصى 8 ميغابايت.</p><div style="margin:16px 0"><img id="botGuildAvatarPreview" src="${esc(url)}" alt="معاينة الصورة" style="width:112px;height:112px;object-fit:cover;border-radius:50%;${url?'':'display:none'}" onerror="this.style.display='none'" onload="this.style.display='block'"></div><button class="ys-btn primary" type="submit" name="action" value="save">حفظ وتطبيق الصورة</button><button class="ys-btn" type="submit" name="action" value="reset" formnovalidate onclick="return confirm('إعادة صورة البوت الافتراضية في هذا السيرفر؟')">إعادة الصورة الافتراضية</button></form></section></main>`,req.user));
+   } catch(e) { next(e); }
+ });
+ app.post('/dashboard/:guildId/bot-avatar', requireLogin, requireGuildAccess, checkCsrf, async(req,res,next)=>{
+   const gid = String(req.params.guildId || '');
+   try {
+     if (!validId(gid)) return res.status(400).send('معرّف السيرفر غير صالح.');
+     const action = String(req.body?.action || 'save');
+     let avatar;
+     if (action === 'reset') avatar = null;
+     else {
+       const url = String(req.body?.imageUrl || '').trim();
+       if (!url || url.length > 2048) return res.status(400).send('أدخل رابط صورة صالحًا.');
+       avatar = await readBotAvatarImage(url);
+     }
+     const updated = await botFetch(`/guilds/${gid}/members/@me`, { method: 'PATCH', body: JSON.stringify({ avatar }) });
+     if (!updated || (action !== 'reset' && !updated.avatar)) throw new Error('لم يؤكد Discord تطبيق الصورة. لم يتم حفظ الإعداد الجديد.');
+     await store.saveData(gid, BOT_AVATAR_DATA, { url: action === 'reset' ? '' : String(req.body.imageUrl).trim(), updatedAt: new Date().toISOString() });
+     const message = action === 'reset' ? 'تمت إعادة الصورة الافتراضية بنجاح.' : 'تم تطبيق صورة البوت لهذا السيرفر بنجاح.';
+     return res.send(page('تم تحديث صورة البوت', `<main class="ys-wrap"><section class="ys-panel"><h1>✅ ${esc(message)}</h1><p class="ys-muted">أكد Discord نجاح العملية، وتم حفظ الإعداد.</p><a class="ys-btn primary" href="/dashboard/${esc(gid)}/bot-avatar">العودة إلى إعدادات الصورة</a></section></main>`, req.user));
+   } catch(e) {
+     const msg = String(e?.message || '');
+     const friendly = /Missing Access|403|50013/i.test(msg) ? 'رفض Discord تغيير الصورة لهذا السيرفر. تأكد من دعم العملية وصلاحية البوت، ثم حاول مرة أخرى.'
+       : /429|rate limit/i.test(msg) ? 'طلبات Discord كثيرة حاليًا. انتظر قليلًا ثم أعد المحاولة.'
+       : msg || 'تعذر تطبيق الصورة. لم يتم تغيير الإعداد المحفوظ.';
+     return res.status(400).send(page('تعذر تحديث صورة البوت', `<main class="ys-wrap"><section class="ys-panel"><h1>❌ تعذر تطبيق الصورة</h1><p>${esc(friendly)}</p><p class="ys-muted">لم يتم حفظ الإعداد الجديد.</p><a class="ys-btn" href="/dashboard/${esc(gid)}/bot-avatar">رجوع</a></section></main>`, req.user));
+   }
+ });
+
  app.get('/dashboard/:guildId/your-server', requireLogin, requireGuildAccess, async(req,res,next)=>{
   try {
    const cfg=await store.getConfig(req.params.guildId), plan=planNameForConfig(cfg), s=await settings();
@@ -106,7 +176,7 @@ function mount(app, deps) {
    const history=await store.data(req.params.guildId,HISTORY,{items:[]});
    const cards=items.map(t=>`<article class="ys-card"><div class="ys-icon">${esc(t.icon)}</div><h3>${esc(t.name)}</h3><p class="ys-muted">${esc(t.description)}</p><span class="ys-badge">${esc(t.category)}</span><span class="ys-badge">${t.plan==='free'?'Free':t.plan==='premium'?'Premium':'Premium+'}</span><p>${t.features.map(x=>`<span class="ys-badge">${esc(x)}</span>`).join('')}</p><div class="ys-actions"><a class="ys-btn" href="/dashboard/${esc(req.params.guildId)}/your-server/${encodeURIComponent(t.id)}">معاينة القالب</a></div></article>`).join('');
    const rows=(history.items||[]).slice(0,15).map(x=>`<tr><td>${esc(x.templateName||x.templateId)}</td><td>${esc(x.status)}</td><td>${esc(x.createdAt?new Date(x.createdAt).toLocaleString('ar-JO'):'—')}</td><td>${esc(x.summary||'')}</td></tr>`).join('');
-   res.send(page('نظام سيرفرك',`<main class="ys-wrap"><section class="ys-hero"><h1>🧰 نظام سيرفرك | Your Server System</h1><p class="ys-muted">جهّز هيكل سيرفر Discord بقوالب جاهزة، مع تأكيد صريح قبل استبدال العناصر التي يديرها قالب سابق.</p><span class="ys-badge">السيرفر: ${esc(req.bundle.guild.name)}</span><span class="ys-badge">خطتك الحالية: ${plan==='premium_plus'?'Premium+':plan==='premium'?'Premium':'Free'}</span></section><section class="ys-grid">${cards}</section><section class="ys-panel"><h2>سجل عمليات الإنشاء</h2><div style="overflow:auto"><table class="ys-table"><thead><tr><th>القالب</th><th>الحالة</th><th>التاريخ</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="4">لا توجد عمليات بعد.</td></tr>'}</tbody></table></div></section></main>`,req.user));
+   res.send(page('نظام سيرفرك',`<main class="ys-wrap"><section class="ys-hero"><h1>🧰 نظام سيرفرك | Your Server System</h1><p class="ys-muted">جهّز هيكل سيرفر Discord بقوالب جاهزة، مع تأكيد صريح قبل استبدال العناصر التي يديرها قالب سابق.</p><span class="ys-badge">السيرفر: ${esc(req.bundle.guild.name)}</span><p><a class="ys-btn primary" href="/dashboard/${esc(req.params.guildId)}/bot-avatar">🖼️ صورة البوت الخاصة بالسيرفر</a></p><span class="ys-badge">خطتك الحالية: ${plan==='premium_plus'?'Premium+':plan==='premium'?'Premium':'Free'}</span></section><section class="ys-grid">${cards}</section><section class="ys-panel"><h2>سجل عمليات الإنشاء</h2><div style="overflow:auto"><table class="ys-table"><thead><tr><th>القالب</th><th>الحالة</th><th>التاريخ</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="4">لا توجد عمليات بعد.</td></tr>'}</tbody></table></div></section></main>`,req.user));
   } catch(e){next(e);}
  });
  app.get('/dashboard/:guildId/your-server/:templateId', requireLogin, requireGuildAccess, async(req,res,next)=>{
