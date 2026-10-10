@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express=require('express');
 const session=require('express-session');
+const {securityHeaders,rateLimit,safeReturnTo,securityEvent}=require('./securityMiddleware');
 const crypto=require('crypto');
 const store=require('./sharedStore');
 const payments=require('./paymentStore');
@@ -63,12 +64,12 @@ function ticketTranscriptPage(ticket,journal,guildId){
 function ownerIds(){return new Set(String(process.env.OWNER_IDS||'').split(',').map(x=>x.trim()).filter(x=>/^\d{15,25}$/.test(x)));}
 function isOwner(user){return Boolean(user?.id&&ownerIds().has(String(user.id)));}
 function botSyncKey(){const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();return token?crypto.createHash('sha256').update(`ZOMBI_SYNC:${token}`).digest('hex'):'';}
-function requireBotSync(req,res,next){const expected=botSyncKey(),auth=String(req.get('authorization')||''),got=auth.startsWith('Bearer ')?auth.slice(7).trim():'';if(!expected||!got)return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});const a=Buffer.from(expected),b=Buffer.from(got);if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});next();}
+function requireBotSync(req,res,next){const expected=botSyncKey(),auth=String(req.get('authorization')||''),got=auth.startsWith('Bearer ')?auth.slice(7).trim():'';if(!expected||!got){securityEvent('bot_sync_unauthorized',req);return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});}const a=Buffer.from(expected),b=Buffer.from(got);if(a.length!==b.length||!crypto.timingSafeEqual(a,b)){securityEvent('bot_sync_unauthorized',req);return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});}next();}
 function canManage(g){try{const p=BigInt(String(g?.permissions||'0'));return Boolean(g?.owner)||(p&MANAGE_GUILD)===MANAGE_GUILD||(p&ADMINISTRATOR)===ADMINISTRATOR;}catch{return false;}}
 function csrf(req){if(!req.session.csrf)req.session.csrf=crypto.randomBytes(24).toString('hex');return req.session.csrf;}
 function checkCsrf(req,res,next){if(!req.session?.csrf)return res.status(403).send('CSRF validation failed');if(String(req.body?._csrf||req.get('x-csrf-token')||'')!==String(req.session?.csrf||''))return res.status(403).send('CSRF validation failed');next();}
-function requireLogin(req,res,next){if(req.user)return next();req.session.returnTo=req.originalUrl;res.redirect('/auth/discord');}
-function requireOwner(req,res,next){if(req.user&&isOwner(req.user))return next();res.status(403).send('Owner only');}
+function requireLogin(req,res,next){if(req.user)return next();req.session.returnTo=safeReturnTo(req.originalUrl);res.redirect('/auth/discord');}
+function requireOwner(req,res,next){if(req.user&&isOwner(req.user)){if(['POST','PUT','PATCH','DELETE'].includes(req.method))console.info(JSON.stringify({event:'owner_admin_action',actorId:String(req.user.id),method:req.method,path:String(req.path||'').slice(0,120),outcome:'authorized',at:new Date().toISOString()}));return next();}securityEvent('owner_access_denied',req);res.status(403).send('Owner only');}
 function userGuild(req,gid){return (req.user?.guilds||[]).find(g=>String(g.id)===String(gid));}
 function color(cfg){const n=parseInt(String(cfg?.branding?.color||'#7c3aed').replace('#',''),16);return Number.isFinite(n)?n:0x7c3aed;}
 function arr(v){return Array.isArray(v)?v:(v?[v]:[]);}
@@ -340,7 +341,7 @@ async function getGuildBundle(id,force=false){
 async function requireGuildAccess(req,res,next){
   const ug=userGuild(req,req.params.guildId);
   try{
-    if(!isOwner(req.user)&&(!ug||!canManage(ug)))return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');
+    if(!isOwner(req.user)&&(!ug||!canManage(ug))){securityEvent('guild_access_denied',req);return res.status(403).send('ليس لديك صلاحية Manage Server على هذا السيرفر.');}
     let bundle;
     try{bundle=await getGuildBundle(req.params.guildId);}catch(e){
       if(Number(e?.status)!==429)throw e;
@@ -1106,9 +1107,13 @@ function planSummaryHtml(site,planName){const p=site.plans[planName];const feats
 
 async function start(){
   const required=['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','PUBLIC_BASE_URL','SESSION_SECRET','DATABASE_URL'];const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
-  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.use('/panel-assets',express.static(require('path').join(__dirname,'assets','panels'),{maxAge:'1h'}));app.set('trust proxy',1);app.use(express.urlencoded({extended:true,limit:'8mb'}));app.use(express.json({limit:'8mb'}));for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','role-manager.js','upgrade.js','operations-ui.js','zombi-logo.png','zombi-v2-logo.svg','zombi-site-background.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.set('Cache-Control','no-store, max-age=0');res.sendFile(require('path').join(__dirname,req.params.file));});
+  const sessionSecret=String(process.env.SESSION_SECRET||'');
+  if(process.env.NODE_ENV==='production'&&(sessionSecret.length<32||/^(change.?me|secret|password|your.?secret)$/i.test(sessionSecret)))throw new Error('Unsafe SESSION_SECRET: set a strong secret (32+ characters) in Render environment settings.');
+  if(process.env.NODE_ENV==='production'&&!String(process.env.DATABASE_URL||'').trim())throw new Error('DATABASE_URL is required in production; refusing to use the in-memory session store.');
+  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(securityHeaders);app.use(rateLimit({windowMs:60000,max:180,keyPrefix:'web'}));app.use('/auth',rateLimit({windowMs:60000,max:20,keyPrefix:'auth'}));app.use('/api/bot-sync',rateLimit({windowMs:60000,max:180,keyPrefix:'bot-sync'}));app.use('/owner',rateLimit({windowMs:60000,max:60,keyPrefix:'owner'}));app.use('/panel-assets',express.static(require('path').join(__dirname,'assets','panels'),{maxAge:'1h'}));app.use(express.urlencoded({extended:true,limit:'8mb',parameterLimit:1000}));app.use(express.json({limit:'8mb'}));for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','role-manager.js','upgrade.js','operations-ui.js','zombi-logo.png','zombi-v2-logo.svg','zombi-site-background.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.set('Cache-Control','no-store, max-age=0');res.sendFile(require('path').join(__dirname,req.params.file));});
   let sessionStore;if(String(process.env.DATABASE_URL||'').trim()){const {Pool}=require('pg');const sslDisabled=String(process.env.DATABASE_SSL||'').toLowerCase()==='false';const rawDb=String(process.env.DATABASE_URL||'').trim();let sessionConnectionString=rawDb;try{const u=new URL(rawDb);for(const k of ['sslmode','sslcert','sslkey','sslrootcert','channel_binding'])u.searchParams.delete(k);sessionConnectionString=u.toString();}catch{}const sessionPool=new Pool({connectionString:sessionConnectionString,ssl:sslDisabled?false:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:15000,keepAlive:true});class PgSessionStore extends session.Store{get(sid,cb){sessionPool.query('SELECT sess,expire_at FROM zombi_web_sessions WHERE sid=$1',[sid]).then(r=>{const row=r.rows[0];if(!row||Number(row.expire_at||0)<Date.now())return cb(null,null);cb(null,row.sess);}).catch(cb);}set(sid,sess,cb){const exp=sess?.cookie?.expires?new Date(sess.cookie.expires).getTime():Date.now()+7*86400000;sessionPool.query(`INSERT INTO zombi_web_sessions(sid,sess,expire_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(sid) DO UPDATE SET sess=EXCLUDED.sess,expire_at=EXCLUDED.expire_at`,[sid,JSON.stringify(sess||{}),exp]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}destroy(sid,cb){sessionPool.query('DELETE FROM zombi_web_sessions WHERE sid=$1',[sid]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}}sessionStore=new PgSessionStore();}
-  app.use(session({store:sessionStore,secret:process.env.SESSION_SECRET||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session.user||null;next();});
+  if(!sessionStore&&process.env.NODE_ENV==='production')throw new Error('Persistent PostgreSQL session store unavailable; refusing production startup.');
+  app.use(session({store:sessionStore,secret:sessionSecret||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session?.user||null;next();});
   app.get('/transcript/:guildId/:token',async(req,res,next)=>{try{const guildId=String(req.params.guildId||'').trim(),token=String(req.params.token||'').trim();if(!/^\d{15,25}$/.test(guildId)||!/^[a-f0-9]{32,64}$/i.test(token))return res.status(404).send('Transcript not found');const staff=await store.data(guildId,'staff-insights.json',{}),tickets=staff?.tickets&&typeof staff.tickets==='object'?staff.tickets:{};const ticket=Object.values(tickets).find(x=>x?.completed&&String(x.transcriptToken||'')===token);if(!ticket)return res.status(404).send('Transcript not found');const journal=await store.data(guildId,`ticket-journal-${ticket.channelId}.json`,{messages:{}});res.set('Cache-Control','public,max-age=60');res.type('html').send(ticketTranscriptPage(ticket,journal,guildId));}catch(e){next(e);}});
   operations.install(app,{store,layout,requireLogin,requireOwner,requireGuildAccess,checkCsrf,csrf,botFetch,requireBotSync,pricing,publicSiteConfig,
     previewPanel:async(which,gid,bundle,config)=>{try{await sendPanel(which,gid,bundle,{preview:true,config});}catch(e){if(e.previewPayload)return e.previewPayload;throw e;}throw new Error('لا توجد لوحة للمعاينة.');}});
@@ -1201,13 +1206,16 @@ async function start(){
       return{user,guilds:Array.isArray(guilds)?guilds:[]};
     }
     const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;
+    const to=safeReturnTo(req.session.returnTo||'/dashboard');
+    await new Promise((resolve,reject)=>req.session.regenerate(err=>err?reject(err):resolve()));
     req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};
-    const to=req.session.returnTo||'/dashboard';delete req.session.returnTo;res.redirect(to);
+    await new Promise((resolve,reject)=>req.session.save(err=>err?reject(err):resolve()));
+    res.redirect(to);
   }catch(e){
     if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>تم إيقاف المحاولة بدل تكرار الطلبات. انتظر تقريبًا ${seconds} ثانية ثم اضغط تسجيل الدخول مرة واحدة.</p><a class="btn primary" href="/auth/discord">تسجيل الدخول من جديد</a><a class="btn" href="/">رجوع</a></section>`,req.user));}
     next(e);
   }});
-  app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>req.session.destroy(()=>res.redirect('/')));
+  app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>{const cookieName='connect.sid';req.session.destroy(err=>{res.clearCookie(cookieName,{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://')});if(err)securityEvent('logout_session_destroy_failed',req,'error');res.redirect('/');});});
 
   app.get('/checkout',requireLogin,async(req,res,next)=>{try{
     const plan=paymentPlan(req.query.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);
@@ -2710,10 +2718,10 @@ res.send(layout('Dashboard', `
 
   app.get('/health',async(_req,res)=>{const hb=await getRecentBotHeartbeat().catch(()=>null);res.json({ok:true,database:await store.health(),uptime:process.uptime(),discordProxy:Boolean(oauthProxyUrl()),botHeartbeat:hb?{ready:hb.ready!==false,guildCount:hb.guildCount||0,ageMs:Date.now()-Number(hb.at||0)}:null});});
   app.use((err,req,res,_next)=>{
-    console.error(err);const status=Number(err?.status||0);
+    const status=Number(err?.status||0);console.error(JSON.stringify({event:'request_error',status:Number.isFinite(status)?status:500,method:String(req.method||'').slice(0,12),path:String(req.path||'').slice(0,120),at:new Date().toISOString()}));
     if(status===429){const seconds=Math.max(1,Math.ceil(Number(err?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>الداشبورد أوقف تكرار الطلبات تلقائيًا. انتظر تقريبًا ${seconds} ثانية ثم أعد فتح الصفحة مرة واحدة.</p><a class="btn primary" href="${esc(req.originalUrl||'/dashboard')}">إعادة المحاولة</a><a class="btn" href="/dashboard">السيرفرات</a></section>`,req.user));}
     if(status===401)return res.status(503).send(layout('Discord Authorization',`<section class="login"><h1>🔑 فشل توثيق Discord</h1><p>تأكد من BOT_TOKEN وبيانات Discord OAuth. إذا كان OAUTH_PROXY_URL مفعّلًا فالنسخة الجديدة تدعم المفتاح اليدوي أو التوثيق المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع</a></section>`,req.user));
-    res.status(500).send(layout('Error',`<section class="login"><h1>❌ حدث خطأ</h1><p>${esc(err.message)}</p></section>`,req.user));
+    res.status(500).send(layout('Error','<section class="login"><h1>❌ حدث خطأ</h1><p>تعذر إكمال الطلب. حاول مرة أخرى لاحقًا.</p></section>',req.user));
   });
   const port=Number(process.env.PORT||3000),host=process.env.HOST||'0.0.0.0';app.listen(port,host,()=>console.log(`🌐 ZOMBI Website: ${baseUrl()} (${host}:${port})`));
 }
