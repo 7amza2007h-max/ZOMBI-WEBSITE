@@ -1243,14 +1243,100 @@ async function start(){
     const manageable=(req.user.guilds||[]).filter(canManage).slice(0,100);
     const presence=await getBotPresenceSnapshot();
     const reliable=Boolean(presence.api||presence.heartbeat?.guildIds?.length||presence.heartbeat?.guildCount===0);
-    const statuses=manageable.map(g=>({g,installed:presence.ids.has(String(g.id))?true:(reliable?false:null)}));
-    const installed=statuses.filter(x=>x.installed===true),missing=statuses.filter(x=>x.installed===false),unknown=statuses.filter(x=>x.installed===null);
-    const cards=(await Promise.all(installed.map(async({g})=>{const cfg=await store.getConfig(g.id);return `<a class="server" href="/dashboard/${g.id}"><div class="server-icon">${g.icon?`<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`:'🤖'}</div><div><b>${esc(g.name)}</b><span>${planBadge(cfg)}</span></div><em>إدارة ←</em></a>`;}))).join('');
-    const add=missing.map(({g})=>`<a class="server muted" href="${inviteUrl(g.id)}"><div class="server-icon">➕</div><div><b>${esc(g.name)}</b><span>البوت غير مضاف</span></div><em>إضافة</em></a>`).join('');
-    const unknownCards=unknown.map(({g})=>`<div class="server muted"><div class="server-icon">⚠️</div><div><b>${esc(g.name)}</b><span>تعذر التحقق من وجود البوت الآن</span></div><em>تحقق من BOT_TOKEN</em></div>`).join('');
-    const apiWarning=presence.error&&!presence.heartbeat?`<section class="panel"><b>⚠️ تعذر فحص ZOMBI Bot من Discord.</b><p class="hint">${esc(presence.error?.message||'تحقق من BOT_TOKEN / OAUTH Proxy في إعدادات الاستضافة.')}</p></section>`:'';
-    res.send(layout('Dashboard',`<section class="dash-head"><div><h1>سيرفراتك</h1><p>تظهر السيرفرات التي لديك فيها Manage Server.</p></div><a class="btn primary" href="/your-server">🧰 نظّم سيرفرك</a></section>${apiWarning}<div class="servers">${cards||(!unknownCards?'<p>لا يوجد سيرفرات مضافة تستطيع إدارتها.</p>':'')}</div>${unknownCards?`<h2>حالة غير مؤكدة</h2><div class="servers">${unknownCards}</div>`:''}${add?`<h2>إضافة ZOMBI لسيرفر آخر</h2><div class="servers">${add}</div>`:''}`,req.user));
-  }catch(e){next(e);}});
+
+const statuses = manageable.map(g => ({
+  g,
+  installed: presence.ids.has(String(g.id))
+    ? true
+    : (reliable ? false : null)
+}));
+
+const installed = statuses.filter(x => x.installed === true);
+const missing = statuses.filter(x => x.installed === false);
+const unknown = statuses.filter(x => x.installed === null);
+
+const cards = (await Promise.all(
+  installed.map(async ({ g }) => {
+    const cfg = await store.getConfig(g.id);
+
+    return `<a class="server" href="/dashboard/${g.id}">
+      <div class="server-icon">
+        ${g.icon
+          ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png">`
+          : '🤖'}
+      </div>
+      <div>
+        <b>${esc(g.name)}</b>
+        <span>${planBadge(cfg)}</span>
+      </div>
+      <em>لوحة التحكم ←</em>
+    </a>`;
+  })
+)).join('');
+
+const add = missing.map(({ g }) => `
+  <a class="server muted" href="${inviteUrl(g.id)}">
+    <div class="server-icon">➕</div>
+    <div>
+      <b>${esc(g.name)}</b>
+      <span>لم تتم إضافة البوت بعد</span>
+    </div>
+    <em>إضافة البوت</em>
+  </a>
+`).join('');
+
+const unknownCards = unknown.map(({ g }) => `
+  <div class="server muted">
+    <div class="server-icon">⚠️</div>
+    <div>
+      <b>${esc(g.name)}</b>
+      <span>تعذر التحقق من حالة البوت حاليًا</span>
+    </div>
+    <em>غير معروف</em>
+  </div>
+`).join('');
+
+const apiWarning = presence.error && !presence.heartbeat
+  ? `<section class="panel">
+      <b>⚠️ تعذر الاتصال ببوت ZOMBI.</b>
+      <p class="hint">${esc(
+        presence.error?.message ||
+        'يرجى التحقق من إعدادات الاتصال بالبوت.'
+      )}</p>
+    </section>`
+  : '';
+
+res.send(layout('Dashboard', `
+  <section class="dash-head">
+    <div>
+      <h1>سيرفراتك</h1>
+      <p>تابع سيرفراتك، وافتح لوحة التحكم لإدارة إعدادات بوت ZOMBI.</p>
+    </div>
+  </section>
+
+  ${apiWarning}
+
+  <div class="servers">
+    ${cards || (!unknownCards
+      ? '<p>لا توجد سيرفرات متاحة للإدارة حاليًا.</p>'
+      : '')}
+  </div>
+
+  ${unknownCards
+    ? `<h2>سيرفرات تعذّر التحقق منها</h2>
+       <div class="servers">${unknownCards}</div>`
+    : ''}
+
+  ${add
+    ? `<h2>إضافة البوت إلى سيرفر آخر</h2>
+       <p class="hint">اختر السيرفر الذي تريد تثبيت ZOMBI فيه.</p>
+       <div class="servers">${add}</div>`
+    : ''}
+`, req.user));
+} catch(e) {
+  next(e);
+}});
+
   app.get('/dashboard/:guildId',requireLogin,requireGuildAccess,async(req,res,next)=>{try{const cfg=await store.getConfig(req.params.guildId);if(!cfg.setupComplete)return res.redirect(`/dashboard/${req.params.guildId}/setup`);const content=await guildPage(req);res.send(layout(req.bundle.guild.name,`<div style="max-width:1200px;margin:12px auto;padding:0 16px"><a class="btn primary" href="/dashboard/${esc(req.params.guildId)}/your-server">🧰 نظام سيرفرك • قوالب جاهزة</a></div>${content}`,req.user));}catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/role-manager/state',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
