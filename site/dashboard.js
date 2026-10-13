@@ -556,13 +556,28 @@
     if (!pageDefs[section]) section = 'overview';
     const def = pageDefs[section];
     document.body.dataset.zSection = section;
-    document.body.dataset.zSectionFamily = ({
+    content.dataset.zSection = section;
+    const familyBySection = {
       overview:'overview', economy:'finance', members:'finance', store:'finance', xp:'progress',
       games:'games', 'game-content':'games', killer:'games', city:'finance', heist:'security',
       gangs:'games', robbery:'security', warnings:'security', logs:'logs', roles:'permissions',
       name:'messages', tickets:'support', applications:'support', 'staff-duty':'staff',
       'staff-event':'staff', 'staff-leave':'staff', music:'media', voice:'media', premium:'plans'
-    })[section] || 'general';
+    };
+    document.body.dataset.zSectionFamily = familyBySection[section] || 'general';
+    // Semantic presentation hooks for distinct section layouts. Existing form actions and
+    // field names are intentionally untouched so the current save/data flow stays intact.
+    content.querySelectorAll('.z-settings-page').forEach(page => {
+      page.classList.toggle('z-settings-page-active', page.dataset.settingsPage === section);
+      page.querySelectorAll(':scope > .panel, :scope > section.panel, :scope > .two').forEach((panel, index) => {
+        panel.classList.add('z-feature-panel');
+        panel.dataset.panelIndex = String(index + 1);
+      });
+    });
+    content.querySelectorAll('.z-page-extra > .panel, .z-page-extra > section.panel').forEach((panel, index) => {
+      panel.classList.add('z-feature-panel');
+      panel.dataset.panelIndex = String(index + 1);
+    });
     pageHeader.querySelector('h1').textContent = def.label;
     pageHeader.querySelector('p').textContent = def.desc;
 
@@ -653,3 +668,111 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
+
+
+// ZOMBI V10.1 — Owner console navigation and real-data server filtering.
+(() => {
+  const owner = document.querySelector('body.owner-page .owner-console');
+  if (!owner) return;
+
+  const sections = [
+    ['owner-templates', '🧰 القوالب'],
+    ['owner-site-settings', '🌐 إعدادات الموقع'],
+    ['owner-plan-table', '🧩 الخطط'],
+    ['owner-codes', '🎟️ الأكواد'],
+    ['owner-payments', '💳 الدفعات'],
+    ['owner-servers', '🖥️ السيرفرات'],
+    ['owner-system-control', '🎛️ التحكم بالأنظمة']
+  ];
+  const nav = document.createElement('nav');
+  nav.className = 'owner-quick-nav';
+  nav.setAttribute('aria-label', 'التنقل السريع في لوحة المالك');
+  const used = new Set();
+  sections.forEach(([selector, label], index) => {
+    let target;
+    if (selector === 'owner-templates') target = owner.querySelector(':scope > .owner-section');
+    else if (selector === 'owner-plan-table') target = owner.querySelector('.owner-plan-table')?.closest('.owner-section');
+    else if (selector === 'owner-codes') target = owner.querySelector('.owner-codes')?.closest('.owner-section');
+    else target = owner.querySelector(`.${selector}`);
+    if (!target || used.has(target)) return;
+    used.add(target);
+    if (!target.id) target.id = `z-owner-section-${index + 1}`;
+    const link = document.createElement('a');
+    link.href = `#${target.id}`;
+    link.textContent = label;
+    link.addEventListener('click', () => {
+      nav.querySelectorAll('a').forEach(a => a.classList.toggle('active', a === link));
+    });
+    nav.appendChild(link);
+  });
+  const hero = owner.querySelector('.owner-hero');
+  if (hero && nav.children.length) hero.insertAdjacentElement('afterend', nav);
+
+  const serverSection = owner.querySelector('.owner-servers');
+  const table = serverSection?.querySelector('tbody');
+  if (!serverSection || !table) return;
+  const toolbar = document.createElement('div');
+  toolbar.className = 'owner-server-toolbar';
+  toolbar.innerHTML = `
+    <label class="owner-server-search-label">
+      <span>بحث في السيرفرات</span>
+      <input type="search" class="owner-server-search" placeholder="اسم السيرفر أو ID…" aria-label="البحث باسم السيرفر أو معرّفه">
+    </label>
+    <label class="owner-server-filter-label">
+      <span>تصفية حسب الخطة</span>
+      <select class="owner-server-plan-filter" aria-label="تصفية السيرفرات حسب الخطة">
+        <option value="all">كل الخطط</option>
+        <option value="free">Free</option>
+        <option value="premium">Premium</option>
+        <option value="premium_plus">Premium+</option>
+      </select>
+    </label>
+    <p class="owner-server-result" role="status" aria-live="polite"></p>`;
+  serverSection.querySelector('.table-wrap')?.insertAdjacentElement('beforebegin', toolbar);
+  const search = toolbar.querySelector('.owner-server-search');
+  const filter = toolbar.querySelector('.owner-server-plan-filter');
+  const status = toolbar.querySelector('.owner-server-result');
+  const rows = [...table.querySelectorAll('tr')];
+  const apply = () => {
+    const q = search.value.trim().toLocaleLowerCase();
+    const plan = filter.value;
+    let shown = 0;
+    rows.forEach(row => {
+      const text = row.textContent.toLocaleLowerCase();
+      const planCell = row.children[2];
+      const planClass = [...(planCell?.querySelector('[class*="owner-plan-"]')?.classList || [])]
+        .find(c => /^owner-plan-(free|premium|premium_plus)$/.test(c))?.replace('owner-plan-', '') || '';
+      const matches = (!q || text.includes(q)) && (plan === 'all' || planClass === plan);
+      row.hidden = !matches;
+      if (matches) shown++;
+    });
+    status.textContent = `عرض ${shown} من ${rows.length} سيرفر`;
+  };
+  search.addEventListener('input', apply);
+  filter.addEventListener('change', apply);
+  apply();
+
+  owner.querySelectorAll('.owner-plan-form').forEach(form => {
+    form.addEventListener('submit', event => {
+      const submitter = event.submitter;
+      if (submitter?.name === 'days' && submitter.value === '0' &&
+          !window.confirm('تأكيد إلغاء اشتراك هذا السيرفر؟ ستعود المزايا حسب خطة Free.')) {
+        event.preventDefault();
+      }
+    });
+  });
+  owner.querySelectorAll('.owner-payment-actions form[action$="/approve"]').forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!window.confirm('تأكيد قبول إثبات الدفع وتفعيل الاشتراك؟')) event.preventDefault();
+    });
+  });
+  owner.querySelectorAll('.owner-payment-actions form[action$="/reject"]').forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!window.confirm('تأكيد رفض طلب الدفع؟')) event.preventDefault();
+    });
+  });
+  owner.querySelector('.owner-system-form')?.addEventListener('submit', event => {
+    const mode = event.currentTarget.elements.mode?.value;
+    if (mode === 'disabled' && !window.confirm('تأكيد تعطيل هذا النظام لهذا السيرفر؟ راجع أثر القرار قبل الحفظ.')) event.preventDefault();
+  });
+})();
