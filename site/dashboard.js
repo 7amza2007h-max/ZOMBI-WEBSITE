@@ -61,6 +61,7 @@
     <div class="z-side-brand">
       <div class="z-side-logo">Z</div>
       <div><strong>ZOMBI</strong><small>COMMAND CENTER</small></div>
+      <button class="z-sidebar-collapse" type="button" aria-label="طي القائمة الجانبية" aria-pressed="false" title="طي القائمة">⇤</button>
     </div>
     <div class="z-side-status"><span></span> متصل بالبوت</div>
     <nav class="z-side-nav"></nav>
@@ -70,9 +71,15 @@
   groups.forEach(([title, ids]) => {
     const group = document.createElement('div');
     group.className = 'z-nav-group';
-    const h = document.createElement('div');
+    const h = document.createElement('button');
+    h.type = 'button';
     h.className = 'z-nav-title';
     h.textContent = title;
+    h.setAttribute('aria-expanded', 'true');
+    h.addEventListener('click', () => {
+      const collapsed = group.classList.toggle('is-collapsed');
+      h.setAttribute('aria-expanded', String(!collapsed));
+    });
     group.appendChild(h);
     ids.forEach(id => {
       const def = pageDefs[id];
@@ -548,6 +555,14 @@
   function render(section) {
     if (!pageDefs[section]) section = 'overview';
     const def = pageDefs[section];
+    document.body.dataset.zSection = section;
+    document.body.dataset.zSectionFamily = ({
+      overview:'overview', economy:'finance', members:'finance', store:'finance', xp:'progress',
+      games:'games', 'game-content':'games', killer:'games', city:'finance', heist:'security',
+      gangs:'games', robbery:'security', warnings:'security', logs:'logs', roles:'permissions',
+      name:'messages', tickets:'support', applications:'support', 'staff-duty':'staff',
+      'staff-event':'staff', 'staff-leave':'staff', music:'media', voice:'media', premium:'plans'
+    })[section] || 'general';
     pageHeader.querySelector('h1').textContent = def.label;
     pageHeader.querySelector('p').textContent = def.desc;
 
@@ -606,6 +621,24 @@
  const status=sidebar.querySelector('.z-side-status');if(status)status.textContent='إعدادات هذا السيرفر';
  const nav=sidebar.querySelector('nav'),search=document.createElement('input');
  search.type='search';search.placeholder='ابحث عن قسم…';search.className='z-section-search';search.setAttribute('aria-label','البحث في أقسام التحكم');sidebar.insertBefore(search,nav);
+ const shell=sidebar.closest('.z-dashboard-shell');
+ const collapse=sidebar.querySelector('.z-sidebar-collapse');
+ collapse?.addEventListener('click',()=>{
+   const isCollapsed=shell.classList.toggle('z-sidebar-collapsed');
+   collapse.setAttribute('aria-pressed',String(isCollapsed));
+   collapse.setAttribute('aria-label',isCollapsed?'توسيع القائمة الجانبية':'طي القائمة الجانبية');
+   collapse.title=isCollapsed?'توسيع القائمة':'طي القائمة';
+   collapse.textContent=isCollapsed?'⇥':'⇤';
+ });
+ const mobileToggle=document.createElement('button');
+ mobileToggle.type='button';mobileToggle.className='z-mobile-nav-toggle';
+ mobileToggle.textContent='☰ قائمة الأقسام';mobileToggle.setAttribute('aria-expanded','false');
+ sidebar.insertBefore(mobileToggle,sidebar.firstChild);
+ mobileToggle.addEventListener('click',()=>{
+   const expanded=sidebar.classList.toggle('z-mobile-nav-open');
+   mobileToggle.setAttribute('aria-expanded',String(expanded));
+   mobileToggle.textContent=expanded?'✕ إخفاء الأقسام':'☰ قائمة الأقسام';
+ });
  search.addEventListener('input',()=>{const q=search.value.trim();nav.querySelectorAll('a').forEach(a=>a.hidden=!a.textContent.includes(q));});
  const form=document.querySelector('form[action$="/settings"]');if(!form)return;
  let dirty=false,submitting=false;const bar=form.querySelector('.z-save-bar'),label=document.createElement('span');
