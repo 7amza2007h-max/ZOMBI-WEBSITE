@@ -548,10 +548,6 @@
   function render(section) {
     if (!pageDefs[section]) section = 'overview';
     const def = pageDefs[section];
-    // Expose the active section to the design layer so each area can have a
-    // distinct visual identity without changing its forms, routes or data.
-    document.body.dataset.zSection = section;
-    pageHeader.dataset.section = section;
     pageHeader.querySelector('h1').textContent = def.label;
     pageHeader.querySelector('p').textContent = def.desc;
 
