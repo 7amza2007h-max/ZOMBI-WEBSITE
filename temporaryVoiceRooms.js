@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const store = require('./sharedStore');
+const { planNameForConfig } = require('./planPolicy');
 const {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
   TextInputBuilder, TextInputStyle, ChannelType, PermissionFlagsBits
@@ -61,7 +62,15 @@ function triggerAccess(type,guild){
 async function createRoom(oldState,newState){
  const member=newState.member, trigger=newState.channel;
  if(!member||member.user.bot||!trigger||trigger.type!==ChannelType.GuildVoice||!trigger.name.includes('Create Room'))return;
- const guild=newState.guild, category=trigger.parent;
+ const guild=newState.guild;
+ const cfg=await store.getConfig(guild.id).catch(()=>null),control=cfg?.ownerSystemControls?.voiceRooms;
+ if(control?.mode==='disabled'||(control?.mode==='subscription'&&planNameForConfig(cfg)==='free')){
+  const message=String(control?.message|| (control?.mode==='disabled'?'🔒 نظام الغرف المؤقتة متوقف حاليًا لهذا السيرفر.':'💎 إنشاء الغرف المؤقتة يتطلب اشتراك ZOMBI Premium أو Premium+.')).slice(0,500);
+  await member.voice.disconnect('ZOMBI temporary rooms are restricted by Owner control').catch(()=>{});
+  await member.send(message).catch(()=>{});
+  return;
+ }
+ const category=trigger.parent;
  if(!category||category.type!==ChannelType.GuildCategory)return;
  const triggerType=String(trigger.name).split(/Create Room/i)[1].replace(/^[\s・\-_]+/,'').trim();
  const tempSettings=await store.data(guild.id,'temporary-voice-settings.json',{defaultLimit:0,roomPrefix:'غرفة'}).catch(()=>({defaultLimit:0,roomPrefix:'غرفة'}));

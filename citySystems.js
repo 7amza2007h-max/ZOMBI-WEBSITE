@@ -23,7 +23,7 @@ const EQUIPMENT={
   car:{label:'🚗 سيارة هروب',key:'car',max:2}
 };
 
-function featureOn(cfg,site,key){return Boolean(cfg?.features?.[key]!==false&&featureAllowed(site,cfg,key));}
+function featureOn(cfg,site,key){const control=cfg?.ownerSystemControls?.[key];if(control?.mode==='disabled')return false;if(control?.mode==='subscription'&&String(cfg?.plan||'free')==='free')return false;return Boolean(cfg?.features?.[key]!==false&&featureAllowed(site,cfg,key));}
 function color(cfg){const n=parseInt(String(cfg?.branding?.color||'#7c3aed').replace('#',''),16);return Number.isFinite(n)?n:0x7c3aed;}
 function currency(cfg){return `${cfg?.currency?.emoji||'🪙'} ${cfg?.currency?.name||'ZOM'}`;}
 function isAdmin(i){return Boolean(i?.memberPermissions?.has(PermissionFlagsBits.ManageGuild)||i?.memberPermissions?.has(PermissionFlagsBits.Administrator));}
