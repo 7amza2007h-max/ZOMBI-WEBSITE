@@ -62,7 +62,7 @@
       <div class="z-side-logo">Z</div>
       <div><strong>ZOMBI</strong><small>COMMAND CENTER</small></div>
     </div>
-    <div class="z-side-status"><span></span> متصل بالبوت</div>
+    <div class="z-side-status" aria-label="معلومات اللوحة"><span></span> إعدادات هذا السيرفر</div>
     <nav class="z-side-nav"></nav>
     <a class="z-side-back" href="/dashboard">← اختيار سيرفر آخر</a>`;
 
@@ -110,6 +110,10 @@
       <p></p>
     </div>
     ${guildIcon ? `<img src="${guildIcon}" alt="">` : ''}`;
+  const headingShortcuts = document.createElement('nav');
+  headingShortcuts.className = 'z-heading-shortcuts';
+  headingShortcuts.setAttribute('aria-label', 'اختصارات الأقسام المرتبطة');
+  pageHeader.appendChild(headingShortcuts);
   content.prepend(pageHeader);
 
   // Keep announcement and the "this server only" note on overview.
@@ -545,11 +549,42 @@
     el.classList.toggle('z-section-hidden', !show);
   };
 
+  const relatedSections = {
+    overview: ['economy', 'members', 'logs'], economy: ['store', 'members', 'xp'], members: ['xp', 'economy', 'warnings'],
+    xp: ['members', 'store', 'games'], store: ['economy', 'roles', 'premium'], games: ['game-content', 'killer', 'city'],
+    'game-content': ['games', 'killer', 'city'], killer: ['games', 'game-content', 'logs'], city: ['economy', 'heist', 'gangs'],
+    heist: ['city', 'gangs', 'robbery'], gangs: ['city', 'heist', 'robbery'], robbery: ['city', 'heist', 'logs'],
+    warnings: ['logs', 'members', 'tickets'], logs: ['warnings', 'members', 'staff-duty'], roles: ['tickets', 'applications', 'name'],
+    name: ['roles', 'tickets', 'applications'], tickets: ['applications', 'roles', 'logs'], applications: ['tickets', 'staff-duty', 'staff-event'],
+    'staff-duty': ['staff-event', 'staff-leave', 'logs'], 'staff-event': ['staff-duty', 'staff-leave', 'applications'],
+    'staff-leave': ['staff-duty', 'staff-event', 'applications'], music: ['voice', 'games', 'logs'], voice: ['music', 'xp', 'logs'],
+    premium: ['overview', 'store', 'games']
+  };
+
   function render(section) {
     if (!pageDefs[section]) section = 'overview';
     const def = pageDefs[section];
+    pageHeader.dataset.section = section;
+    content.dataset.activeSection = section;
     pageHeader.querySelector('h1').textContent = def.label;
     pageHeader.querySelector('p').textContent = def.desc;
+    document.body.dataset.zSection = section;
+    headingShortcuts.replaceChildren();
+    (relatedSections[section] || []).forEach(id => {
+      const related = pageDefs[id];
+      if (!related) return;
+      const link = document.createElement('a');
+      link.href = `/dashboard/${guildId}?section=${id}`;
+      link.dataset.section = id;
+      link.textContent = related.label;
+      link.addEventListener('click', event => {
+        event.preventDefault();
+        history.pushState({}, '', link.href);
+        render(id);
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      });
+      headingShortcuts.appendChild(link);
+    });
 
     nav.querySelectorAll('a[data-section]').forEach(a => a.classList.toggle('active', a.dataset.section === section));
 
