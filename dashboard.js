@@ -127,8 +127,9 @@
       <div class="z-side-logo">Z</div>
       <div><strong>ZOMBI</strong><small>COMMAND CENTER</small></div>
     </div>
-    <div class="z-side-status"><span></span> متصل بالبوت</div>
-    <nav class="z-side-nav"></nav>
+    <div class="z-side-status"><span></span> مركز قيادة ZOMBI</div>
+    <div class="z-side-context"><span class="z-context-orb">✦</span><div><b>SERVER CONTROL</b><small>إدارة مستقلة لهذا السيرفر</small></div></div>
+    <nav class="z-side-nav" aria-label="أقسام لوحة تحكم السيرفر"></nav>
     <a class="z-side-back" href="/dashboard">← اختيار سيرفر آخر</a>`;
 
   const nav = sidebar.querySelector('.z-side-nav');
@@ -183,6 +184,7 @@
   const hardRenderSection = (requested) => {
     let section = pageDefs[requested] ? requested : 'overview';
     try {
+      document.body.dataset.zSection = section;
       nav.querySelectorAll('a[data-section]').forEach(a => {
         const active = a.dataset.section === section;
         a.classList.toggle('active', active);
