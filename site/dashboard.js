@@ -12,6 +12,9 @@
 
   const pageDefs = {
     warnings: {label:'التحذيرات',icon:'⚠️',desc:'روم التحذيرات، IDs الرتب وإضافة مستويات التحذير؛ الإتاحة حسب خطة السيرفر.'},
+    welcome: {label:'الترحيب',icon:'👋',desc:'رسالة الترحيب وصورتها وروم القوانين وروابط الأقسام للأعضاء الجدد.'},
+    reactionroles: {label:'رتب الرياكشن',icon:'⭐',desc:'إعداد لوحات الرتب التفاعلية وإرسالها وتحديثها.'},
+    'staff-stats': {label:'إحصائيات الإدارة',icon:'📊',desc:'عرض سجلات نشاط الطاقم حسب الإداري والفترة المحددة.'},
     logs: {label:'سجل السيرفر',icon:'📋',desc:'اختيار روم Log وتحديد الأحداث التي تُسجّل.'},
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
@@ -38,10 +41,10 @@
   };
 
   const groups = [
-    ['التحكم', ['overview', 'economy', 'members', 'xp', 'store']],
+    ['التحكم', ['overview', 'welcome', 'economy', 'members', 'xp', 'store']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'city', 'heist', 'gangs', 'robbery']],
-    ['الأنظمة', ['warnings', 'logs', 'roles', 'name', 'tickets', 'applications', 'music', 'voice']],
-    ['إدارة الطاقم', ['staff-duty', 'staff-event', 'staff-leave']],
+    ['الأنظمة', ['warnings', 'logs', 'roles', 'reactionroles', 'name', 'tickets', 'applications', 'music', 'voice']],
+    ['إدارة الطاقم', ['staff-duty', 'staff-event', 'staff-leave', 'staff-stats']],
     ['الاشتراك', ['premium']]
   ];
 
@@ -558,7 +561,9 @@
     name: ['roles', 'tickets', 'applications'], tickets: ['applications', 'roles', 'logs'], applications: ['tickets', 'staff-duty', 'staff-event'],
     'staff-duty': ['staff-event', 'staff-leave', 'logs'], 'staff-event': ['staff-duty', 'staff-leave', 'applications'],
     'staff-leave': ['staff-duty', 'staff-event', 'applications'], music: ['voice', 'games', 'logs'], voice: ['music', 'xp', 'logs'],
-    premium: ['overview', 'store', 'games']
+    premium: ['overview', 'store', 'games'],
+    welcome: ['overview', 'logs', 'roles'], reactionroles: ['roles', 'tickets', 'applications'],
+    'staff-stats': ['staff-duty', 'logs', 'members']
   };
 
   function render(section) {
