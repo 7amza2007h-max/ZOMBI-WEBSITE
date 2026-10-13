@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { safeReturnTo, rateLimit, securityHeaders } = require('../dashboard/securityMiddleware');
+const { safeReturnTo, rateLimit, securityHeaders } = require('../securityMiddleware');
 
 assert.equal(safeReturnTo('/dashboard'), '/dashboard');
 assert.equal(safeReturnTo('/dashboard?tab=roles'), '/dashboard?tab=roles');

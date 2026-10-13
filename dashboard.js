@@ -1,6 +1,41 @@
 'use strict';
 
 (() => {
+  // Server picker: live search and sorting, limited to the server cards already rendered by the backend.
+  if (location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
+    document.querySelectorAll('main .servers').forEach((list, index) => {
+      const cards = [...list.querySelectorAll('.server')];
+      if (cards.length < 2) return;
+      const tools = document.createElement('div');
+      tools.className = 'z-server-tools';
+      const search = document.createElement('input');
+      search.type = 'search';
+      search.className = 'z-server-search';
+      search.placeholder = 'ابحث باسم السيرفر…';
+      search.setAttribute('aria-label', 'البحث في السيرفرات');
+      const sort = document.createElement('select');
+      sort.className = 'z-server-sort';
+      sort.setAttribute('aria-label', 'ترتيب السيرفرات');
+      [['default','الترتيب الحالي'],['az','الاسم: أ إلى ي'],['za','الاسم: ي إلى أ']].forEach(([value,label]) => {
+        const option = document.createElement('option'); option.value = value; option.textContent = label; sort.append(option);
+      });
+      tools.append(search, sort);
+      list.parentNode.insertBefore(tools, list);
+      const apply = () => {
+        const query = search.value.trim().toLocaleLowerCase();
+        const ordered = [...cards];
+        if (sort.value === 'az' || sort.value === 'za') ordered.sort((a,b) => {
+          const an = (a.querySelector('b')?.textContent || '').trim();
+          const bn = (b.querySelector('b')?.textContent || '').trim();
+          return an.localeCompare(bn, 'ar', { sensitivity: 'base' }) * (sort.value === 'za' ? -1 : 1);
+        });
+        ordered.forEach(card => { card.hidden = !card.textContent.toLocaleLowerCase().includes(query); list.append(card); });
+      };
+      search.addEventListener('input', apply);
+      sort.addEventListener('change', apply);
+    });
+  }
+
   const match = location.pathname.match(/^\/dashboard\/(\d{15,25})\/?$/);
   if (!match) return;
 
