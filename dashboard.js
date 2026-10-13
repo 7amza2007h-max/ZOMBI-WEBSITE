@@ -3,7 +3,7 @@
 (() => {
   // Server picker: live search and sorting, limited to the server cards already rendered by the backend.
   if (location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
-    document.querySelectorAll('main .servers').forEach((list, index) => {
+    document.querySelectorAll('main .servers').forEach(list => {
       const cards = [...list.querySelectorAll('.server')];
       if (cards.length < 2) return;
       const tools = document.createElement('div');
@@ -21,6 +21,13 @@
       });
       tools.append(search, sort);
       list.parentNode.insertBefore(tools, list);
+      const empty = document.createElement('p');
+      empty.className = 'z-server-empty';
+      empty.setAttribute('role', 'status');
+      empty.setAttribute('aria-live', 'polite');
+      empty.textContent = 'ما لقينا سيرفر بهذا الاسم.';
+      empty.hidden = true;
+      list.insertAdjacentElement('afterend', empty);
       const apply = () => {
         const query = search.value.trim().toLocaleLowerCase();
         const ordered = [...cards];
@@ -29,7 +36,13 @@
           const bn = (b.querySelector('b')?.textContent || '').trim();
           return an.localeCompare(bn, 'ar', { sensitivity: 'base' }) * (sort.value === 'za' ? -1 : 1);
         });
-        ordered.forEach(card => { card.hidden = !card.textContent.toLocaleLowerCase().includes(query); list.append(card); });
+        let visible = 0;
+        ordered.forEach(card => {
+          card.hidden = !card.textContent.toLocaleLowerCase().includes(query);
+          if (!card.hidden) visible += 1;
+          list.append(card);
+        });
+        empty.hidden = visible !== 0;
       };
       search.addEventListener('input', apply);
       sort.addEventListener('change', apply);

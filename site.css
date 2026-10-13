@@ -795,3 +795,53 @@ body.owner-page:before{background-image:linear-gradient(rgba(178,138,255,.05) 1p
 .z-skip-link{position:fixed;z-index:200;top:8px;right:8px;transform:translateY(-160%);padding:10px 14px;border:1px solid var(--zcc-line-strong);border-radius:10px;background:#081522;color:#eafaff;text-decoration:none;box-shadow:var(--zcc-shadow)}
 .z-skip-link:focus{transform:translateY(0);outline:2px solid var(--zcc-cyan);outline-offset:3px}
 #main-content:focus{outline:none}
+
+/* ZOMBI Cyber Command Center — page-aware polish and interaction states */
+.zombi-dashboard{--section-accent:#52e5ff;--section-accent-soft:rgba(82,229,255,.13)}
+.zombi-dashboard[data-z-section="overview"]{--section-accent:#52e5ff;--section-accent-soft:rgba(82,229,255,.13)}
+.zombi-dashboard[data-z-section="economy"],.zombi-dashboard[data-z-section="city"],.zombi-dashboard[data-z-section="store"]{--section-accent:#f2c66d;--section-accent-soft:rgba(242,198,109,.13)}
+.zombi-dashboard[data-z-section="games"],.zombi-dashboard[data-z-section="game-content"],.zombi-dashboard[data-z-section="killer"]{--section-accent:#b28aff;--section-accent-soft:rgba(178,138,255,.14)}
+.zombi-dashboard[data-z-section="tickets"],.zombi-dashboard[data-z-section="applications"],.zombi-dashboard[data-z-section="suggestions"]{--section-accent:#71b9ff;--section-accent-soft:rgba(113,185,255,.13)}
+.zombi-dashboard[data-z-section="permissions"],.zombi-dashboard[data-z-section="warnings"],.zombi-dashboard[data-z-section="logs"]{--section-accent:#ff8b9e;--section-accent-soft:rgba(255,139,158,.13)}
+.zombi-dashboard[data-z-section="xp"],.zombi-dashboard[data-z-section="roles"],.zombi-dashboard[data-z-section="reactionroles"],.zombi-dashboard[data-z-section="event"]{--section-accent:#70e0b2;--section-accent-soft:rgba(112,224,178,.13)}
+.zombi-dashboard[data-z-section="music"],.zombi-dashboard[data-z-section="voice"]{--section-accent:#6edce8;--section-accent-soft:rgba(110,220,232,.13)}
+.zombi-dashboard[data-z-section^="staff-"]{--section-accent:#c0a0ff;--section-accent-soft:rgba(192,160,255,.13)}
+.zombi-dashboard[data-z-section="premium"]{--section-accent:#d2a8ff;--section-accent-soft:rgba(210,168,255,.15)}
+.zombi-dashboard .z-page-heading{border-color:color-mix(in srgb,var(--section-accent) 35%,rgba(82,229,255,.1))!important}
+.zombi-dashboard .z-page-heading:after{background:linear-gradient(90deg,transparent,var(--section-accent),rgba(77,141,255,.85),transparent)!important}
+.zombi-dashboard .z-side-nav a.active,.zombi-dashboard .z-side-nav a[aria-current="page"]{border-color:color-mix(in srgb,var(--section-accent) 36%,transparent)!important;box-shadow:inset -2px 0 var(--section-accent)!important;background:linear-gradient(100deg,var(--section-accent-soft),rgba(58,79,154,.07))!important}
+.zombi-dashboard .z-side-nav a.active .z-nav-icon,.zombi-dashboard .z-side-nav a[aria-current="page"] .z-nav-icon{color:var(--section-accent)!important;border-color:color-mix(in srgb,var(--section-accent) 28%,transparent)!important}
+.zombi-dashboard .z-settings-page>h3:before{background:linear-gradient(180deg,var(--section-accent),rgba(255,255,255,.15))!important}
+.zombi-dashboard .z-settings-page:focus-within{border-color:color-mix(in srgb,var(--section-accent) 34%,rgba(102,174,207,.16))!important}
+.zombi-dashboard .z-local-save:focus-visible,.zombi-dashboard button:focus-visible,.zombi-dashboard a:focus-visible{outline-color:var(--section-accent)!important}
+.servers .server{min-width:0;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease,background .2s ease}
+.servers .server:hover{transform:translateY(-2px);border-color:rgba(82,229,255,.34)!important;box-shadow:0 18px 40px rgba(0,0,0,.22),0 0 0 1px rgba(82,229,255,.05)!important}
+.servers .server:focus-visible{outline:2px solid #52e5ff;outline-offset:3px}
+.servers .server>div:nth-child(2){min-width:0;overflow-wrap:anywhere}
+.servers .server em{white-space:nowrap}
+.z-server-tools input,.z-server-tools select{min-height:43px;border:1px solid rgba(116,160,196,.24);border-radius:11px;padding:10px 12px;background:rgba(4,10,19,.9);color:#edf7ff}
+.z-server-tools input::placeholder{color:#7893aa}
+.z-server-tools input:focus-visible,.z-server-tools select:focus-visible{border-color:#52e5ff;outline:2px solid rgba(82,229,255,.25);outline-offset:1px}
+.zombi-dashboard .z-settings-page .table-wrap,.owner-page .table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.zombi-dashboard .z-settings-page table,.owner-page table{border-collapse:separate;border-spacing:0;width:100%;min-width:520px}
+.zombi-dashboard .z-settings-page th,.owner-page th{color:#bdebf6;background:rgba(82,229,255,.055);font-weight:800}
+.zombi-dashboard .z-settings-page td,.zombi-dashboard .z-settings-page th,.owner-page td,.owner-page th{border-bottom:1px solid rgba(116,160,196,.12);padding:11px 12px;vertical-align:middle}
+.zombi-dashboard .z-settings-page tbody tr:hover td,.owner-page tbody tr:hover td{background:rgba(82,229,255,.025)}
+.zombi-dashboard .z-settings-page label,.owner-page .owner-section label{min-width:0;overflow-wrap:anywhere}
+.zombi-dashboard .z-settings-page input[type="checkbox"],.zombi-dashboard .z-settings-page input[type="radio"],.owner-page input[type="checkbox"],.owner-page input[type="radio"]{accent-color:#52e5ff}
+.zombi-dashboard .z-settings-page input[type="file"],.owner-page input[type="file"]{max-width:100%;font-size:12px}
+.zombi-dashboard .z-settings-page pre,.owner-page pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.zombi-dashboard .z-settings-page img,.owner-page .owner-section img{max-width:100%;height:auto}
+.owner-page .owner-hero{isolation:isolate;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035)!important}
+.owner-page .owner-section{box-shadow:0 12px 38px rgba(0,0,0,.16)!important}
+.owner-page .owner-section-head h2,.owner-page .owner-section h2{color:#f1eaff}
+.owner-page .owner-section-head p,.owner-page .owner-section .hint{color:#a9a2bf}
+.owner-page .owner-stat-grid{align-items:stretch}
+.owner-page .owner-stat-grid article{min-width:0;overflow-wrap:anywhere}
+.owner-page .owner-actions{flex-wrap:wrap}
+.owner-page .owner-actions>*{min-width:0}
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{scroll-margin-block:90px}
+@media(max-width:760px){.servers .server{gap:10px;align-items:center}.servers .server em{white-space:normal;text-align:start}.zombi-dashboard .z-settings-page .table-wrap,.owner-page .table-wrap{margin-inline:-2px}.zombi-dashboard .z-settings-page td,.zombi-dashboard .z-settings-page th,.owner-page td,.owner-page th{padding:9px 10px}}
+@media(max-width:430px){.servers .server{align-items:flex-start}.servers .server em{max-width:95px;font-size:11px}.zombi-dashboard .z-settings-page table,.owner-page table{min-width:480px}}
+@media(prefers-reduced-motion:reduce){.servers .server:hover{transform:none}}
+.z-server-empty{margin:10px 0 18px;padding:16px;border:1px dashed rgba(82,229,255,.24);border-radius:12px;background:rgba(82,229,255,.035);color:#9dbbd0;text-align:center}
