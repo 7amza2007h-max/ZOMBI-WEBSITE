@@ -597,17 +597,13 @@ async function guildPage(req){
     <div class="card-actions"><button type="submit" class="btn primary">💾 حفظ إعدادات الترحيب</button></div>
   </form>
 
-  <form class="panel" data-z-page="auto-reply" method="post" action="/dashboard/${guild.id}/auto-reply/save"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="auto-reply">
-    <h2>💬 الرد التلقائي</h2>
-    <p class="muted">حدد كلمة أو عبارة يرد عليها البوت تلقائيًا. الإعدادات مستقلة لهذا السيرفر فقط.</p>
-    <div class="form-grid">
-      <label><input type="checkbox" name="autoReplyEnabled" ${cfg.autoReply?.enabled?'checked':''}> تفعيل الرد التلقائي</label>
-      <label>طريقة المطابقة<select name="autoReplyMatch"><option value="contains" ${(cfg.autoReply?.match||'contains')==='contains'?'selected':''}>إذا احتوت الرسالة على العبارة</option><option value="exact" ${cfg.autoReply?.match==='exact'?'selected':''}>إذا كانت الرسالة مطابقة تمامًا</option></select></label>
-      <label class="wide">الكلمة أو العبارة التي تشغّل الرد<input name="autoReplyTrigger" maxlength="100" required value="${esc(cfg.autoReply?.trigger||'')}" placeholder="مثال: السلام عليكم"></label>
-      <label class="wide">الرد الذي يرسله البوت<textarea name="autoReplyResponse" maxlength="1900" required placeholder="مثال: وعليكم السلام ورحمة الله وبركاته">${esc(cfg.autoReply?.response||'')}</textarea><small>متغيرات اختيارية: <code>{user}</code> اسم العضو، <code>{mention}</code> منشن العضو، <code>{server}</code> اسم السيرفر.</small></label>
-      <label>تحديد روم (اختياري)<select name="autoReplyChannelId"><option value="">كل الشاتات النصية</option>${textChannels(channels,cfg.autoReply?.channelId||'')}</select><small>إذا اخترت رومًا، سيعمل الرد التلقائي فيه فقط.</small></label>
-    </div>
-    <div class="card-actions"><button type="submit" class="btn primary">💾 حفظ الرد التلقائي</button></div>
+  <form class="panel" data-z-page="auto-reply" data-auto-reply-form method="post" action="/dashboard/${guild.id}/auto-reply/save"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="auto-reply">
+    <h2>💬 الردود التلقائية</h2>
+    <p class="muted">أضف عدة قواعد؛ لكل كلمة أو عبارة ردّها وطريقة مطابقتها والروم الاختياري. الإعدادات مستقلة لهذا السيرفر فقط.</p>
+    <label><input type="checkbox" name="autoReplyEnabled" ${cfg.autoReply?.enabled?'checked':''}> تفعيل نظام الردود التلقائية</label>
+    <div class="auto-reply-rules" data-auto-reply-rules>${(()=>{const saved=Array.isArray(cfg.autoReply?.rules)?cfg.autoReply.rules:((cfg.autoReply?.trigger||cfg.autoReply?.response)?[{trigger:cfg.autoReply.trigger,response:cfg.autoReply.response,channelId:cfg.autoReply.channelId,match:cfg.autoReply.match}]:[]);const rules=saved.length?saved:[{}];return rules.map((r,i)=>`<section class="config-card auto-reply-rule" data-auto-reply-rule><div class="card-actions"><h3>الرد رقم ${i+1}</h3><button type="button" class="btn danger" data-auto-reply-remove>حذف الرد</button></div><div class="form-grid"><label class="wide">الكلمة أو العبارة التي تشغّل الرد<input name="autoReplyTrigger_${i}" maxlength="100" value="${esc(r.trigger||'')}" placeholder="مثال: السلام عليكم"></label><label class="wide">الرد الذي يرسله البوت<textarea name="autoReplyResponse_${i}" maxlength="1900" placeholder="اكتب الرد هنا">${esc(r.response||'')}</textarea></label><label>طريقة المطابقة<select name="autoReplyMatch_${i}"><option value="contains" ${(r.match||'contains')==='contains'?'selected':''}>إذا احتوت الرسالة على العبارة</option><option value="exact" ${r.match==='exact'?'selected':''}>إذا كانت الرسالة مطابقة تمامًا</option></select></label><label>تحديد روم (اختياري)<select name="autoReplyChannelId_${i}"><option value="">كل الشاتات النصية</option>${textChannels(channels,r.channelId||'')}</select></label></div></section>`).join('')+'';})()}</div>
+    <div class="card-actions"><button type="button" class="btn" data-auto-reply-add>➕ إضافة رد آخر</button><button type="submit" class="btn primary">💾 حفظ جميع الردود</button></div>
+    <p class="hint">متغيرات اختيارية داخل الرد: <code>{user}</code> اسم العضو، <code>{mention}</code> منشنه، <code>{server}</code> اسم السيرفر. اترك القواعد الفارغة بدون تعبئة.</p>
   </form>
 
   <form class="panel" method="post" action="/dashboard/${guild.id}/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_settingsSection" value="all">
@@ -2221,19 +2217,29 @@ res.send(layout('Dashboard', `
 
   app.post('/dashboard/:guildId/auto-reply/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
     const gid=req.params.guildId;
-    const trigger=String(req.body.autoReplyTrigger||'').trim().slice(0,100);
-    const response=String(req.body.autoReplyResponse||'').trim().slice(0,1900);
-    const channelId=String(req.body.autoReplyChannelId||'').trim();
-    const match=String(req.body.autoReplyMatch||'contains')==='exact'?'exact':'contains';
     const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===id&&[0,5].includes(Number(c.type)));
-    if(Boolean(req.body.autoReplyEnabled)&&(!trigger||!response))throw new Error('أدخل العبارة والرد قبل تفعيل النظام.');
-    if(!validText(channelId))throw new Error('الروم المختار غير صالح لهذا السيرفر.');
+    const indexes=[...new Set(Object.keys(req.body).map(k=>k.match(/^autoReplyTrigger_(\d+)$/)).filter(Boolean).map(m=>Number(m[1])))].sort((a,b)=>a-b);
+    const rules=[];
+    for(const i of indexes){
+      const trigger=String(req.body[`autoReplyTrigger_${i}`]||'').trim().slice(0,100);
+      const response=String(req.body[`autoReplyResponse_${i}`]||'').trim().slice(0,1900);
+      const channelId=String(req.body[`autoReplyChannelId_${i}`]||'').trim();
+      const match=String(req.body[`autoReplyMatch_${i}`]||'contains')==='exact'?'exact':'contains';
+      if(!trigger&&!response)continue;
+      if(!trigger||!response)throw new Error(`أكمل العبارة والرد في القاعدة رقم ${i+1} أو اترك الاثنين فارغين.`);
+      if(!validText(channelId))throw new Error(`الروم المختار في القاعدة رقم ${i+1} غير صالح لهذا السيرفر.`);
+      rules.push({trigger,response,channelId,match});
+      if(rules.length>50)throw new Error('الحد الأقصى هو 50 ردًا تلقائيًا لكل سيرفر.');
+    }
+    if(Boolean(req.body.autoReplyEnabled)&&!rules.length)throw new Error('أضف قاعدة واحدة على الأقل قبل تفعيل الردود التلقائية.');
     const current=await store.getConfig(gid);
-    const autoReply={...(current.autoReply||{}),enabled:Boolean(req.body.autoReplyEnabled),trigger,response,channelId,match};
+    const autoReply={...(current.autoReply||{}),enabled:Boolean(req.body.autoReplyEnabled),rules};
+    // Keep legacy top-level fields for compatibility with older dashboard readers.
+    Object.assign(autoReply,rules[0]||{trigger:'',response:'',channelId:'',match:'contains'});
     const saved=await store.patchConfig(gid,{autoReply});
     const verify=await store.getConfig(gid);
     const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
-    if(JSON.stringify(stable(verify.autoReply))!==JSON.stringify(stable(saved.autoReply)))throw new Error('فشل التحقق من حفظ إعدادات الرد التلقائي.');
+    if(JSON.stringify(stable(verify.autoReply))!==JSON.stringify(stable(saved.autoReply)))throw new Error('فشل التحقق من حفظ إعدادات الردود التلقائية.');
     return res.redirect(`/dashboard/${gid}?section=auto-reply&saved=1`);
   }catch(e){next(e);}});
 

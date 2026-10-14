@@ -841,6 +841,29 @@
  nav.addEventListener('click',()=>queueMicrotask(update));update();
 })();
 
+
+// ZOMBI Auto Reply: add/remove multiple rules without reloading the dashboard.
+(() => {
+ const form=document.querySelector('[data-auto-reply-form]');
+ const list=form?.querySelector('[data-auto-reply-rules]');
+ if(!form||!list)return;
+ const channelOptions=()=>{const first=list.querySelector('select[name^="autoReplyChannelId_"]');return first?first.innerHTML:'<option value="">كل الشاتات النصية</option>';};
+ const nextIndex=()=>Math.max(-1,...[...list.querySelectorAll('[data-auto-reply-rule]')].map(card=>Number(card.dataset.index??[...card.querySelectorAll('[name]')].map(x=>x.name.match(/_(\d+)$/)?.[1]).find(x=>x!==undefined)??-1)))+1;
+ const renumber=()=>list.querySelectorAll('[data-auto-reply-rule]').forEach((card,i)=>{const h=card.querySelector('h3');if(h)h.textContent=`الرد رقم ${i+1}`;});
+ form.addEventListener('click',event=>{
+   const remove=event.target.closest('[data-auto-reply-remove]');
+   if(remove){const cards=list.querySelectorAll('[data-auto-reply-rule]');if(cards.length<=1){const card=remove.closest('[data-auto-reply-rule]');card.querySelectorAll('input,textarea').forEach(el=>el.value='');card.querySelector('select[name^="autoReplyMatch_"]').value='contains';card.querySelector('select[name^="autoReplyChannelId_"]').value='';}else remove.closest('[data-auto-reply-rule]').remove();renumber();return;}
+   if(event.target.closest('[data-auto-reply-add]')){
+     if(list.querySelectorAll('[data-auto-reply-rule]').length>=50){alert('الحد الأقصى 50 ردًا تلقائيًا.');return;}
+     const i=nextIndex(),card=document.createElement('section');card.className='config-card auto-reply-rule';card.dataset.autoReplyRule='';
+     card.innerHTML=`<div class="card-actions"><h3>الرد الجديد</h3><button type="button" class="btn danger" data-auto-reply-remove>حذف الرد</button></div><div class="form-grid"><label class="wide">الكلمة أو العبارة التي تشغّل الرد<input name="autoReplyTrigger_${i}" maxlength="100" placeholder="مثال: السلام عليكم"></label><label class="wide">الرد الذي يرسله البوت<textarea name="autoReplyResponse_${i}" maxlength="1900" placeholder="اكتب الرد هنا"></textarea></label><label>طريقة المطابقة<select name="autoReplyMatch_${i}"><option value="contains">إذا احتوت الرسالة على العبارة</option><option value="exact">إذا كانت الرسالة مطابقة تمامًا</option></select></label><label>تحديد روم (اختياري)<select name="autoReplyChannelId_${i}">${channelOptions()}</select></label></div>`;
+     // The server-rendered fields use the same naming scheme, so no client-side data is lost.
+     card.querySelectorAll('[name]').forEach(el=>{el.name=el.name.replace(/_\d+$/,`_${i}`);});
+     list.append(card);card.querySelector('input').focus();
+   }
+ });
+})();
+
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
 
 // Per-event Audit Logs filters; controls never alter saved values until the normal form is submitted.
