@@ -841,3 +841,12 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
+
+// Per-event Audit Logs filters; controls never alter saved values until the normal form is submitted.
+(() => {
+ const search=document.getElementById('audit-log-search'),filter=document.getElementById('audit-log-filter');
+ if(!search||!filter)return;
+ const cards=[...document.querySelectorAll('[data-audit-log-card]')];
+ const apply=()=>{const q=search.value.trim().toLocaleLowerCase('ar'),group=filter.value;for(const card of cards){const name=String(card.dataset.auditLogName||'').toLocaleLowerCase('ar');card.hidden=Boolean((q&&!name.includes(q))||(group&&card.dataset.auditLogGroup!==group));}};
+ search.addEventListener('input',apply);filter.addEventListener('change',apply);
+})();
