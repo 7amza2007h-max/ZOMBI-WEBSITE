@@ -597,6 +597,19 @@ async function guildPage(req){
     <div class="card-actions"><button type="submit" class="btn primary">💾 حفظ إعدادات الترحيب</button></div>
   </form>
 
+  <form class="panel" data-z-page="auto-reply" method="post" action="/dashboard/${guild.id}/auto-reply/save"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_returnSection" value="auto-reply">
+    <h2>💬 الرد التلقائي</h2>
+    <p class="muted">حدد كلمة أو عبارة يرد عليها البوت تلقائيًا. الإعدادات مستقلة لهذا السيرفر فقط.</p>
+    <div class="form-grid">
+      <label><input type="checkbox" name="autoReplyEnabled" ${cfg.autoReply?.enabled?'checked':''}> تفعيل الرد التلقائي</label>
+      <label>طريقة المطابقة<select name="autoReplyMatch"><option value="contains" ${(cfg.autoReply?.match||'contains')==='contains'?'selected':''}>إذا احتوت الرسالة على العبارة</option><option value="exact" ${cfg.autoReply?.match==='exact'?'selected':''}>إذا كانت الرسالة مطابقة تمامًا</option></select></label>
+      <label class="wide">الكلمة أو العبارة التي تشغّل الرد<input name="autoReplyTrigger" maxlength="100" required value="${esc(cfg.autoReply?.trigger||'')}" placeholder="مثال: السلام عليكم"></label>
+      <label class="wide">الرد الذي يرسله البوت<textarea name="autoReplyResponse" maxlength="1900" required placeholder="مثال: وعليكم السلام ورحمة الله وبركاته">${esc(cfg.autoReply?.response||'')}</textarea><small>متغيرات اختيارية: <code>{user}</code> اسم العضو، <code>{mention}</code> منشن العضو، <code>{server}</code> اسم السيرفر.</small></label>
+      <label>تحديد روم (اختياري)<select name="autoReplyChannelId"><option value="">كل الشاتات النصية</option>${textChannels(channels,cfg.autoReply?.channelId||'')}</select><small>إذا اخترت رومًا، سيعمل الرد التلقائي فيه فقط.</small></label>
+    </div>
+    <div class="card-actions"><button type="submit" class="btn primary">💾 حفظ الرد التلقائي</button></div>
+  </form>
+
   <form class="panel" method="post" action="/dashboard/${guild.id}/settings"><input type="hidden" name="_csrf" value="${token}"><input type="hidden" name="_settingsSection" value="all">
     <h2>⚙️ الإعدادات العامة والهوية</h2>
     <div class="form-grid"><label>حالة البوت<input name="presenceText" value="${esc(cfg.system?.presenceText||'ZOM Economy | /help')}"></label><label>Presence<select name="presenceStatus"><option value="online" ${cfg.system?.presenceStatus==='online'?'selected':''}>Online</option><option value="idle" ${cfg.system?.presenceStatus==='idle'?'selected':''}>Idle</option><option value="dnd" ${cfg.system?.presenceStatus==='dnd'?'selected':''}>DND</option><option value="invisible" ${cfg.system?.presenceStatus==='invisible'?'selected':''}>Invisible</option></select></label><label>اسم العملة ${lockedNote(canCurrency)}<input name="currencyName" value="${esc(cfg.currency.name)}" ${disabled(canCurrency)}></label><label>Emoji العملة<select name="currencyEmoji">${currencyEmojiOptions(emojis,cfg.currency.emoji)}</select><small>اختر إيموجي من إيموجيات نفس السيرفر. يدعم الإيموجي العادي والمتحرك.</small></label><label>لون Embed ${lockedNote(canBrand)}<input name="brandColor" value="${esc(cfg.branding.color)}" ${disabled(canBrand)}></label><label>اسم ZOMBI في اللوحات ${lockedNote(canBrand)}<input name="customName" value="${esc(cfg.branding.customName)}" ${disabled(canBrand)}></label><label>Footer مخصص ${lockedNote(canBrand)}<input name="customFooter" value="${esc(cfg.branding.customFooter)}" ${disabled(canBrand)}></label><label>اسم البوت داخل السيرفر ${lockedNote(canBotProfile,profileLockText)}<input name="botNickname" value="${esc(cfg.branding.botNickname||'')}" ${disabled(canBotProfile)}></label><label class="wide">Logo البوت في لوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="avatarUrl" value="${esc(cfg.branding.avatarUrl||'')}" placeholder="https://.../avatar.png" ${disabled(canBotProfile)}></label><label class="wide">Banner لوحات البوت داخل هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<input type="url" name="bannerUrl" value="${esc(cfg.branding.bannerUrl||'')}" placeholder="https://.../banner.png" ${disabled(canBotProfile)}></label><label class="wide">Bio مخصص للوحات هذا السيرفر ${lockedNote(canBotProfile,profileLockText)}<textarea name="botBio" maxlength="190" ${disabled(canBotProfile)}>${esc(cfg.branding.bio||'')}</textarea></label><label class="wide">Logo اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelLogoUrl" value="${esc(cfg.branding.panelLogoUrl||'')}" ${disabled(canBotProfile)}></label><label class="wide">Banner اللوحات Premium ${lockedNote(canBotProfile,profileLockText)}<input name="panelBannerUrl" value="${esc(cfg.branding.panelBannerUrl||'')}" ${disabled(canBotProfile)}></label><label class="wide">رابط خط الزخرفة / Divider<input type="url" name="lineUrl" value="${esc(cfg.branding.lineUrl||'')}" placeholder="https://.../line.gif"></label><label class="wide">الرتب المسموح لها باستخدام أمر خط<select multiple size="6" name="lineRoleIds">${roleOptions(roles,guild.id,cfg.branding.lineRoleIds||[])}</select><small>اختر رتبة أو أكثر. مالك السيرفر وAdministrator مسموح لهم دائمًا. إذا تركتها فارغة يبقى الأمر للإدارة فقط.</small></label></div>
@@ -708,7 +721,6 @@ async function guildPage(req){
       <label>⚙️ لوق النظام / أخطاء<select name="logSystem">${textChannels(channels,cfg.channels.logSystem)}</select></label>
     </div>
     <h3>🧭 سجل الأحداث الاحترافي — إعداد مستقل لكل نوع</h3><p><a class="btn" href="/dashboard/${guild.id}/audit-history">📚 عرض سجل الأحداث التاريخي</a></p>
-    <div class="config-card" style="margin:12px 0"><h4>⚡ إنشاء جميع رومات اللوقات تلقائيًا</h4><p class="hint">اختر كاتجوري موجودًا في سيرفرك، وسيُنشئ ZOMBI داخله رومًا نصيًا لكل نوع من أنواع اللوقات الـ28 بأسماء واضحة، ثم يربط كل نوع بالروم الخاص به ويشغّله. الرومات الموجودة بنفس الاسم داخل الكاتجوري ستُستخدم بدل تكرارها.</p><div class="form-grid"><label>📁 كاتجوري رومات اللوقات<select name="auditLogsCategoryId" required>${categories(channels,'')}</select></label></div><button class="btn primary" type="submit" formmethod="post" formaction="/dashboard/${guild.id}/audit-logs/create-channels" onclick="return confirm('سيتم إنشاء حتى 28 رومًا نصيًا داخل الكاتجوري المختار وربط كل لوق برومه. هل تريد المتابعة؟')">🛠️ إنشاء وربط كل رومات اللوقات</button></div>
     <p class="hint">كل نوع له مفتاح تشغيل وروم مستقل. عند ترك النوع معطّلًا أو بدون روم، لن يرسل هذا النوع إلى الروم العام أو إلى أي روم آخر.</p>
     <div class="form-grid"><label>🔎 البحث عن نوع لوق<input id="audit-log-search" type="search" placeholder="مثال: دخول، حظر، صوتي..."></label><label>🗂️ تصفية حسب الفئة<select id="audit-log-filter"><option value="">كل الفئات</option>${[...new Set(AUDIT_LOG_TYPES.map(x=>x.group))].map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}</select></label></div>
     <div class="form-grid audit-log-grid">${AUDIT_LOG_TYPES.map(item=>{const setting=cfg.auditLogs?.[item.key]||{};const selected=String(setting.channelId||'');const selectedChannel=channels.find(c=>String(c.id)===selected&&[0,5].includes(Number(c.type)));return `<div class="config-card audit-log-card" data-audit-log-card data-audit-log-name="${esc(item.label.toLowerCase())}" data-audit-log-group="${esc(item.group)}"><h4>${item.emoji} ${item.label}</h4><label><input type="checkbox" name="auditLog_enabled_${item.key}" ${setting.enabled===true?'checked':''}> تشغيل هذا النوع</label><label>روم اللوق<select name="auditLog_channel_${item.key}">${textChannels(channels,selected)}</select></label><small>${selected?`الروم المحدد: ${selectedChannel?'#'+esc(selectedChannel.name):'غير موجود في قائمة رومات هذا السيرفر؛ اختر رومًا صالحًا.'}`:'لم يتم اختيار روم.'}</small></div>`;}).join('')}</div>
@@ -1350,37 +1362,6 @@ res.send(layout('Dashboard', `
 } catch(e) {
   next(e);
 }});
-
-  app.post('/dashboard/:guildId/audit-logs/create-channels',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
-    const gid=String(req.params.guildId),categoryId=String(req.body.auditLogsCategoryId||'').trim();
-    const bundle=await getGuildBundle(gid,true);
-    if(!bundle?.guild)throw new Error('تعذر قراءة بيانات السيرفر من Discord.');
-    const category=(bundle.channels||[]).find(c=>String(c.id)===categoryId&&Number(c.type)===4);
-    if(!category) return res.status(400).send(layout('اختيار غير صالح','<main class="panel"><h2>❌ اختر كاتجوري صحيحًا من نفس السيرفر.</h2><a class="btn" href="/dashboard/'+esc(gid)+'">رجوع للداشبورد</a></main>',req.user));
-    const logTypes=AUDIT_LOG_TYPES;
-    const existing=new Map((bundle.channels||[]).filter(c=>String(c.parent_id||'')===categoryId&&[0,5].includes(Number(c.type))).map(c=>[String(c.name||'').toLowerCase(),c]));
-    const cfg=await store.getConfig(gid);cfg.auditLogs={...(cfg.auditLogs||{})};
-    const results=[];let created=0,reused=0,failed=0;
-    const channelName=item=>String(item.label||item.key).normalize('NFKC').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,'').trim().toLowerCase().replace(/[^\p{L}\p{N}-]+/gu,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,90)||String(item.key).replace(/_/g,'-');
-    for(const item of logTypes){
-      const name=channelName(item);let channel=existing.get(name.toLowerCase());
-      try{
-        if(channel){reused++;channel._zombiReused=true;}
-        else{
-          channel=await botFetch(`/guilds/${gid}/channels`,{method:'POST',body:JSON.stringify({name,type:0,parent_id:categoryId,reason:'ZOMBI Dashboard: إنشاء رومات Audit Logs'})});
-          if(!channel?.id)throw new Error('Discord لم يُرجع معرّف الروم.');
-          existing.set(name.toLowerCase(),channel);created++;
-          // Avoid burst requests; Discord API rate limits are still handled by botFetch.
-          await new Promise(resolve=>setTimeout(resolve,350));
-        }
-        cfg.auditLogs[item.key]={...(cfg.auditLogs[item.key]||{}),enabled:true,channelId:String(channel.id),updatedAt:Date.now()};
-        results.push(`✅ #${name} — ${channel.id}${channel._zombiReused?' (موجود مسبقًا)':''}`);
-      }catch(e){failed++;results.push(`❌ #${name} — ${String(e?.message||'تعذر إنشاء الروم').slice(0,180)}`);}
-    }
-    await store.saveConfig(gid,cfg);
-    const content=`<main class="panel" style="max-width:1000px;margin:24px auto"><h1>🧾 نتيجة إنشاء رومات اللوقات</h1><p>السيرفر: ${esc(bundle.guild.name||gid)} • الكاتجوري: ${esc(category.name||'')} </p><p>تم إنشاء ${created} رومًا جديدًا، وإعادة استخدام ${reused} رومًا موجودًا، وتعذر ${failed}.</p><p class="hint">تم حفظ وربط الأنواع الناجحة في إعدادات هذا السيرفر فقط. تأكد أن البوت يملك Manage Channels وأن صلاحيات الكاتجوري تسمح له بإرسال الرسائل والتضمينات.</p><div class="config-card"><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(results.join('\n'))}</pre></div><a class="btn primary" href="/dashboard/${esc(gid)}">العودة إلى الداشبورد</a> <a class="btn" href="/dashboard/${esc(gid)}/audit-history">سجل الأحداث</a></main>`;
-    res.send(layout('نتيجة إنشاء اللوقات',content,req.user));
-  }catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/audit-history',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
     const gid=String(req.params.guildId),all=await store.data(gid,'audit-log-history.json',[]),rows=Array.isArray(all)?all:[];
@@ -2236,6 +2217,24 @@ res.send(layout('Dashboard', `
     const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
     if(JSON.stringify(stable(verify.welcome))!==JSON.stringify(stable(saved.welcome)))throw new Error('فشل التحقق من حفظ إعدادات الترحيب في Guild Settings.');
     return res.redirect(`/dashboard/${gid}?section=welcome&saved=1&welcomeSaved=1`);
+  }catch(e){next(e);}});
+
+  app.post('/dashboard/:guildId/auto-reply/save',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const gid=req.params.guildId;
+    const trigger=String(req.body.autoReplyTrigger||'').trim().slice(0,100);
+    const response=String(req.body.autoReplyResponse||'').trim().slice(0,1900);
+    const channelId=String(req.body.autoReplyChannelId||'').trim();
+    const match=String(req.body.autoReplyMatch||'contains')==='exact'?'exact':'contains';
+    const validText=id=>!id||req.bundle.channels.some(c=>String(c.id)===id&&[0,5].includes(Number(c.type)));
+    if(Boolean(req.body.autoReplyEnabled)&&(!trigger||!response))throw new Error('أدخل العبارة والرد قبل تفعيل النظام.');
+    if(!validText(channelId))throw new Error('الروم المختار غير صالح لهذا السيرفر.');
+    const current=await store.getConfig(gid);
+    const autoReply={...(current.autoReply||{}),enabled:Boolean(req.body.autoReplyEnabled),trigger,response,channelId,match};
+    const saved=await store.patchConfig(gid,{autoReply});
+    const verify=await store.getConfig(gid);
+    const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v??null);
+    if(JSON.stringify(stable(verify.autoReply))!==JSON.stringify(stable(saved.autoReply)))throw new Error('فشل التحقق من حفظ إعدادات الرد التلقائي.');
+    return res.redirect(`/dashboard/${gid}?section=auto-reply&saved=1`);
   }catch(e){next(e);}});
 
   app.post('/dashboard/:guildId/questions',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const [cfg,site]=await Promise.all([store.getConfig(req.params.guildId),store.getGlobalConfig()]);if(!featureAllowed(site,cfg,'gameQuestions'))return res.status(403).send('تعديل الأسئلة غير متاح في خطتك.');const max=maxFor(req,cfg,site,'questionsPerGame'),next=normalizeGameContent({quizQuestions:parsePairs(req.body.quizText,max,'qa'),trueFalseQuestions:parsePairs(req.body.trueFalseText,max,'qa'),wordQuestions:parsePairs(req.body.wordText,max,'word'),speedWords:parseWords(req.body.speedText,max),dailyQuestions:parsePairs(req.body.dailyText,max,'qa')});await store.saveGameContent(req.params.guildId,next);redirectDashboard(req,res);}catch(e){next(e);}});

@@ -65,6 +65,7 @@
     overview: { label: 'الرئيسية', icon: '⌂', desc: 'نظرة عامة وإعدادات ZOMBI الأساسية لهذا السيرفر.' },
     line: { label: 'الخط', icon: '➖', desc: 'غيّر صورة الخط وحدد الرتب المسموح لها باستخدام أمر خط لكل سيرفر.' },
     welcome: { label: 'الترحيب', icon: '👋', desc: 'صورة الترحيب، روم الترحيب، روم القوانين وروابط الأقسام للعضو الجديد.' },
+    'auto-reply': { label: 'الرد التلقائي', icon: '💬', desc: 'حدد عبارة يلتقطها البوت والرد الذي يرسله تلقائيًا في هذا السيرفر.' },
     economy: { label: 'الاقتصاد', icon: '◈', desc: 'العملة، المكافآت، التحويلات وإدارة اقتصاد السيرفر.' },
     members: { label: 'الأعضاء', icon: '♟', desc: 'أرصدة الأعضاء، Timeout بالرتب، وban 💥 مع التحكم بالشاتات.' },
     xp: { label: 'XP والبروفايل', icon: '🏆', desc: 'Chat XP وVoice XP والمواسم ورتب المستويات وإشعارات ارتفاع المستوى.' },
@@ -102,7 +103,7 @@
 
   const groups = [
     ['الرئيسية والاقتصاد', ['overview', 'economy', 'city', 'store', 'xp', 'bot-commands', 'members']],
-    ['المجتمع واللوحات', ['welcome', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'zajel', 'applications']],
+    ['المجتمع واللوحات', ['welcome', 'auto-reply', 'line', 'rules', 'guide', 'roles', 'reactionroles', 'name', 'tickets', 'suggestions', 'zajel', 'applications']],
     ['الفعاليات والإدارة', ['event', 'staff-event', 'staff-leave', 'staff-event-leave', 'staff-duty', 'staff-admin', 'staff-stats', 'staff-insights']],
     ['الألعاب والمدينة', ['games', 'game-content', 'killer', 'heist', 'gangs', 'robbery', 'director']],
     ['الصوت والحماية', ['music', 'voice', 'permissions', 'warnings', 'logs']],
