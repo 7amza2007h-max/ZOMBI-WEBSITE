@@ -708,6 +708,7 @@ async function guildPage(req){
       <label>⚙️ لوق النظام / أخطاء<select name="logSystem">${textChannels(channels,cfg.channels.logSystem)}</select></label>
     </div>
     <h3>🧭 سجل الأحداث الاحترافي — إعداد مستقل لكل نوع</h3><p><a class="btn" href="/dashboard/${guild.id}/audit-history">📚 عرض سجل الأحداث التاريخي</a></p>
+    <div class="config-card" style="margin:12px 0"><h4>⚡ إنشاء جميع رومات اللوقات تلقائيًا</h4><p class="hint">اختر كاتجوري موجودًا في سيرفرك، وسيُنشئ ZOMBI داخله رومًا نصيًا لكل نوع من أنواع اللوقات الـ28 بأسماء واضحة، ثم يربط كل نوع بالروم الخاص به ويشغّله. الرومات الموجودة بنفس الاسم داخل الكاتجوري ستُستخدم بدل تكرارها.</p><div class="form-grid"><label>📁 كاتجوري رومات اللوقات<select name="auditLogsCategoryId" required>${categories(channels,'')}</select></label></div><button class="btn primary" type="submit" formmethod="post" formaction="/dashboard/${guild.id}/audit-logs/create-channels" onclick="return confirm('سيتم إنشاء حتى 28 رومًا نصيًا داخل الكاتجوري المختار وربط كل لوق برومه. هل تريد المتابعة؟')">🛠️ إنشاء وربط كل رومات اللوقات</button></div>
     <p class="hint">كل نوع له مفتاح تشغيل وروم مستقل. عند ترك النوع معطّلًا أو بدون روم، لن يرسل هذا النوع إلى الروم العام أو إلى أي روم آخر.</p>
     <div class="form-grid"><label>🔎 البحث عن نوع لوق<input id="audit-log-search" type="search" placeholder="مثال: دخول، حظر، صوتي..."></label><label>🗂️ تصفية حسب الفئة<select id="audit-log-filter"><option value="">كل الفئات</option>${[...new Set(AUDIT_LOG_TYPES.map(x=>x.group))].map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}</select></label></div>
     <div class="form-grid audit-log-grid">${AUDIT_LOG_TYPES.map(item=>{const setting=cfg.auditLogs?.[item.key]||{};const selected=String(setting.channelId||'');const selectedChannel=channels.find(c=>String(c.id)===selected&&[0,5].includes(Number(c.type)));return `<div class="config-card audit-log-card" data-audit-log-card data-audit-log-name="${esc(item.label.toLowerCase())}" data-audit-log-group="${esc(item.group)}"><h4>${item.emoji} ${item.label}</h4><label><input type="checkbox" name="auditLog_enabled_${item.key}" ${setting.enabled===true?'checked':''}> تشغيل هذا النوع</label><label>روم اللوق<select name="auditLog_channel_${item.key}">${textChannels(channels,selected)}</select></label><small>${selected?`الروم المحدد: ${selectedChannel?'#'+esc(selectedChannel.name):'غير موجود في قائمة رومات هذا السيرفر؛ اختر رومًا صالحًا.'}`:'لم يتم اختيار روم.'}</small></div>`;}).join('')}</div>
@@ -1349,6 +1350,37 @@ res.send(layout('Dashboard', `
 } catch(e) {
   next(e);
 }});
+
+  app.post('/dashboard/:guildId/audit-logs/create-channels',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{
+    const gid=String(req.params.guildId),categoryId=String(req.body.auditLogsCategoryId||'').trim();
+    const bundle=await getGuildBundle(gid,true);
+    if(!bundle?.guild)throw new Error('تعذر قراءة بيانات السيرفر من Discord.');
+    const category=(bundle.channels||[]).find(c=>String(c.id)===categoryId&&Number(c.type)===4);
+    if(!category) return res.status(400).send(layout('اختيار غير صالح','<main class="panel"><h2>❌ اختر كاتجوري صحيحًا من نفس السيرفر.</h2><a class="btn" href="/dashboard/'+esc(gid)+'">رجوع للداشبورد</a></main>',req.user));
+    const logTypes=AUDIT_LOG_TYPES;
+    const existing=new Map((bundle.channels||[]).filter(c=>String(c.parent_id||'')===categoryId&&[0,5].includes(Number(c.type))).map(c=>[String(c.name||'').toLowerCase(),c]));
+    const cfg=await store.getConfig(gid);cfg.auditLogs={...(cfg.auditLogs||{})};
+    const results=[];let created=0,reused=0,failed=0;
+    const channelName=item=>String(item.label||item.key).normalize('NFKC').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,'').trim().toLowerCase().replace(/[^\p{L}\p{N}-]+/gu,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,90)||String(item.key).replace(/_/g,'-');
+    for(const item of logTypes){
+      const name=channelName(item);let channel=existing.get(name.toLowerCase());
+      try{
+        if(channel){reused++;channel._zombiReused=true;}
+        else{
+          channel=await botFetch(`/guilds/${gid}/channels`,{method:'POST',body:JSON.stringify({name,type:0,parent_id:categoryId,reason:'ZOMBI Dashboard: إنشاء رومات Audit Logs'})});
+          if(!channel?.id)throw new Error('Discord لم يُرجع معرّف الروم.');
+          existing.set(name.toLowerCase(),channel);created++;
+          // Avoid burst requests; Discord API rate limits are still handled by botFetch.
+          await new Promise(resolve=>setTimeout(resolve,350));
+        }
+        cfg.auditLogs[item.key]={...(cfg.auditLogs[item.key]||{}),enabled:true,channelId:String(channel.id),updatedAt:Date.now()};
+        results.push(`✅ #${name} — ${channel.id}${channel._zombiReused?' (موجود مسبقًا)':''}`);
+      }catch(e){failed++;results.push(`❌ #${name} — ${String(e?.message||'تعذر إنشاء الروم').slice(0,180)}`);}
+    }
+    await store.saveConfig(gid,cfg);
+    const content=`<main class="panel" style="max-width:1000px;margin:24px auto"><h1>🧾 نتيجة إنشاء رومات اللوقات</h1><p>السيرفر: ${esc(bundle.guild.name||gid)} • الكاتجوري: ${esc(category.name||'')} </p><p>تم إنشاء ${created} رومًا جديدًا، وإعادة استخدام ${reused} رومًا موجودًا، وتعذر ${failed}.</p><p class="hint">تم حفظ وربط الأنواع الناجحة في إعدادات هذا السيرفر فقط. تأكد أن البوت يملك Manage Channels وأن صلاحيات الكاتجوري تسمح له بإرسال الرسائل والتضمينات.</p><div class="config-card"><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(results.join('\n'))}</pre></div><a class="btn primary" href="/dashboard/${esc(gid)}">العودة إلى الداشبورد</a> <a class="btn" href="/dashboard/${esc(gid)}/audit-history">سجل الأحداث</a></main>`;
+    res.send(layout('نتيجة إنشاء اللوقات',content,req.user));
+  }catch(e){next(e);}});
 
   app.get('/dashboard/:guildId/audit-history',requireLogin,requireGuildAccess,async(req,res,next)=>{try{
     const gid=String(req.params.guildId),all=await store.data(gid,'audit-log-history.json',[]),rows=Array.isArray(all)?all:[];
