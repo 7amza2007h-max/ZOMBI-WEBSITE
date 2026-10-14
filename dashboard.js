@@ -286,7 +286,7 @@
     text = String(text || '');
     if (text.includes('إدارة الرتب والصلاحيات المتقدمة')) return 'permissions';
     if (text.includes('⚠️ التحذيرات')) return 'warnings';
-    if (text.includes('سجل السيرفر Log') || text.includes('مركز لوقات ZOMBI') || text.includes('لوقات ZOMBI')) return 'logs';
+    if (text.includes('سجل السيرفر Log') || text.includes('مركز لوقات ZOMBI') || text.includes('لوقات ZOMBI') || text.includes('سجل الأحداث الاحترافي')) return 'logs';
     if (text.includes('تحديد كل الرومات')) return 'overview';
     if (text.includes('نظام الترحيب')) return 'welcome';
     if (text.includes('تشغيل وإيقاف')) return 'overview';
