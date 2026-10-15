@@ -1707,8 +1707,10 @@ res.send(layout('Dashboard', `
           type:String(req.body[`suggestionLabel_${idx}`]||`type-${idx+1}`).slice(0,40),
           emoji:String(req.body[`suggestionEmoji_${idx}`]||'💡').slice(0,16),
           color:/^#[0-9a-f]{6}$/i.test(String(req.body[`suggestionColor_${idx}`]||''))?String(req.body[`suggestionColor_${idx}`]):'#E11D48',
-          bannerUrl:String(req.body[`suggestionBannerUrl_${idx}`]||'').trim().slice(0,2000),
-          lineUrl:String(req.body[`suggestionLineUrl_${idx}`]||'').trim().slice(0,2000),
+          // Keep previously saved URLs if this dashboard build omits these fields
+          // from the POST. If the fields are present but empty, allow the owner to clear them.
+          bannerUrl:String(has(`suggestionBannerUrl_${idx}`)?(req.body[`suggestionBannerUrl_${idx}`]||''):(cfg.suggestions?.channels?.find(x=>String(x.channelId)===String(req.body[`suggestionChannelId_${idx}`]||''))?.bannerUrl||'')).trim().slice(0,2000),
+          lineUrl:String(has(`suggestionLineUrl_${idx}`)?(req.body[`suggestionLineUrl_${idx}`]||''):(cfg.suggestions?.channels?.find(x=>String(x.channelId)===String(req.body[`suggestionChannelId_${idx}`]||''))?.lineUrl||'')).trim().slice(0,2000),
           enabled:Boolean(req.body[`suggestionEnabled_${idx}`])
         })).filter(r=>/^\d{15,25}$/.test(r.channelId)).slice(0,20)
       };
