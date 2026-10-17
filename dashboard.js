@@ -445,7 +445,7 @@
   moveControl('brandColor', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('customName', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('customFooter', 'premium', 'هوية وتصميم هذا السيرفر');
-  moveControl('botNickname', 'premium', 'هوية وتصميم هذا السيرفر');
+  moveControl('botNickname', 'overview', 'اسم البوت داخل هذا السيرفر');
   moveControl('avatarUrl', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('bannerUrl', 'premium', 'هوية وتصميم هذا السيرفر');
   moveControl('botBio', 'premium', 'هوية وتصميم هذا السيرفر');
