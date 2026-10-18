@@ -196,10 +196,24 @@ async function botFetch(route,options={}){
       if(Number(e?.status)!==429)throw e;
       const waitMs=Math.ceil(Number(e.retryAfter||0)*1000);
       if(waitMs<=0)throw e;
-      // Discord rejected the request: wait for its stated cooldown and retry once.
-      if(waitMs>30000){e.message=`Discord API 429: انتظر ${Math.ceil(waitMs/1000)} ثانية قبل إعادة المحاولة.`;throw e;}
-      await sleepMs(waitMs+250);
-      result=await performBotRequest(route,options);
+      // Respect Discord's actual retry_after value, including cooldowns longer than 30 seconds.
+      // Never retry before Discord's requested time; if the cooldown is unusually long, return
+      // a clear message rather than flooding Discord with more requests.
+      const maxWaitMs=15*60*1000;
+      if(waitMs>maxWaitMs){
+        e.message=`Discord API 429: Discord طلب الانتظار ${Math.ceil(waitMs/1000)} ثانية. أعد المحاولة بعد انتهاء المدة.`;
+        throw e;
+      }
+      await sleepMs(waitMs+500);
+      try {
+        result=await performBotRequest(route,options);
+      } catch(retryError) {
+        if(Number(retryError?.status)===429){
+          const seconds=Math.max(1,Math.ceil(Number(retryError.retryAfter||30)));
+          retryError.message=`Discord API 429: ما زال حد الطلبات فعالًا. انتظر ${seconds} ثانية ثم حاول مرة واحدة.`;
+        }
+        throw retryError;
+      }
     }
     invalidateBotCaches(route);return result;
   }
