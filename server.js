@@ -191,7 +191,17 @@ async function performBotRequest(route,options={}){
 async function botFetch(route,options={}){
   const method=String(options.method||'GET').toUpperCase(),key=`${method}:${route}`;
   if(method!=='GET'){
-    const result=await performBotRequest(route,options);invalidateBotCaches(route);return result;
+    let result;
+    try{result=await performBotRequest(route,options);}catch(e){
+      if(Number(e?.status)!==429)throw e;
+      const waitMs=Math.ceil(Number(e.retryAfter||0)*1000);
+      if(waitMs<=0)throw e;
+      // Discord rejected the request: wait for its stated cooldown and retry once.
+      if(waitMs>30000){e.message=`Discord API 429: انتظر ${Math.ceil(waitMs/1000)} ثانية قبل إعادة المحاولة.`;throw e;}
+      await sleepMs(waitMs+250);
+      result=await performBotRequest(route,options);
+    }
+    invalidateBotCaches(route);return result;
   }
   const now=Date.now(),cached=botGetCache.get(key);
   if(cached&&cached.until>now)return cached.data;
@@ -935,12 +945,16 @@ function toV2EditPayloadRaw(payload){const out={...payload};delete out.flags;del
 async function sendPanelMessage(channelId,messageId,payload){
   if(!channelId)throw new Error('حدد الروم أولًا.');
   if(messageId){
-    try{
-      const old=await botFetch(`/channels/${channelId}/messages/${messageId}`);
+    let old=null;
+    try{old=await botFetch(`/channels/${channelId}/messages/${messageId}`);}catch(e){
+      // Recreate only if the saved message is actually missing. Never hide 429 or permission errors.
+      if(Number(e?.status)!==404 && Number(e?.discord?.code)!==10008)throw e;
+    }
+    if(old){
       const isV2=Boolean(Number(old?.flags||0)&32768);
       if(isV2)return await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'PATCH',body:JSON.stringify(toV2EditPayloadRaw(payload))});
-      await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'DELETE'}).catch(()=>null);
-    }catch{}
+      await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'DELETE'});
+    }
   }
   return botFetch(`/channels/${channelId}/messages`,{method:'POST',body:JSON.stringify(payload)});
 }
@@ -1101,7 +1115,7 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
     const payload={embeds:[embed],components:[{type:1,components:[{type:3,custom_id:'zombi_rules_select',placeholder:'📜 اختر نوع القوانين...',min_values:1,max_values:1,options}]}],allowed_mentions:{parse:[]}};
     const m=await sendOrUpdate(cfg.rules.channelId,cfg.rules.panelMessageId,payload);cfg.rules.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;
   }
-  if(which==='store'){if(!featureAllowed(site,cfg,'store'))throw new Error('Store غير متاح لهذه الخطة.');const payload=rawStorePanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store.panelMessageId,payload);cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
+  if(which==='store'){if(!featureAllowed(site,cfg,'store'))throw new Error('Store غير متاح لهذه الخطة.');const hadPanel=Boolean(cfg.store?.panelMessageId);const payload=rawStorePanelPayload(cfg,site);const m=await sendOrUpdate(cfg.channels.storePanel,cfg.store.panelMessageId,payload);cfg.store.panelMessageId=m.id;await store.saveConfig(guildId,cfg);if(!hadPanel)await botFetch(`/channels/${cfg.channels.storePanel}/pins/${m.id}`,{method:'PUT'}).catch(()=>{});return;}
   if(which==='name'){if(!cfg.nameChange?.enabled)throw new Error('فعّل نظام تغيير الاسم أولًا.');if(!cfg.channels.nameChangePanel)throw new Error('حدد روم لوحة تغيير الاسم أولًا.');const hex=parseInt(String(cfg.nameChange.color||'#8B5CF6').replace('#',''),16);const embed={color:Number.isFinite(hex)?hex:0x8B5CF6,title:cfg.nameChange.title||'تغيير اسمك في السيرفر',description:cfg.nameChange.description||'اضغط الزر لتغيير اسمك.',footer:{text:'ZOMBI • NAME CENTER'}};if(cfg.nameChange.bannerUrl)embed.image={url:cfg.nameChange.bannerUrl};const payload={embeds:[embed],components:[{type:1,components:[{type:2,style:1,custom_id:'zombi_name_change_open',label:String(cfg.nameChange.buttonLabel||'تغيير اسمي').slice(0,80),emoji:{name:String(cfg.nameChange.buttonEmoji||'✏️')}}]}]};const m=await sendOrUpdate(cfg.channels.nameChangePanel,cfg.nameChange.panelMessageId,payload);cfg.nameChange.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='roles'){if(!featureAllowed(site,cfg,'rolePanel'))throw new Error('Self Roles غير متاحة لهذه الخطة.');const items=(cfg.rolePanel.items||[]).slice(0,limitFor(site,cfg,'selfRoles'));if(!items.length)throw new Error('أضف رتب Self Roles أولًا.');const roleMap=new Map(bundle.roles.map(r=>[r.id,r])),styleMap={Primary:1,Secondary:2,Success:3,Danger:4},rows=[];for(let i=0;i<items.length;i+=5)rows.push({type:1,components:items.slice(i,i+5).map(x=>({type:2,style:styleMap[x.style]||2,custom_id:`pub:role:${x.roleId}`,label:String(x.label||roleMap.get(x.roleId)?.name||'Role').slice(0,80),...(x.emoji?{emoji:{name:x.emoji}}:{})}))});const payload={embeds:[{color:color(cfg),title:cfg.rolePanel.title,description:cfg.rolePanel.description,footer:{text:cfg.rolePanel.footer||'ZOMBI • ROLE CENTER'}}],components:rows.slice(0,5)};const m=await sendOrUpdate(cfg.channels.rolePanel,cfg.rolePanel.panelMessageId,payload);cfg.rolePanel.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
   if(which==='guide'){if(!featureAllowed(site,cfg,'serverGuide'))throw new Error('دليل السيرفر غير متاح لهذه الخطة.');if(!cfg.channels?.serverGuidePanel)throw new Error('حدد روم لوحة دليل السيرفر أولًا.');const payload=rawGuidePanelPayload(cfg,guildId);const m=await sendOrUpdate(cfg.channels.serverGuidePanel,cfg.serverGuide?.panelMessageId,payload);cfg.serverGuide.panelMessageId=m.id;await store.saveConfig(guildId,cfg);return;}
