@@ -94,6 +94,7 @@
     nav.appendChild(group);
   });
 
+  const navLinks = [...nav.querySelectorAll('a[data-section]')];
   main.className = 'z-dashboard-shell';
   main.append(content, sidebar);
 
@@ -533,9 +534,16 @@
     settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
   }
 
-  const allPostForms = () => [...content.querySelectorAll('form[method="post" i]')];
+  // Cache the static form list once; scanning every form on each sidebar click
+  // was needlessly expensive on this large dashboard.
+  const postForms = [...content.querySelectorAll('form[method="post" i]')];
+  let activeSection = 'overview';
   const setReturnSection = section => {
-    allPostForms().forEach(form => {
+    activeSection = section;
+    // Forms only need the return section when submitted, not on every navigation.
+  };
+  postForms.forEach(form => {
+    form.addEventListener('submit', () => {
       let input = form.querySelector('input[name="_returnSection"]');
       if (!input) {
         input = document.createElement('input');
@@ -543,9 +551,9 @@
         input.name = '_returnSection';
         form.appendChild(input);
       }
-      input.value = section;
-    });
-  };
+      input.value = activeSection;
+    }, true);
+  });
 
   const showNode = (el, show) => {
     if (!el) return;
@@ -566,6 +574,8 @@
     'staff-stats': ['staff-duty', 'logs', 'members']
   };
 
+  // Snapshot section containers after the dashboard's dynamic controls are built.
+  const pageNodes = [...content.querySelectorAll('[data-z-page]')];
   function render(section) {
     if (!pageDefs[section]) section = 'overview';
     const def = pageDefs[section];
@@ -591,7 +601,7 @@
       headingShortcuts.appendChild(link);
     });
 
-    nav.querySelectorAll('a[data-section]').forEach(a => a.classList.toggle('active', a.dataset.section === section));
+    navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === section));
 
     if (settingsForm) {
       const hasSettings = settingsGroups.has(section);
@@ -611,7 +621,7 @@
       if (profileBtn) profileBtn.classList.toggle('z-section-hidden', section !== 'overview');
     }
 
-    [...content.querySelectorAll('[data-z-page]')].forEach(el => {
+    pageNodes.forEach(el => {
       if (el === settingsForm || el.closest('.z-settings-hub')) return;
       showNode(el, el.dataset.zPage === section);
     });
