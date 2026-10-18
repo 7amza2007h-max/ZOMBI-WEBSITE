@@ -534,26 +534,16 @@
     settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
   }
 
-  // Cache the static form list once; scanning every form on each sidebar click
-  // was needlessly expensive on this large dashboard.
-  const postForms = [...content.querySelectorAll('form[method="post" i]')];
+  // The section is only needed when a form submits. Avoid walking every form on
+  // every sidebar click, which becomes expensive on this large dashboard DOM.
   let activeSection = 'overview';
-  const setReturnSection = section => {
-    activeSection = section;
-    // Forms only need the return section when submitted, not on every navigation.
-  };
-  postForms.forEach(form => {
-    form.addEventListener('submit', () => {
-      let input = form.querySelector('input[name="_returnSection"]');
-      if (!input) {
-        input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = '_returnSection';
-        form.appendChild(input);
-      }
-      input.value = activeSection;
-    }, true);
-  });
+  const postForms = [...content.querySelectorAll('form[method="post" i]')];
+  const setReturnSection = section => { activeSection = section; };
+  postForms.forEach(form => form.addEventListener('submit', () => {
+    let input = form.querySelector('input[name="_returnSection"]');
+    if (!input) { input = document.createElement('input'); input.type = 'hidden'; input.name = '_returnSection'; form.appendChild(input); }
+    input.value = activeSection;
+  }, true));
 
   const showNode = (el, show) => {
     if (!el) return;
@@ -574,7 +564,6 @@
     'staff-stats': ['staff-duty', 'logs', 'members']
   };
 
-  // Snapshot section containers after the dashboard's dynamic controls are built.
   const pageNodes = [...content.querySelectorAll('[data-z-page]')];
   function render(section) {
     if (!pageDefs[section]) section = 'overview';

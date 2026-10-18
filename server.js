@@ -188,32 +188,30 @@ async function performBotRequest(route,options={}){
     throw e;
   }
 }
-// Discord REST coordination: serialize mutations and honour Discord's actual retry_after.
-// This prevents dashboard button bursts from creating overlapping writes against the same bot.
+// Discord REST request coordination. Mutations are serialized; all requests respect
+// Discord's retry_after instead of immediately repeating a limited route.
 let botMutationQueue=Promise.resolve();
 let botMutationLastAt=0;
-const BOT_MUTATION_MIN_GAP_MS=180;
-function discordRetryDelayMs(error){
-  const raw=Number(error?.retryAfter??error?.discord?.retry_after??error?.discord?.retryAfter??0);
-  return Number.isFinite(raw)&&raw>0?Math.ceil(raw*1000):1000;
+const BOT_MUTATION_MIN_GAP_MS=350;
+function botRetryAfterMs(error){
+  const n=Number(error?.retryAfter??error?.discord?.retry_after??error?.discord?.retryAfter??0);
+  return Number.isFinite(n)&&n>0?Math.ceil(n*1000):1000;
 }
-async function performBotRequestWithRetry(route,options={},maxAttempts=3){
-  let lastError;
-  for(let attempt=0;attempt<maxAttempts;attempt++){
+async function performBotRequestRetry(route,options={},attempts=2){
+  let last;
+  for(let attempt=0;attempt<attempts;attempt++){
     try{return await performBotRequest(route,options);}
     catch(error){
-      lastError=error;
-      if(Number(error?.status)!==429||attempt>=maxAttempts-1)throw error;
-      const waitMs=discordRetryDelayMs(error);
-      error.discordRoute=String(route).slice(0,180);
-      if(waitMs>15*60*1000){
-        error.retryAfter=Math.ceil(waitMs/1000);
-        throw error;
-      }
-      await sleepMs(waitMs+250);
+      last=error;
+      if(Number(error?.status)!==429||attempt>=attempts-1)throw error;
+      const wait=botRetryAfterMs(error);
+      // Keep web requests bounded. Long global limits should be surfaced with the
+      // actual wait duration rather than holding a dashboard request open for minutes.
+      if(wait>30_000){error.retryAfter=Math.ceil(wait/1000);error.discordRoute=String(route).slice(0,180);throw error;}
+      await sleepMs(wait+300);
     }
   }
-  throw lastError;
+  throw last;
 }
 async function queuedBotMutation(route,options){
   let release;
@@ -223,7 +221,7 @@ async function queuedBotMutation(route,options){
   try{
     const gap=BOT_MUTATION_MIN_GAP_MS-(Date.now()-botMutationLastAt);
     if(gap>0)await sleepMs(gap);
-    try{return await performBotRequestWithRetry(route,options,3);}
+    try{return await performBotRequestRetry(route,options,2);}
     catch(error){error.discordRoute=String(route).slice(0,180);throw error;}
     finally{botMutationLastAt=Date.now();}
   }finally{release();}
@@ -241,7 +239,7 @@ async function botFetch(route,options={}){
   const task=(async()=>{
     try{
       let result;
-      try{result=await performBotRequestWithRetry(route,options,3);}
+      try{result=await performBotRequestRetry(route,options,2);}
       catch(error){
         if(Number(error?.status)===429&&cached&&cached.staleUntil>now)return cached.data;
         error.discordRoute=String(route).slice(0,180);
@@ -346,9 +344,10 @@ async function getGuildBundle(id,force=false){
   if(!force){
     stored=await readStoredGuildBundle(gid);
     if(stored&&Number(stored.at||0)>now-15*60_000){
-      const emojis=await botFetch(`/guilds/${gid}/emojis`).catch(()=>stored.emojis||[]);
-      const data={guild:stored.guild,channels:stored.channels,roles:stored.roles,emojis:Array.isArray(emojis)?emojis:[],_snapshot:true};
-      guildBundleCache.set(gid,{data,until:now+60_000,staleUntil:now+30*60_000});
+      // A fresh snapshot is sufficient for rendering the dashboard. Avoid an API
+      // request on every server switch; refresh naturally after the snapshot expires.
+      const data={guild:stored.guild,channels:stored.channels,roles:stored.roles,emojis:Array.isArray(stored.emojis)?stored.emojis:[],_snapshot:true};
+      guildBundleCache.set(gid,{data,until:now+2*60_000,staleUntil:now+30*60_000});
       return data;
     }
   }
@@ -436,7 +435,7 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.2.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.2.0"></script><script defer src="/site/role-manager.js?v=16.2.0"></script><script defer src="/site/upgrade.js?v=16.2.0"></script><script defer src="/site/operations-ui.js?v=16.2.0"></script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.3.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.3.0"></script><script defer src="/site/role-manager.js?v=16.3.0"></script><script defer src="/site/upgrade.js?v=16.3.0"></script><script defer src="/site/operations-ui.js?v=16.3.0"></script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_BOT_CLIENT_ID||process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="z-command-showcase" aria-labelledby="z-command-showcase-title"><div class="z-showcase-copy"><span class="z-showcase-kicker"><i></i> ZOMBI CYBER COMMAND CENTER</span><h2 id="z-command-showcase-title">مش مجرد بوت.<br><b>مركز قيادة مجتمعك.</b></h2><p>واجهة تجمع إدارة السيرفرات، الحماية، التذاكر، الألعاب، الرتب، والاقتصاد في مكان واحد. كل سيرفر له إعداداته الخاصة.</p><div class="z-showcase-points"><span><b>01</b> إدارة مستقلة لكل سيرفر</span><span><b>02</b> أدوات منظمة حسب النظام</span><span><b>03</b> واجهة تدعم الجوال</span></div><div class="actions"><a class="btn primary z-btn-energy" href="/dashboard">افتح مركز التحكم <span aria-hidden="true">↗</span></a><a class="btn z-btn-ghost" href="/demo">استكشف التجربة</a></div></div><a class="z-showcase-art" href="/demo" aria-label="استكشف تصميم مركز تحكم ZOMBI"><img src="/assets/zombi-command-center-showcase.png" alt="تصور بصري لواجهة ZOMBI Cyber Command Center مع لوحات إدارة السيرفرات والأمان والتذاكر والألعاب" loading="lazy"><span class="z-art-tag"><i></i> COMMAND INTERFACE</span><span class="z-art-corner" aria-hidden="true">Z / 01</span></a><div class="z-showcase-orbit" aria-hidden="true"></div></section><section class="features"><div class="z-section-intro"><span class="z-showcase-kicker"><i></i> SYSTEM MODULES</span><h2>كل نظام بمكانه الصحيح</h2><p>أدوات واضحة بدل لوحة مزدحمة — اختَر النظام وركّز على إعداداته.</p></div><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
@@ -974,46 +973,33 @@ function makeDashboardPanelV2(payload,centerName='ZOMB • CONTROL CENTER',marke
   return{components:[{type:17,accent_color:accent,id:panelMarkerId(marker),components:parts}],flags:32768,allowed_mentions:payload?.allowed_mentions||{parse:[]}};
 }
 function toV2EditPayloadRaw(payload){const out={...payload};delete out.flags;delete out.content;delete out.embeds;return out;}
-function isDiscordMissingMessage(error){
-  return Number(error?.status)===404||Number(error?.discord?.code)===10008;
+function isDiscordMessageMissing(error){
+  return Number(error?.status)===404||Number(error?.discord?.code)===10008||Number(error?.discord?.code)===10003;
 }
-function isDiscordPayloadError(error){
+function isDiscordPayloadValidationError(error){
   return Number(error?.status)===400||Number(error?.discord?.code)===50035;
 }
 async function sendPanelMessage(channelId,messageId,payload,legacyPayload=null){
   if(!channelId)throw new Error('حدد الروم أولًا.');
-  const post=body=>botFetch(`/channels/${channelId}/messages`,{method:'POST',body:JSON.stringify(body)});
-  const patch=(id,body)=>botFetch(`/channels/${channelId}/messages/${id}`,{method:'PATCH',body:JSON.stringify(body)});
+  const call=(route,method,body)=>botFetch(route,{method,body:JSON.stringify(body)});
+  const post=body=>call(`/channels/${channelId}/messages`,'POST',body);
+  const patch=(id,body)=>call(`/channels/${channelId}/messages/${id}`,'PATCH',body);
   const isV2=Boolean(Number(payload?.flags||0)&32768);
   if(messageId){
-    // Do not swallow 429 or delete a valid panel after a transient read/update failure.
-    // A PATCH is attempted first; only a genuinely missing message is recreated.
     try{
-      const existing=await botFetch(`/channels/${channelId}/messages/${messageId}`);
-      if(Boolean(Number(existing?.flags||0)&32768)){
-        try{return await patch(messageId,toV2EditPayloadRaw(payload));}
-        catch(error){
-          if(isDiscordMissingMessage(error))return post(payload);
-          if(isV2&&legacyPayload&&isDiscordPayloadError(error)){
-            try{return await patch(messageId,legacyPayload);}
-            catch(editError){if(isDiscordMissingMessage(editError))return post(legacyPayload);throw editError;}
-          }
-          throw error;
-        }
-      }
-      // Legacy Discord messages cannot safely be converted to Components V2 in-place.
-      // Delete only after the lookup succeeded and then create the new-format panel.
-      await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'DELETE'});
+      // PATCH directly: GET-before-PATCH added latency and an unnecessary API hit.
+      return await patch(messageId,isV2?toV2EditPayloadRaw(payload):payload);
     }catch(error){
-      if(isDiscordMissingMessage(error))return post(payload);
+      if(isDiscordMessageMissing(error))return post(payload);
+      if(isV2&&legacyPayload&&isDiscordPayloadValidationError(error)){
+        try{return await patch(messageId,legacyPayload);}
+        catch(editError){if(isDiscordMessageMissing(editError))return post(legacyPayload);throw editError;}
+      }
       throw error;
     }
   }
   try{return await post(payload);}
-  catch(error){
-    if(isV2&&legacyPayload&&isDiscordPayloadError(error))return post(legacyPayload);
-    throw error;
-  }
+  catch(error){if(isV2&&legacyPayload&&isDiscordPayloadValidationError(error))return post(legacyPayload);throw error;}
 }
 
 function legacyHomeGamesPanelPayload(cfg){
@@ -2886,8 +2872,8 @@ res.send(layout('Dashboard', `
 
   app.get('/health',async(_req,res)=>{const hb=await getRecentBotHeartbeat().catch(()=>null);res.json({ok:true,database:await store.health(),uptime:process.uptime(),discordProxy:Boolean(oauthProxyUrl()),botHeartbeat:hb?{ready:hb.ready!==false,guildCount:hb.guildCount||0,ageMs:Date.now()-Number(hb.at||0)}:null});});
   app.use((err,req,res,_next)=>{
-    const status=Number(err?.status||0);console.error(JSON.stringify({event:'request_error',status:Number.isFinite(status)?status:500,method:String(req.method||'').slice(0,12),path:String(req.path||'').slice(0,120),discordRoute:String(err?.discordRoute||'').slice(0,180),discordCode:Number(err?.discord?.code||0)||undefined,retryAfter:Number(err?.retryAfter||0)||undefined,message:String(err?.message||'').slice(0,240),at:new Date().toISOString()}));
-    if(status===429){const seconds=Math.max(1,Math.ceil(Number(err?.retryAfter||30)));res.set('Retry-After',String(seconds));const route=String(err?.discordRoute||'').replace(/[<>]/g,'');return res.status(429).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>لم يكتمل الطلب لأن Discord فرض حدًا مؤقتًا. انتظر ${seconds} ثانية ثم أعد المحاولة مرة واحدة.</p>${route?`<p class="hint">الطلب: <code>${esc(route)}</code></p>`:''}<a class="btn primary" href="${esc(req.originalUrl||'/dashboard')}">إعادة المحاولة</a><a class="btn" href="/dashboard">السيرفرات</a></section>`,req.user));}
+    const status=Number(err?.status||0);console.error(JSON.stringify({event:'request_error',status:Number.isFinite(status)?status:500,method:String(req.method||'').slice(0,12),path:String(req.path||'').slice(0,120),discordRoute:String(err?.discordRoute||'').slice(0,180),discordCode:Number(err?.discord?.code||0)||undefined,retryAfter:Number(err?.retryAfter||0)||undefined,message:String(err?.message||'').slice(0,220),at:new Date().toISOString()}));
+    if(status===429){const seconds=Math.max(1,Math.ceil(Number(err?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>الداشبورد أوقف تكرار الطلبات تلقائيًا. انتظر تقريبًا ${seconds} ثانية ثم أعد فتح الصفحة مرة واحدة.</p><a class="btn primary" href="${esc(req.originalUrl||'/dashboard')}">إعادة المحاولة</a><a class="btn" href="/dashboard">السيرفرات</a></section>`,req.user));}
     if(status===401)return res.status(503).send(layout('Discord Authorization',`<section class="login"><h1>🔑 فشل توثيق Discord</h1><p>تأكد من BOT_TOKEN وبيانات Discord OAuth. إذا كان OAUTH_PROXY_URL مفعّلًا فالنسخة الجديدة تدعم المفتاح اليدوي أو التوثيق المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع</a></section>`,req.user));
     res.status(500).send(layout('Error','<section class="login"><h1>❌ حدث خطأ</h1><p>تعذر إكمال الطلب. حاول مرة أخرى لاحقًا.</p></section>',req.user));
   });
