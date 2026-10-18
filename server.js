@@ -932,17 +932,48 @@ function makeDashboardPanelV2(payload,centerName='ZOMB • CONTROL CENTER',marke
   return{components:[{type:17,accent_color:accent,id:panelMarkerId(marker),components:parts}],flags:32768,allowed_mentions:payload?.allowed_mentions||{parse:[]}};
 }
 function toV2EditPayloadRaw(payload){const out={...payload};delete out.flags;delete out.content;delete out.embeds;return out;}
-async function sendPanelMessage(channelId,messageId,payload){
+async function sendPanelApi(route,options){
+  try{return await botFetch(route,options);}
+  catch(e){
+    if(Number(e?.status)!==429)throw e;
+    const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));
+    // Do not hammer Discord. Retry once only when the wait is reasonably short.
+    if(seconds>120){
+      const limited=new Error(`Discord API 429: انتظر ${seconds} ثانية حسب طلب Discord ثم أعد إرسال اللوحة.`);
+      limited.status=429;limited.retryAfter=seconds;throw limited;
+    }
+    await sleepMs(seconds*1000+350);
+    return await botFetch(route,options);
+  }
+}
+function isDiscordMessageMissing(e){
+  return Number(e?.status)===404 || Number(e?.discord?.code)===10008 || Number(e?.discord?.code)===10003;
+}
+function isDiscordPayloadValidationError(e){
+  return Number(e?.status)===400 || Number(e?.discord?.code)===50035;
+}
+async function sendPanelMessage(channelId,messageId,payload,legacyPayload=null){
   if(!channelId)throw new Error('حدد الروم أولًا.');
+  const post=async(body)=>sendPanelApi(`/channels/${channelId}/messages`,{method:'POST',body:JSON.stringify(body)});
+  const patch=async(id,body)=>sendPanelApi(`/channels/${channelId}/messages/${id}`,{method:'PATCH',body:JSON.stringify(body)});
+  const isV2=Boolean(Number(payload?.flags||0)&32768);
   if(messageId){
     try{
-      const old=await botFetch(`/channels/${channelId}/messages/${messageId}`);
-      const isV2=Boolean(Number(old?.flags||0)&32768);
-      if(isV2)return await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'PATCH',body:JSON.stringify(toV2EditPayloadRaw(payload))});
-      await botFetch(`/channels/${channelId}/messages/${messageId}`,{method:'DELETE'}).catch(()=>null);
-    }catch{}
+      return await patch(messageId,isV2?toV2EditPayloadRaw(payload):payload);
+    }catch(e){
+      if(isDiscordMessageMissing(e))return post(payload);
+      if(isV2&&legacyPayload&&isDiscordPayloadValidationError(e)){
+        try{return await patch(messageId,legacyPayload);}
+        catch(editError){if(isDiscordMessageMissing(editError))return post(legacyPayload);throw editError;}
+      }
+      throw e;
+    }
   }
-  return botFetch(`/channels/${channelId}/messages`,{method:'POST',body:JSON.stringify(payload)});
+  try{return await post(payload);}
+  catch(e){
+    if(isV2&&legacyPayload&&isDiscordPayloadValidationError(e))return post(legacyPayload);
+    throw e;
+  }
 }
 
 function legacyHomeGamesPanelPayload(cfg){
@@ -1080,9 +1111,10 @@ async function sendPanel(which,guildId,bundle,options={}){const [cfg,site]=await
     const centers={bank:'ZOMB • BANK CENTER',games:'ZOMB • GAMES CENTER',tickets:'ZOMB • SUPPORT CENTER',store:'ZOMB • STORE CENTER',roles:'ZOMB • ROLE CENTER',guide:'ZOMB • SERVER GUIDE',name:'ZOMB • NAME CENTER',voice:'ZOMB • VOICE CENTER'};
     const panelBrand=String(bundle?.guild?.name||cfg?.branding?.customName||'Server').trim().slice(0,80)||'Server';
     const center=which==='bank'&&String(cfg.bank?.panelCenterName||'').trim()?String(cfg.bank.panelCenterName).trim().slice(0,120):(centers[which]||'ZOMB • CONTROL CENTER').replace(/^ZOMB/i,panelBrand);
+    const legacyPayload=payload;
     payload=makeDashboardPanelV2(payload,center,`ZOMB-${String(which||'panel').toUpperCase()}-PANEL-V2`);
     if(options.preview){const e=new Error('PREVIEW');e.previewPayload=payload;throw e;}
-    return sendPanelMessage(channelId,messageId,payload);
+    return sendPanelMessage(channelId,messageId,payload,legacyPayload);
   };
   // All guilds, including the original home guild, now use the same guild-scoped panel path.
 
