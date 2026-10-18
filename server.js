@@ -190,31 +190,31 @@ async function performBotRequest(route,options={}){
 }
 async function botFetch(route,options={}){
   const method=String(options.method||'GET').toUpperCase(),key=`${method}:${route}`;
-  if(method!=='GET'){
-    let result;
-    try{result=await performBotRequest(route,options);}catch(e){
-      if(Number(e?.status)!==429)throw e;
-      const waitMs=Math.ceil(Number(e.retryAfter||0)*1000);
-      if(waitMs<=0)throw e;
-      // Respect Discord's actual retry_after value, including cooldowns longer than 30 seconds.
-      // Never retry before Discord's requested time; if the cooldown is unusually long, return
-      // a clear message rather than flooding Discord with more requests.
-      const maxWaitMs=15*60*1000;
-      if(waitMs>maxWaitMs){
-        e.message=`Discord API 429: Discord طلب الانتظار ${Math.ceil(waitMs/1000)} ثانية. أعد المحاولة بعد انتهاء المدة.`;
-        throw e;
+  const requestWith429Retry=async()=>{
+    try{return await performBotRequest(route,options);}
+    catch(firstError){
+      if(Number(firstError?.status)!==429)throw firstError;
+      // Discord's retry_after is expressed in seconds. A missing value gets a conservative fallback.
+      const seconds=Math.max(1,Number(firstError.retryAfter)||30);
+      const waitMs=Math.ceil(seconds*1000)+500;
+      // Avoid leaving a web request hanging indefinitely; tell the user the real cooldown instead.
+      if(waitMs>15*60*1000){
+        firstError.message=`Discord API 429: Discord طلب الانتظار ${Math.ceil(waitMs/1000)} ثانية. أعد المحاولة بعد انتهاء المدة.`;
+        throw firstError;
       }
-      await sleepMs(waitMs+500);
-      try {
-        result=await performBotRequest(route,options);
-      } catch(retryError) {
-        if(Number(retryError?.status)===429){
-          const seconds=Math.max(1,Math.ceil(Number(retryError.retryAfter||30)));
-          retryError.message=`Discord API 429: ما زال حد الطلبات فعالًا. انتظر ${seconds} ثانية ثم حاول مرة واحدة.`;
+      await sleepMs(waitMs);
+      try{return await performBotRequest(route,options);}
+      catch(secondError){
+        if(Number(secondError?.status)===429){
+          const retrySeconds=Math.max(1,Math.ceil(Number(secondError.retryAfter)||30));
+          secondError.message=`Discord API 429: ما زال حد الطلبات فعالًا. انتظر ${retrySeconds} ثانية ثم حاول مرة واحدة.`;
         }
-        throw retryError;
+        throw secondError;
       }
     }
+  };
+  if(method!=='GET'){
+    const result=await requestWith429Retry();
     invalidateBotCaches(route);return result;
   }
   const now=Date.now(),cached=botGetCache.get(key);
@@ -223,15 +223,10 @@ async function botFetch(route,options={}){
   const task=(async()=>{
     try{
       let result;
-      try{result=await performBotRequest(route,options);}catch(e){
-        if(Number(e?.status)===429){
-          const waitMs=Math.ceil(Number(e.retryAfter||0)*1000);
-          if(waitMs>0&&waitMs<=4500){await sleepMs(waitMs+150);result=await performBotRequest(route,options);}
-          else if(cached&&cached.staleUntil>now)return cached.data;
-          else throw e;
-        }else throw e;
-      }
-      botGetCache.set(key,{data:result,until:Date.now()+botCacheTtl(route),staleUntil:Date.now()+10*60*1000});return result;
+      try{result=await requestWith429Retry();}
+      catch(e){if(Number(e?.status)===429&&cached&&cached.staleUntil>Date.now())return cached.data;throw e;}
+      botGetCache.set(key,{data:result,until:Date.now()+botCacheTtl(route),staleUntil:Date.now()+10*60*1000});
+      return result;
     }finally{botInflight.delete(key);}
   })();
   botInflight.set(key,task);return task;
