@@ -132,7 +132,10 @@ function retryAfterSeconds(response,data){
 }
 function makeDiscordError(response,data,label='Discord API'){
   const e=new Error(data?.message||data?.error_description||data?.error||`${label} ${response?.status||'ERR'}`);
-  e.status=Number(response?.status||0);e.discord=data;e.retryAfter=retryAfterSeconds(response,data);return e;
+  e.status=Number(response?.status||0);e.discord=data;e.retryAfter=retryAfterSeconds(response,data);
+  e.discordGlobal=Boolean(data?.global||String(response?.headers?.get?.('x-ratelimit-global')||'').toLowerCase()==='true');
+  e.discordBucket=String(response?.headers?.get?.('x-ratelimit-bucket')||'');
+  return e;
 }
 async function directBotRequest(route,options={}){
   const token=botToken();
@@ -140,7 +143,7 @@ async function directBotRequest(route,options={}){
   const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',Accept:'application/json',...(options.headers||{})}});
   if(res.status===204)return null;
   const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text?{message:text}:null;}
-  if(!res.ok)throw makeDiscordError(res,data,'Discord API');
+  if(!res.ok){const error=makeDiscordError(res,data,'Discord API');error.discordRoute=String(route).slice(0,180);throw error;}
   return data;
 }
 async function proxyBotRequest(route,options={}){
@@ -153,7 +156,7 @@ async function proxyBotRequest(route,options={}){
     const res=await fetch(proxy.url,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
     const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
     if([401,403].includes(res.status)){lastAuthError=makeDiscordError(res,payload,'ZOMBI Discord Proxy');continue;}
-    if(!res.ok||payload?.ok===false){const e=makeDiscordError(res,payload?.data||payload,'Discord API');e.status=Number(payload?.status||res.status);e.retryAfter=Number(payload?.retry_after||e.retryAfter||0);throw e;}
+    if(!res.ok||payload?.ok===false){const discordData=payload?.data||payload;const e=makeDiscordError(res,discordData,'Discord API');e.status=Number(payload?.status||res.status);e.retryAfter=Number(payload?.retry_after||discordData?.retry_after||e.retryAfter||0);e.discordGlobal=Boolean(payload?.global||discordData?.global||e.discordGlobal);e.discordRoute=String(route).slice(0,180);throw e;}
     return payload?.data??null;
   }
   throw lastAuthError||new Error('تعذر توثيق Discord Proxy.');
@@ -188,27 +191,50 @@ async function performBotRequest(route,options={}){
     throw e;
   }
 }
-// Discord REST request coordination. Mutations are serialized; all requests respect
-// Discord's retry_after instead of immediately repeating a limited route.
+// Discord REST coordination: serialize writes and share rate-limit cooldowns across
+// every dashboard panel. This prevents one 429 from being followed by a burst of
+// requests from other panels/sections using the same bot token.
 let botMutationQueue=Promise.resolve();
 let botMutationLastAt=0;
-const BOT_MUTATION_MIN_GAP_MS=350;
+let botGlobalRateLimitUntil=0;
+const botRouteRateLimits=new Map();
+const BOT_MUTATION_MIN_GAP_MS=500;
 function botRetryAfterMs(error){
   const n=Number(error?.retryAfter??error?.discord?.retry_after??error?.discord?.retryAfter??0);
   return Number.isFinite(n)&&n>0?Math.ceil(n*1000):1000;
 }
-async function performBotRequestRetry(route,options={},attempts=2){
+function botRouteLimitKey(route,options={}){return `${String(options.method||'GET').toUpperCase()}:${String(route||'').split('?')[0]}`;}
+function recordBotRateLimit(error,route,options={}){
+  const wait=Math.max(1000,botRetryAfterMs(error));
+  // Apply the short retry_after to all new requests as well as this route. Discord
+  // sometimes reports bucket/global details inconsistently through proxies; a brief
+  // shared pause is safer than letting every other panel immediately hit the same 429.
+  botGlobalRateLimitUntil=Math.max(botGlobalRateLimitUntil,Date.now()+wait+250);
+  botRouteRateLimits.set(botRouteLimitKey(route,options),Date.now()+wait+250);
+  error.discordRoute=String(route).slice(0,180);
+  error.retryAfter=Math.ceil(wait/1000);
+  return wait;
+}
+async function waitForBotRateLimit(route,options={}){
+  const key=botRouteLimitKey(route,options);
+  const until=Math.max(botGlobalRateLimitUntil,Number(botRouteRateLimits.get(key)||0));
+  const wait=until-Date.now();
+  if(wait<=0){if(botRouteRateLimits.get(key)<=Date.now())botRouteRateLimits.delete(key);return;}
+  // Avoid tying up a browser request for a very long Discord global cooldown.
+  if(wait>30_000){const e=new Error('Discord rate limit is still active');e.status=429;e.retryAfter=Math.ceil(wait/1000);e.discordRoute=String(route).slice(0,180);e.discordGlobal=botGlobalRateLimitUntil>=until;throw e;}
+  await sleepMs(wait);
+}
+async function performBotRequestRetry(route,options={},attempts=3){
   let last;
   for(let attempt=0;attempt<attempts;attempt++){
+    await waitForBotRateLimit(route,options);
     try{return await performBotRequest(route,options);}
     catch(error){
       last=error;
-      if(Number(error?.status)!==429||attempt>=attempts-1)throw error;
-      const wait=botRetryAfterMs(error);
-      // Keep web requests bounded. Long global limits should be surfaced with the
-      // actual wait duration rather than holding a dashboard request open for minutes.
-      if(wait>30_000){error.retryAfter=Math.ceil(wait/1000);error.discordRoute=String(route).slice(0,180);throw error;}
-      await sleepMs(wait+300);
+      if(Number(error?.status)!==429)throw error;
+      const wait=recordBotRateLimit(error,route,options);
+      if(attempt>=attempts-1||wait>30_000)throw error;
+      await sleepMs(wait+250);
     }
   }
   throw last;
@@ -2642,13 +2668,13 @@ res.send(layout('Dashboard', `
     // Application panels are also guild-scoped and are included in Update All.
     try{
       const apps=normalizeApplicationsConfig(await store.data(req.params.guildId,'applications-config.json',{enabled:true,types:[]})),brand=String(req.bundle.guild.name||(await store.getConfig(req.params.guildId))?.branding?.customName||'Server').slice(0,80);let count=0;
-      for(const type of apps.types){if(type.enabled===false||!type.panelChannelId)continue;const payload={embeds:[{color:0x5865F2,title:`${type.emoji} ${type.title}`,description:type.description||'اضغط الزر بالأسفل لفتح نموذج التقديم.',footer:{text:`${brand} • APPLICATIONS`},...(type.bannerUrl?{image:{url:type.bannerUrl}}:{}),...(type.thumbnailUrl?{thumbnail:{url:type.thumbnailUrl}}:{})}],components:[{type:1,components:[{type:2,style:1,custom_id:`pub:application:open:${type.id}`,label:type.buttonLabel.slice(0,80),emoji:{name:type.emoji||'📝'}}]}],allowed_mentions:{parse:[]}};let msg=null;if(type.panelMessageId){try{msg=await botFetch(`/channels/${type.panelChannelId}/messages/${type.panelMessageId}`,{method:'PATCH',body:JSON.stringify(payload)});}catch{}}if(!msg)msg=await botFetch(`/channels/${type.panelChannelId}/messages`,{method:'POST',body:JSON.stringify(payload)});type.panelMessageId=String(msg?.id||type.panelMessageId||'');count++;}
+      for(const type of apps.types){if(type.enabled===false||!type.panelChannelId)continue;const payload={embeds:[{color:0x5865F2,title:`${type.emoji} ${type.title}`,description:type.description||'اضغط الزر بالأسفل لفتح نموذج التقديم.',footer:{text:`${brand} • APPLICATIONS`},...(type.bannerUrl?{image:{url:type.bannerUrl}}:{}),...(type.thumbnailUrl?{thumbnail:{url:type.thumbnailUrl}}:{})}],components:[{type:1,components:[{type:2,style:1,custom_id:`pub:application:open:${type.id}`,label:type.buttonLabel.slice(0,80),emoji:{name:type.emoji||'📝'}}]}],allowed_mentions:{parse:[]}};let msg=null;if(type.panelMessageId){try{msg=await botFetch(`/channels/${type.panelChannelId}/messages/${type.panelMessageId}`,{method:'PATCH',body:JSON.stringify(payload)});}catch(error){if(!isDiscordMessageMissing(error))throw error;}}if(!msg)msg=await botFetch(`/channels/${type.panelChannelId}/messages`,{method:'POST',body:JSON.stringify(payload)});type.panelMessageId=String(msg?.id||type.panelMessageId||'');count++;}
       await store.saveData(req.params.guildId,'applications-config.json',apps);results.push(count?`✅ applications: ${count}`:'➖ applications: لا توجد لوحات محفوظة');
     }catch(error){results.push(`➖ applications: ${String(error?.message||error).slice(0,100)}`);}
     res.send(layout('Panels Updated',`<section class="login"><h1>📨 تحديث لوحات ${esc(req.bundle.guild.name)}</h1><pre style="white-space:pre-wrap;text-align:right">${esc(results.join('\n'))}</pre><a class="btn primary" href="/dashboard/${req.params.guildId}">رجوع للداشبورد</a></section>`,req.user));
   });
 
-  for(const which of ['bank','games','tickets','store','roles','name','guide','rules','voice'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){res.status(400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message)}</h1><a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
+  for(const which of ['bank','games','tickets','store','roles','name','guide','rules','voice'])app.post(`/dashboard/:guildId/send/${which}`,requireLogin,requireGuildAccess,checkCsrf,async(req,res)=>{try{await sendPanel(which,req.params.guildId,req.bundle);redirectDashboard(req,res);}catch(e){const status=Number(e?.status||0),wait=Number(e?.retryAfter||0),route=String(e?.discordRoute||'');const detail=status===429?`<p>Discord حدّد عدد الطلبات مؤقتًا.${wait?` جرّب بعد ${wait} ثانية.`:''}</p>${route?`<p dir="ltr"><code>${esc(route)}</code></p>`:''}`:'';res.status(status===429?429:400).send(layout('Error',`<section class="login"><h1>❌ ${esc(e.message||'فشل إرسال اللوحة')}</h1>${detail}<a class="btn" href="/dashboard/${req.params.guildId}">رجوع</a></section>`,req.user));}});
 
   app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(publicSiteConfig(await store.getGlobalConfig())),req.user));}catch(e){next(e);}});
 
@@ -2862,7 +2888,7 @@ res.send(layout('Dashboard', `
   app.post('/dashboard/:guildId/applications/add',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const data=await getApplications(req.params.guildId);if(data.types.length>=25)throw new Error('الحد الأقصى 25 نوع تقديم.');const base=applicationTypeFromBody(req,{},'new');base.id=`app_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;data.types.push(base);await saveApplications(req.params.guildId,data);redirectDashboard(req,res,'applications');}catch(e){next(e);}});
   app.post('/dashboard/:guildId/applications/update',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const data=await getApplications(req.params.guildId),id=String(req.body.typeId||''),idx=data.types.findIndex(x=>x.id===id);if(idx<0)throw new Error('نوع التقديم غير موجود.');data.types[idx]=applicationTypeFromBody(req,data.types[idx],'edit');data.types[idx].id=id;await saveApplications(req.params.guildId,data);redirectDashboard(req,res,'applications');}catch(e){next(e);}});
   app.post('/dashboard/:guildId/applications/delete',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const data=await getApplications(req.params.guildId),id=String(req.body.typeId||'');data.types=data.types.filter(x=>x.id!==id);await saveApplications(req.params.guildId,data);redirectDashboard(req,res,'applications');}catch(e){next(e);}});
-  app.post('/dashboard/:guildId/applications/send',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const data=await getApplications(req.params.guildId),id=String(req.body.typeId||''),idx=data.types.findIndex(x=>x.id===id);if(idx<0)throw new Error('نوع التقديم غير موجود.');const type=applicationTypeFromBody(req,data.types[idx],'edit');type.id=id;const appEmbed={color:0x5865F2,title:`${type.emoji} ${type.title}`.slice(0,256),description:type.description||'اضغط الزر بالأسفل لفتح نموذج التقديم.',footer:{text:`${String((await store.getConfig(req.params.guildId))?.branding?.customName||req.bundle.guild.name||'Server').slice(0,80)} • APPLICATIONS`}};if(type.bannerUrl)appEmbed.image={url:type.bannerUrl};if(type.thumbnailUrl)appEmbed.thumbnail={url:type.thumbnailUrl};const payload={embeds:[appEmbed],components:[{type:1,components:[{type:2,style:1,custom_id:`pub:application:open:${type.id}`,label:type.buttonLabel.slice(0,80),emoji:{name:type.emoji||'📝'}}]}]};let msg=null;if(type.panelMessageId){try{msg=await botFetch(`/channels/${type.panelChannelId}/messages/${type.panelMessageId}`,{method:'PATCH',body:JSON.stringify(payload)});}catch{}}if(!msg)msg=await botFetch(`/channels/${type.panelChannelId}/messages`,{method:'POST',body:JSON.stringify(payload)});type.panelMessageId=String(msg?.id||type.panelMessageId||'');data.types[idx]=type;await saveApplications(req.params.guildId,data);redirectDashboard(req,res,'applications');}catch(e){next(e);}});
+  app.post('/dashboard/:guildId/applications/send',requireLogin,requireGuildAccess,checkCsrf,async(req,res,next)=>{try{const data=await getApplications(req.params.guildId),id=String(req.body.typeId||''),idx=data.types.findIndex(x=>x.id===id);if(idx<0)throw new Error('نوع التقديم غير موجود.');const type=applicationTypeFromBody(req,data.types[idx],'edit');type.id=id;const appEmbed={color:0x5865F2,title:`${type.emoji} ${type.title}`.slice(0,256),description:type.description||'اضغط الزر بالأسفل لفتح نموذج التقديم.',footer:{text:`${String((await store.getConfig(req.params.guildId))?.branding?.customName||req.bundle.guild.name||'Server').slice(0,80)} • APPLICATIONS`}};if(type.bannerUrl)appEmbed.image={url:type.bannerUrl};if(type.thumbnailUrl)appEmbed.thumbnail={url:type.thumbnailUrl};const payload={embeds:[appEmbed],components:[{type:1,components:[{type:2,style:1,custom_id:`pub:application:open:${type.id}`,label:type.buttonLabel.slice(0,80),emoji:{name:type.emoji||'📝'}}]}]};let msg=null;if(type.panelMessageId){try{msg=await botFetch(`/channels/${type.panelChannelId}/messages/${type.panelMessageId}`,{method:'PATCH',body:JSON.stringify(payload)});}catch(error){if(!isDiscordMessageMissing(error))throw error;}}if(!msg)msg=await botFetch(`/channels/${type.panelChannelId}/messages`,{method:'POST',body:JSON.stringify(payload)});type.panelMessageId=String(msg?.id||type.panelMessageId||'');data.types[idx]=type;await saveApplications(req.params.guildId,data);redirectDashboard(req,res,'applications');}catch(e){next(e);}});
 
   // ZOMBI-ZAJEL-DASHBOARD-20261005
   require('./zajelDashboard').mount(app,{store,requireLogin,requireGuildAccess,checkCsrf,csrf,layout,botFetch});
@@ -2872,7 +2898,7 @@ res.send(layout('Dashboard', `
 
   app.get('/health',async(_req,res)=>{const hb=await getRecentBotHeartbeat().catch(()=>null);res.json({ok:true,database:await store.health(),uptime:process.uptime(),discordProxy:Boolean(oauthProxyUrl()),botHeartbeat:hb?{ready:hb.ready!==false,guildCount:hb.guildCount||0,ageMs:Date.now()-Number(hb.at||0)}:null});});
   app.use((err,req,res,_next)=>{
-    const status=Number(err?.status||0);console.error(JSON.stringify({event:'request_error',status:Number.isFinite(status)?status:500,method:String(req.method||'').slice(0,12),path:String(req.path||'').slice(0,120),discordRoute:String(err?.discordRoute||'').slice(0,180),discordCode:Number(err?.discord?.code||0)||undefined,retryAfter:Number(err?.retryAfter||0)||undefined,message:String(err?.message||'').slice(0,220),at:new Date().toISOString()}));
+    const status=Number(err?.status||0);console.error(JSON.stringify({event:'request_error',status:Number.isFinite(status)?status:500,method:String(req.method||'').slice(0,12),path:String(req.path||'').slice(0,120),discordRoute:String(err?.discordRoute||'').slice(0,180),discordCode:Number(err?.discord?.code||0)||undefined,retryAfter:Number(err?.retryAfter||0)||undefined,discordGlobal:Boolean(err?.discordGlobal||err?.discord?.global),message:String(err?.message||'').slice(0,220),at:new Date().toISOString()}));
     if(status===429){const seconds=Math.max(1,Math.ceil(Number(err?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('Discord Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>الداشبورد أوقف تكرار الطلبات تلقائيًا. انتظر تقريبًا ${seconds} ثانية ثم أعد فتح الصفحة مرة واحدة.</p><a class="btn primary" href="${esc(req.originalUrl||'/dashboard')}">إعادة المحاولة</a><a class="btn" href="/dashboard">السيرفرات</a></section>`,req.user));}
     if(status===401)return res.status(503).send(layout('Discord Authorization',`<section class="login"><h1>🔑 فشل توثيق Discord</h1><p>تأكد من BOT_TOKEN وبيانات Discord OAuth. إذا كان OAUTH_PROXY_URL مفعّلًا فالنسخة الجديدة تدعم المفتاح اليدوي أو التوثيق المشتق تلقائيًا من DISCORD_CLIENT_SECRET.</p><a class="btn primary" href="/dashboard">رجوع</a></section>`,req.user));
     res.status(500).send(layout('Error','<section class="login"><h1>❌ حدث خطأ</h1><p>تعذر إكمال الطلب. حاول مرة أخرى لاحقًا.</p></section>',req.user));
