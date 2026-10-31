@@ -1300,23 +1300,26 @@ async function start(){
   app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
   app.get('/terms',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('شروط الخدمة',`<section class="legal"><h1>شروط الخدمة</h1><p>باستخدام ZOMBI أو Dashboard فإنك توافق على استخدام الخدمة بشكل قانوني ووفق شروط Discord.</p><h2>صلاحيات السيرفر</h2><p>يجب أن تكون مخولًا لإضافة البوت أو تعديل إعدادات السيرفر. بعض الوظائف تحتاج صلاحيات Discord مثل Manage Channels وManage Roles، ويجب أن تكون رتبة البوت أعلى من الرتب التي يديرها.</p><h2>Free وPremium وPremium+</h2><p>الميزات والحدود المتاحة لكل خطة يحددها مالك ZOMBI وقد تتغير. مدة Premium تبدأ حسب الكود أو التفعيل الممنوح للسيرفر، ولا يمنح Premium حق تغيير حساب البوت العالمي لكل سيرفر؛ التخصيص لكل سيرفر يقتصر على الخيارات التي يوفرها Dashboard.</p><h2>الاستخدام المقبول</h2><p>لا تستخدم الخدمة للإساءة، التخريب، الاحتيال، انتهاك حقوق الآخرين أو مخالفة قواعد Discord. يجوز تعطيل الوصول عند إساءة الاستخدام.</p><h2>توفر الخدمة</h2><p>نسعى لاستمرار الخدمة لكن لا نضمن عدم الانقطاع أو فقدان البيانات بسبب أعطال خارجية. يُنصح بالاحتفاظ بنسخ احتياطية للإعدادات المهمة.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
   app.get('/auth/discord',(req,res)=>{
+    console.info('[OAuth] login_start_requested');
     const state=crypto.randomBytes(24).toString('hex'),now=Date.now();
     const states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
     req.session.oauthStates=[...states.filter(x=>x&&Number(x.at)>now-10*60*1000),{value:state,at:now}].slice(-5);
     const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
     const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});
-    req.session.save(err=>{if(err){console.error('OAuth session save failed:',err.message);return res.status(503).send(layout('Session Error','<section class="login"><h1>تعذر حفظ جلسة تسجيل الدخول</h1><p>تحقق من اتصال قاعدة البيانات ثم حاول مرة أخرى.</p><a class="btn" href="/auth/discord">إعادة المحاولة</a></section>',req.user));}res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
+    req.session.save(err=>{if(err){console.error('[OAuth] login_start_session_save_failed',err.message);return res.status(503).send(layout('Session Error','<section class="login"><h1>تعذر حفظ جلسة تسجيل الدخول</h1><p>تحقق من اتصال قاعدة البيانات ثم حاول مرة أخرى.</p><a class="btn" href="/auth/discord">إعادة المحاولة</a></section>',req.user));}console.info('[OAuth] login_start_session_saved redirecting_to_discord');res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
   });
-  app.get('/auth/discord/callback',async(req,res,next)=>{try{
+  app.get('/auth/discord/callback',async(req,res,next)=>{let oauthStage='callback_received';try{
+    console.info('[OAuth] callback_received',JSON.stringify({hasCode:!!req.query.code,hasState:!!req.query.state,hasDiscordError:!!req.query.error}));
     if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
     const incomingState=String(req.query.state||''),states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
     const stateIndex=states.findIndex(x=>String(x?.value||'')===incomingState&&Date.now()-Number(x?.at||0)<10*60*1000);
-    if(!req.query.code||!incomingState||stateIndex<0)return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));
+    if(!req.query.code||!incomingState||stateIndex<0){console.warn('[OAuth] callback_state_validation_failed',JSON.stringify({hasCode:!!req.query.code,hasState:!!incomingState,matchedState:stateIndex>=0,sessionStateCount:states.length}));return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));}
     req.session.oauthStates=states.filter((_,i)=>i!==stateIndex);
     const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
     async function requestJson(url,options,label,maxShortRetries=1){
       for(let attempt=0;;attempt++){
-        const response=await fetch(url,options),raw=await response.text();let data=null;
+        oauthStage=label;console.info('[OAuth] discord_request_started',label);
+        const response=await fetch(url,options),raw=await response.text();console.info('[OAuth] discord_request_finished',JSON.stringify({stage:label,status:response.status}));let data=null;
         try{data=raw?JSON.parse(raw):{};}catch{const err=new Error(`${label} رجّع رد غير متوقع (${response.status}): ${raw.replace(/\s+/g,' ').slice(0,180)}`);err.status=response.status;throw err;}
         if(response.ok)return data;
         const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||0);
@@ -1350,15 +1353,18 @@ async function start(){
       const guilds=await requestJson(`${API}/users/@me/guilds`,{headers},'Discord guild list',1);
       return{user,guilds:Array.isArray(guilds)?guilds:[]};
     }
+    oauthStage='discord_authentication';console.info('[OAuth] authentication_flow_started',JSON.stringify({proxyConfigured:!!oauthProxyUrl()}));
     const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;
+    oauthStage='session_regenerate';console.info('[OAuth] discord_authentication_succeeded');
     const to=safeReturnTo(req.session.returnTo||'/dashboard');
     const dashboardPasswordOk=req.session?.dashboardPasswordOk===true;
     await new Promise((resolve,reject)=>req.session.regenerate(err=>err?reject(err):resolve()));
     if(dashboardPasswordOk)req.session.dashboardPasswordOk=true;
     req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};
-    await new Promise((resolve,reject)=>req.session.save(err=>err?reject(err):resolve()));
-    res.redirect(to);
+    oauthStage='session_save';await new Promise((resolve,reject)=>req.session.save(err=>err?reject(err):resolve()));
+    console.info('[OAuth] login_completed redirecting_to_dashboard');res.redirect(to);
   }catch(e){
+    console.error('[OAuth] login_failed',JSON.stringify({stage:oauthStage,status:Number(e?.status)||null,retryAfter:Number(e?.retryAfter)||null,errorType:e?.name||'Error'}));
     if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>تم إيقاف المحاولة بدل تكرار الطلبات. انتظر تقريبًا ${seconds} ثانية ثم اضغط تسجيل الدخول مرة واحدة.</p><a class="btn primary" href="/auth/discord">تسجيل الدخول من جديد</a><a class="btn" href="/">رجوع</a></section>`,req.user));}
     next(e);
   }});
