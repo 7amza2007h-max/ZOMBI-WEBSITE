@@ -285,7 +285,14 @@ async function getRecentBotHeartbeat(){
   try{
     const hb=await store.data('site','heartbeat.json',{});const at=Number(hb?.at||0);
     if(!at||Date.now()-at>180_000)return null;
-    return{...hb,guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,5000):[]};
+    const guilds=Array.isArray(hb.guilds)?hb.guilds.map(g=>({
+      id:String(g?.id||''),name:String(g?.name||'').slice(0,100),
+      icon:g?.icon?String(g.icon).slice(0,100):null,
+      approximate_member_count:Math.max(0,Math.min(100000000,Number(g?.approximate_member_count)||0)),
+      owner_id:/^\d{15,25}$/.test(String(g?.owner_id||''))?String(g.owner_id):''
+    })).filter(g=>/^\d{15,25}$/.test(g.id)).slice(0,5000):[];
+    const guildIds=Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,5000):guilds.map(g=>g.id);
+    return{...hb,guildIds:[...new Set([...guildIds,...guilds.map(g=>g.id)])].slice(0,5000),guilds};
   }catch{return null;}
 }
 async function getBotPresenceSnapshot(){
@@ -1277,22 +1284,41 @@ async function start(){
            if(!hasAuthoritativeHeartbeat)ids=await store.allGuildIds().catch(()=>[]);
            ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000);
            const known=new Map((ownerGuildCache.guilds||[]).map(g=>[String(g.id),g]));
-           const verified=[];let transientFailures=0;
-           for(let i=0;i<ids.length;i+=5){
-             const batch=await Promise.all(ids.slice(i,i+5).map(async id=>{
-               try{const g=await getBotGuild(id);if(!g||!g.name)return null;return {...g,id:String(g.id||id),name:String(g.name),permissions:ADMINISTRATOR.toString(),owner:false};}
-               catch(e){if([403,404].includes(Number(e?.status))||Number(e?.code)===50001)return null;transientFailures++;return known.get(id)||null;}
-             }));verified.push(...batch.filter(Boolean));
+           const gatewayGuilds=new Map((hb?.guilds||[]).map(g=>[String(g.id),g]));
+           if(hasAuthoritativeHeartbeat){
+             // Gateway membership is authoritative. Do not issue one REST request per guild.
+             ownerGuildCache.guilds=ids.map(id=>{
+               const gateway=gatewayGuilds.get(id)||{},previous=known.get(id)||{};
+               return {
+                 id,
+                 name:String(gateway.name||previous.name||`Server ${id}`).slice(0,100),
+                 icon:gateway.icon??previous.icon??null,
+                 approximate_member_count:Number(gateway.approximate_member_count??previous.approximate_member_count)||0,
+                 owner_id:String(gateway.owner_id||previous.owner_id||''),
+                 // Owner authentication is separate from Discord member permissions.
+                 permissions:'0',owner:false
+               };
+             });
+             ownerGuildCache.loaded=true;
+             ownerGuildCache.until=Date.now()+60_000;
+           }else{
+             const verified=[];let transientFailures=0;
+             for(let i=0;i<ids.length;i+=5){
+               const batch=await Promise.all(ids.slice(i,i+5).map(async id=>{
+                 try{const g=await getBotGuild(id);if(!g||!g.name)return null;return {...g,id:String(g.id||id),name:String(g.name),permissions:'0',owner:false};}
+                 catch(e){if([403,404].includes(Number(e?.status))||Number(e?.code)===50001)return null;transientFailures++;return known.get(id)||null;}
+               }));verified.push(...batch.filter(Boolean));
+             }
+             if(transientFailures&&verified.length===0&&!ownerGuildCache.loaded){const e=new Error('تعذر التحقق من سيرفرات البوت بسبب خطأ مؤقت من Discord.');e.code='GUILD_DISCOVERY_TEMPORARY_FAILURE';throw e;}
+             if(!ids.length&&!ownerGuildCache.loaded){
+               const e=new Error('لم يصل heartbeat موثوق من خدمة البوت بعد؛ لا يمكن اعتبار قائمة السيرفرات فارغة.');
+               e.code='GUILD_DISCOVERY_NO_SOURCE';throw e;
+             }
+             const verifiedMap=new Map(verified.map(g=>[String(g.id),g]));
+             for(const oldGuild of ownerGuildCache.guilds||[])if(!verifiedMap.has(String(oldGuild.id))&&transientFailures)verifiedMap.set(String(oldGuild.id),oldGuild);
+             ownerGuildCache.guilds=[...verifiedMap.values()];
+             ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+30_000;
            }
-           if(transientFailures&&verified.length===0&&!ownerGuildCache.loaded){const e=new Error('تعذر التحقق من سيرفرات البوت بسبب خطأ مؤقت من Discord.');e.code='GUILD_DISCOVERY_TEMPORARY_FAILURE';throw e;}
-           if(!hasAuthoritativeHeartbeat&&!ids.length&&!ownerGuildCache.loaded){
-             const e=new Error('لم يصل heartbeat موثوق من خدمة البوت بعد؛ لا يمكن اعتبار قائمة السيرفرات فارغة.');
-             e.code='GUILD_DISCOVERY_NO_SOURCE';throw e;
-           }
-           const verifiedMap=new Map(verified.map(g=>[String(g.id),g]));
-           for(const oldGuild of ownerGuildCache.guilds||[])if(!verifiedMap.has(String(oldGuild.id))&&transientFailures)verifiedMap.set(String(oldGuild.id),oldGuild);
-           ownerGuildCache.guilds=[...verifiedMap.values()];
-           ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+(transientFailures?30_000:hasAuthoritativeHeartbeat?60_000:30_000);
          })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;throw e;}).finally(()=>{ownerGuildCache.refreshing=null;});
        }
        try{
@@ -1332,8 +1358,17 @@ async function start(){
       botId:String(body.botId||'').slice(0,30),
       botTag:String(body.botTag||'').slice(0,100),
       guildCount:Math.max(0,Math.min(5000,Number(body.guildCount)||0)),
-      guildIds:Array.isArray(body.guildIds)?[...new Set(body.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000):[]
+      guildIds:Array.isArray(body.guildIds)?[...new Set(body.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000):[],
+      guilds:Array.isArray(body.guilds)?body.guilds.map(g=>({
+        id:String(g?.id||''),name:String(g?.name||'').slice(0,100),
+        icon:g?.icon?String(g.icon).slice(0,100):null,
+        approximate_member_count:Math.max(0,Math.min(100000000,Number(g?.approximate_member_count)||0)),
+        owner_id:/^\d{15,25}$/.test(String(g?.owner_id||''))?String(g.owner_id):''
+      })).filter(g=>/^\d{15,25}$/.test(g.id)).slice(0,5000):[]
     };
+    if(!payload.guildIds.length&&payload.guilds.length)payload.guildIds=payload.guilds.map(g=>g.id);
+    payload.guildIds=[...new Set([...payload.guildIds,...payload.guilds.map(g=>g.id)])].slice(0,5000);
+    payload.guildCount=Math.max(payload.guildCount,payload.guildIds.length);
     await store.saveData('site','heartbeat.json',payload);
     res.json({ok:true});
   }catch(e){next(e);}});
@@ -2729,9 +2764,10 @@ res.send(layout('Dashboard', `
     const ids=[...new Set([...storedIds,...(presence.heartbeat?.guildIds||[])].map(String).filter(id=>/^\d{15,25}$/.test(id)))].slice(0,5000);
     const userGuildMap=new Map((req.user?.guilds||[]).map(g=>[String(g.id),g]));
     const apiGuilds=presence.api?.guilds instanceof Map?presence.api.guilds:new Map();
-    const entries=await Promise.all(ids.slice(0,250).map(async id=>{
-      const sid=String(id),knownInstalled=presence.ids.has(sid),fallbackGuild=userGuildMap.get(sid)||null;
-      const g=apiGuilds.get(sid)||(knownInstalled&&fallbackGuild?fallbackGuild:(knownInstalled?{id:sid,name:`Server ${sid}`,icon:null,approximate_member_count:0}:null));
+    const gatewayGuilds=new Map((presence.heartbeat?.guilds||[]).map(g=>[String(g.id),g]));
+    const entries=await Promise.all(ids.map(async id=>{
+      const sid=String(id),knownInstalled=presence.ids.has(sid),fallbackGuild=userGuildMap.get(sid)||null,gatewayGuild=gatewayGuilds.get(sid)||null;
+      const g=apiGuilds.get(sid)||(gatewayGuild?{id:sid,name:gatewayGuild.name,icon:gatewayGuild.icon,approximate_member_count:gatewayGuild.approximate_member_count,owner_id:gatewayGuild.owner_id}:null)||(knownInstalled&&fallbackGuild?fallbackGuild:(knownInstalled?{id:sid,name:`Server ${sid}`,icon:null,approximate_member_count:0}:null));
       const cfg=await store.getConfig(sid);return{id:sid,g,cfg,plan:planNameForConfig(cfg)};
     }));
     const premiumCount=entries.filter(x=>x.plan==='premium').length,plusCount=entries.filter(x=>x.plan==='premium_plus').length,freeCount=entries.filter(x=>x.plan==='free').length;

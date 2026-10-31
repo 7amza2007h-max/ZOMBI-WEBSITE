@@ -13695,9 +13695,17 @@ const dashboardHeartbeatUrl = String(
 
 async function publishDashboardHeartbeat() {
     if (!dashboardHeartbeatUrl || !TOKEN || !client.isReady()) return;
-    const guildIds = [...client.guilds.cache.keys()]
-        .filter(id => /^\d{15,25}$/.test(String(id)))
-        .slice(0, 5000);
+    const gatewayGuilds = [...client.guilds.cache.values()]
+        .filter(guild => /^\d{15,25}$/.test(String(guild.id)))
+        .slice(0, 5000)
+        .map(guild => ({
+            id: String(guild.id),
+            name: String(guild.name || '').slice(0, 100),
+            icon: guild.icon || null,
+            approximate_member_count: Math.max(0, Number(guild.memberCount) || 0),
+            owner_id: String(guild.ownerId || '')
+        }));
+    const guildIds = gatewayGuilds.map(guild => guild.id);
     const secret = crypto.createHash('sha256')
         .update(`ZOMBI_SYNC:${TOKEN}`)
         .digest('hex');
@@ -13715,7 +13723,8 @@ async function publishDashboardHeartbeat() {
                 botId: String(client.user.id),
                 botTag: String(client.user.tag),
                 guildCount: guildIds.length,
-                guildIds
+                guildIds,
+                guilds: gatewayGuilds
             }),
             signal: AbortSignal.timeout(10000)
         });
