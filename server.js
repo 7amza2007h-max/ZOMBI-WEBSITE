@@ -1278,16 +1278,23 @@ async function start(){
          req.user.guilds=ids.map(id=>({id,name:id,permissions:ADMINISTRATOR.toString(),owner:false}));
          if(!ownerGuildCache.refreshing){
            ownerGuildCache.refreshing=(async()=>{
-             // Discord's bot guild-list endpoint returns IDs and names together.
-             // Use one cached list request instead of issuing one /guilds/:id
-             // request for every server (which caused slow loads and rate limits).
-             const api=await getBotGuildIdSet();
-             const byId=api?.guilds instanceof Map?api.guilds:new Map();
-             const allIds=[...new Set([...ids,...(api?.ids||[])].map(String))].slice(0,500);
-             const guilds=allIds.map(id=>{
-               const g=byId.get(id);
-               return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:{id,name:id,permissions:ADMINISTRATOR.toString(),owner:false};
-             });
+             // Bot tokens cannot use OAuth's /users/@me/guilds endpoint to
+             // enumerate guild names. Fetch each known heartbeat guild directly
+             // through the bot's /guilds/:id endpoint, with bounded concurrency.
+             const allIds=[...new Set(ids.map(String))].slice(0,500);
+             const guilds=[];
+             for(let i=0;i<allIds.length;i+=5){
+               const batch=await Promise.all(allIds.slice(i,i+5).map(async id=>{
+                 try{
+                   const g=await getBotGuild(id);
+                   return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;
+                 }catch(e){
+                   console.warn(`[Dashboard] guild name fetch failed for ${id}:`,e.message);
+                   return null;
+                 }
+               }));
+               guilds.push(...batch.filter(Boolean));
+             }
              ownerGuildCache.guilds=guilds;ownerGuildCache.until=Date.now()+5*60*1000;
            })().catch(e=>console.error('[Dashboard] bot guild list load failed:',e.message)).finally(()=>{ownerGuildCache.refreshing=null;});
          }
