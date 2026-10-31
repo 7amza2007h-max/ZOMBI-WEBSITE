@@ -532,6 +532,41 @@
     }, true);
 
     settingsForm.addEventListener('z-save-failed', restoreTemporarilyDisabled);
+    // Save the active settings section in the background; keep the dashboard DOM alive.
+    settingsForm.addEventListener('submit', async event => {
+      if (event.defaultPrevented || settingsForm.dataset.zombiAjaxSaving === '1') return;
+      const submitter = event.submitter || preparedSubmitter;
+      if (!submitter) return;
+      event.preventDefault();
+      const page = submitter.name === 'forceBotProfile' ? 'overview' : (submitter.dataset.page || currentFromUrl());
+      sectionInput.value = page;
+      const body = new URLSearchParams(new FormData(settingsForm));
+      if (submitter.name) body.set(submitter.name, submitter.value || '');
+      const status = settingsForm.querySelector('.z-dirty-status');
+      const buttons = [...settingsForm.querySelectorAll('button[type="submit"]')];
+      const prior = buttons.map(button => button.disabled);
+      buttons.forEach(button => button.disabled = true);
+      settingsForm.dataset.zombiAjaxSaving = '1';
+      if (status) status.textContent = 'جارٍ حفظ القسم…';
+      try {
+        const response = await fetch(settingsForm.action, { method: 'POST', body, headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || result.message || 'تعذر حفظ الإعدادات.');
+        if (status) status.textContent = '✓ تم حفظ التغييرات';
+        settingsForm.dataset.zombiDirty = '0';
+        settingsForm.dispatchEvent(new Event('z-save-success'));
+      } catch (error) {
+        if (status) status.textContent = 'لم يتم الحفظ: ' + (error.message || 'خطأ اتصال');
+        const alert = settingsForm.querySelector('.z-save-error') || document.createElement('p');
+        alert.className = 'warn z-save-error'; alert.setAttribute('role', 'alert'); alert.textContent = error.message || 'تعذر حفظ الإعدادات.';
+        if (!alert.parentNode) settingsForm.appendChild(alert);
+        restoreTemporarilyDisabled();
+      } finally {
+        buttons.forEach((button, index) => button.disabled = prior[index]);
+        settingsForm.dataset.zombiAjaxSaving = '0';
+        preparedSubmitter = null;
+      }
+    });
   }
 
   // The section is only needed when a form submits. Avoid walking every form on
@@ -649,9 +684,9 @@
  const form=document.querySelector('form[action$="/settings"]');if(!form)return;
  let dirty=false,submitting=false;const bar=form.querySelector('.z-save-bar'),label=document.createElement('span');
  label.className='z-dirty-status';label.setAttribute('role','status');if(bar)bar.prepend(label);
- form.addEventListener('input',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
- form.addEventListener('change',()=>{dirty=true;label.textContent='تغييرات غير محفوظة';});
- form.addEventListener('submit',e=>{if(!e.defaultPrevented){submitting=true;label.textContent='جارٍ حفظ الإعدادات…';}});
+ form.addEventListener('input',()=>{dirty=true;form.dataset.zombiDirty='1';label.textContent='تغييرات غير محفوظة';});
+ form.addEventListener('change',()=>{dirty=true;form.dataset.zombiDirty='1';label.textContent='تغييرات غير محفوظة';});
+ form.addEventListener('submit',e=>{if(!e.defaultPrevented){submitting=true;label.textContent='جارٍ حفظ الإعدادات…';}});form.addEventListener('z-save-success',()=>{dirty=false;submitting=false;form.dataset.zombiDirty='0';label.textContent='✓ تم الحفظ';});
  form.addEventListener('z-save-failed',()=>{submitting=false;label.textContent='لم تُحفظ التغييرات';});
  window.addEventListener('beforeunload',e=>{if(dirty&&!submitting){e.preventDefault();e.returnValue='';}});
  const update=()=>nav.querySelectorAll('a').forEach(a=>{if(a.classList.contains('active'))a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
@@ -659,37 +694,3 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
-
-
-// ZOMBI image picker: upload selected files to the bot host and keep the returned URL in the existing field.
-(function(){
-  const imageField=/^(?:.*(?:banner|thumbnail|avatar|logo|image|cover|icon|line).*url|.*url.*(?:banner|thumbnail|avatar|logo|image|cover|icon|line))$/i;
-  function enhance(){
-    document.querySelectorAll('input').forEach(input=>{
-      if(input.dataset.zombiImagePicker||!imageField.test(input.name||''))return;
-      input.dataset.zombiImagePicker='1';
-      const wrap=document.createElement('div');wrap.className='zombi-image-upload';wrap.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px';
-      const file=document.createElement('input');file.type='file';file.accept='image/png,image/jpeg,image/gif,image/webp';file.hidden=true;
-      const button=document.createElement('button');button.type='button';button.className='btn';button.textContent='📁 اختيار صورة من الجهاز';
-      const status=document.createElement('small');status.textContent='ترفع الصورة إلى ملفات البوت تلقائياً';status.style.cssText='color:var(--muted,#aaa)';
-      button.addEventListener('click',()=>file.click());
-      file.addEventListener('change',async()=>{
-        const selected=file.files&&file.files[0];if(!selected)return;
-        if(selected.size>5*1024*1024){status.textContent='حجم الصورة أكبر من 5MB.';file.value='';return;}
-        if(!/^image\/(png|jpeg|gif|webp)$/.test(selected.type)){status.textContent='صيغة الصورة غير مدعومة.';file.value='';return;}
-        const form=input.closest('form'),csrf=form?.querySelector('[name="_csrf"]')?.value||'';
-        const guildId=(location.pathname.match(/\/dashboard\/([0-9]+)/)||[])[1]||'';
-        button.disabled=true;status.textContent='⏳ جاري رفع الصورة إلى استضافة البوت...';
-        try{
-          const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('تعذرت قراءة الصورة.'));reader.readAsDataURL(selected);});
-          const response=await fetch('/api/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({data,guildId})});
-          const result=await response.json().catch(()=>({}));if(!response.ok||!result.ok||!result.url)throw new Error(result.error||'فشل رفع الصورة.');
-          input.value=result.url;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));status.textContent='✅ تم رفع الصورة؛ الرابط جاهز، اضغط حفظ.';
-        }catch(error){status.textContent='❌ '+(error.message||'تعذر رفع الصورة.');}finally{button.disabled=false;file.value='';}
-      });
-      wrap.append(button,file,status);input.insertAdjacentElement('afterend',wrap);
-    });
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',enhance);else enhance();
-  new MutationObserver(enhance).observe(document.documentElement,{childList:true,subtree:true});
-})();
