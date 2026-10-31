@@ -1259,6 +1259,12 @@ async function start(){
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
        if(ownerGuildCache.loaded&&ownerGuildCache.until>Date.now()){req.user.guilds=ownerGuildCache.guilds;return next();}
+       // If Discord recently failed and there is no cached list yet, do not block Owner login.
+       if(!ownerGuildCache.loaded&&ownerGuildCache.until>Date.now()){
+         req.user.guilds=ownerGuildCache.guilds||[];
+         req.user.guildDiscoveryError=true;
+         return next();
+       }
        if(!ownerGuildCache.refreshing){
          ownerGuildCache.refreshing=(async()=>{
            const hb=await getRecentBotHeartbeat();
@@ -1278,8 +1284,17 @@ async function start(){
            ownerGuildCache.guilds=verified;ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+(transientFailures?30_000:5*60_000);
          })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;throw e;}).finally(()=>{ownerGuildCache.refreshing=null;});
        }
-       try{await ownerGuildCache.refreshing;req.user.guilds=ownerGuildCache.guilds;}
-       catch(e){if(ownerGuildCache.loaded)req.user.guilds=ownerGuildCache.guilds;else return res.status(503).type('html').send(loginPage('تعذر التحقق من سيرفرات البوت حاليًا بسبب اتصال Discord. لم يتم اعتبار القائمة فارغة؛ أعد المحاولة لاحقًا.'));}
+       try{
+         await ownerGuildCache.refreshing;
+         req.user.guilds=ownerGuildCache.guilds;
+         req.user.guildDiscoveryError=false;
+       }catch(e){
+         console.warn('[Dashboard] Discord guild discovery unavailable; allowing authenticated Owner session:',e?.message||e);
+         req.user.guilds=ownerGuildCache.guilds||[];
+         req.user.guildDiscoveryError=true;
+         // Brief backoff avoids retrying Discord on every dashboard request.
+         ownerGuildCache.until=Date.now()+15_000;
+       }
        return next();
      }
      if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
@@ -1415,6 +1430,13 @@ const unknownCards = unknown.map(({ g }) => `
   </div>
 `).join('');
 
+const ownerDiscoveryWarning = req.user.guildDiscoveryError
+  ? `<section class="panel">
+      <b>⚠️ تعذر التحقق من سيرفرات البوت حاليًا.</b>
+      <p class="hint">تم تسجيل دخولك بنجاح، لكن اتصال Discord لا يسمح بالتحقق من السيرفرات الآن. لن نعتبر القائمة فارغة، وستتم إعادة المحاولة تلقائيًا.</p>
+    </section>`
+  : '';
+
 const apiWarning = presence.error && !presence.heartbeat
   ? `<section class="panel">
       <b>⚠️ تعذر الاتصال ببوت ZOMBI.</b>
@@ -1433,10 +1455,11 @@ res.send(layout('Dashboard', `
     </div>
   </section>
 
+  ${ownerDiscoveryWarning}
   ${apiWarning}
 
   <div class="servers">
-    ${cards || (!unknownCards
+    ${cards || (!unknownCards && !req.user.guildDiscoveryError
       ? '<p>لا توجد سيرفرات متاحة للإدارة حاليًا.</p>'
       : '')}
   </div>
