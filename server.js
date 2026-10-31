@@ -1253,20 +1253,32 @@ async function start(){
      req.session.regenerate(err=>{if(err)return res.status(500).type('html').send(loginPage('تعذر إنشاء جلسة آمنة. حاول مرة أخرى.'));req.session.user={id:'dashboard-owner',username:dashboardUsername,displayName:dashboardUsername,isDashboardOwner:true,guilds:[]};req.session.save(saveErr=>{if(saveErr)return res.status(500).type('html').send(loginPage('تعذر حفظ جلسة الدخول.'));res.redirect('/dashboard');});});
    });
    app.get('/logout',(req,res)=>{req.session.destroy(err=>{res.clearCookie('connect.sid',{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://')});if(err)securityEvent('logout_session_destroy_failed',req,'error');res.redirect('/login');});});
+   const ownerGuildCache={guilds:[],until:0,refreshing:null};
    app.use(async(req,res,next)=>{
      if(req.path==='/health'||req.path==='/login'||req.path.startsWith('/api/bot-sync/'))return next();
      if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
-       // Build the Owner's server list from the bot heartbeat (Gateway guild IDs), not a user OAuth account.
+       // Serve the cached guild list immediately; refresh Discord guild details in the background.
+       if(ownerGuildCache.until>Date.now()&&ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
        try{
          const hb=await getRecentBotHeartbeat();
          let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
          if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
          ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
-         const guilds=await Promise.all(ids.map(async id=>{try{const g=await getBotGuild(id);return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;}catch{return null;}}));
-         req.user.guilds=guilds.filter(Boolean);
-       }catch(e){console.error('[Dashboard] bot guild list load failed:',e.message);req.user.guilds=[];}
+         // Do not make every dashboard click wait for up to 500 Discord API requests.
+         req.user.guilds=ids.map(id=>({id,name:id,permissions:ADMINISTRATOR.toString(),owner:false}));
+         if(!ownerGuildCache.refreshing){
+           ownerGuildCache.refreshing=(async()=>{
+             const guilds=[];
+             for(let i=0;i<ids.length;i+=10){
+               const batch=await Promise.all(ids.slice(i,i+10).map(async id=>{try{const g=await getBotGuild(id);return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;}catch{return null;}}));
+               guilds.push(...batch.filter(Boolean));
+             }
+             ownerGuildCache.guilds=guilds;ownerGuildCache.until=Date.now()+5*60*1000;
+           })().catch(e=>console.error('[Dashboard] bot guild list load failed:',e.message)).finally(()=>{ownerGuildCache.refreshing=null;});
+         }
+       }catch(e){console.error('[Dashboard] bot guild list load failed:',e.message);req.user.guilds=ownerGuildCache.guilds||[];}
        return next();
      }
      if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
