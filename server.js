@@ -62,13 +62,13 @@ function ticketTranscriptPage(ticket,journal,guildId){
   </style></head><body><main class="wrap"><div class="brand"><div class="brand-badge">🎫</div><div><h1>ZOMBI Ticket Transcript</h1><p>نسخة محفوظة من محادثة التذكرة بعد الإغلاق</p></div></div><section class="card status"><h2>🔒 تم حذف التذكرة</h2><p>${esc(ticket.channelName||'Ticket')} • ${esc(transcriptDate(ticket.closedAt))}</p></section><section class="card meta"><div class="item"><div class="label">👤 صاحب التذكرة</div><div class="value">${esc(owner)}</div></div><div class="item"><div class="label">🛡️ حذف بواسطة</div><div class="value">${esc(closer)}</div></div><div class="item"><div class="label">🎫 نوع التذكرة</div><div class="value">${esc(ticket.typeName||'تذكرة')}</div></div><div class="item"><div class="label">🙋 المسؤول المستلم</div><div class="value">${esc(claimer||'لم يستلمها أحد')}</div></div><div class="item"><div class="label">🕐 وقت فتحها</div><div class="value ltr">${esc(transcriptDate(ticket.createdAt))}</div></div><div class="item"><div class="label">🗑️ وقت حذفها</div><div class="value ltr">${esc(transcriptDate(ticket.closedAt))}</div></div><div class="item"><div class="label">🏷️ اسم التذكرة</div><div class="value">${esc(ticket.channelName||ticket.channelId||'—')}</div></div><div class="item"><div class="label">🔢 رقم التذكرة</div><div class="value">#${esc(number)}</div></div></section><section class="card messages">${rows||'<div class="empty">لا توجد رسائل محفوظة لهذه التذكرة.</div>'}</section><div class="footer">ZOMBI • Ticket System • محفوظة تلقائيًا عند إغلاق التذكرة • ${esc(guildId)}</div></main></body></html>`;
 }
 function ownerIds(){return new Set(String(process.env.OWNER_IDS||'').split(',').map(x=>x.trim()).filter(x=>/^\d{15,25}$/.test(x)));}
-function isOwner(user){return Boolean(user?.id&&ownerIds().has(String(user.id)));}
+function isOwner(user){return Boolean(user?.isDashboardOwner===true&&user?.id==='dashboard-owner');}
 function botSyncKey(){const token=String(process.env.BOT_TOKEN||process.env.TOKEN||'').trim();return token?crypto.createHash('sha256').update(`ZOMBI_SYNC:${token}`).digest('hex'):'';}
 function requireBotSync(req,res,next){const expected=botSyncKey(),auth=String(req.get('authorization')||''),got=auth.startsWith('Bearer ')?auth.slice(7).trim():'';if(!expected||!got){securityEvent('bot_sync_unauthorized',req);return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});}const a=Buffer.from(expected),b=Buffer.from(got);if(a.length!==b.length||!crypto.timingSafeEqual(a,b)){securityEvent('bot_sync_unauthorized',req);return res.status(401).json({ok:false,error:'BOT_SYNC_UNAUTHORIZED'});}next();}
 function canManage(g){try{const p=BigInt(String(g?.permissions||'0'));return Boolean(g?.owner)||(p&MANAGE_GUILD)===MANAGE_GUILD||(p&ADMINISTRATOR)===ADMINISTRATOR;}catch{return false;}}
 function csrf(req){if(!req.session.csrf)req.session.csrf=crypto.randomBytes(24).toString('hex');return req.session.csrf;}
 function checkCsrf(req,res,next){if(!req.session?.csrf)return res.status(403).send('CSRF validation failed');if(String(req.body?._csrf||req.get('x-csrf-token')||'')!==String(req.session?.csrf||''))return res.status(403).send('CSRF validation failed');next();}
-function requireLogin(req,res,next){if(req.user)return next();req.session.returnTo=safeReturnTo(req.originalUrl);res.redirect('/auth/discord');}
+function requireLogin(req,res,next){if(req.user?.isDashboardOwner===true)return next();res.redirect('/login');}
 function requireOwner(req,res,next){if(req.user&&isOwner(req.user)){if(['POST','PUT','PATCH','DELETE'].includes(req.method))console.info(JSON.stringify({event:'owner_admin_action',actorId:String(req.user.id),method:req.method,path:String(req.path||'').slice(0,120),outcome:'authorized',at:new Date().toISOString()}));return next();}securityEvent('owner_access_denied',req);res.status(403).send('Owner only');}
 function userGuild(req,gid){return (req.user?.guilds||[]).find(g=>String(g.id)===String(gid));}
 function color(cfg){const n=parseInt(String(cfg?.branding?.color||'#7c3aed').replace('#',''),16);return Number.isFinite(n)?n:0x7c3aed;}
@@ -461,7 +461,7 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.3.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/auth/discord">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.3.0"></script><script defer src="/site/role-manager.js?v=16.3.0"></script><script defer src="/site/upgrade.js?v=16.3.0"></script><script defer src="/site/operations-ui.js?v=16.3.0"></script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.3.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<span class="pill z-owner-badge">👑 OWNER</span><a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/login">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.3.0"></script><script defer src="/site/role-manager.js?v=16.3.0"></script><script defer src="/site/upgrade.js?v=16.3.0"></script><script defer src="/site/operations-ui.js?v=16.3.0"></script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_BOT_CLIENT_ID||process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="z-command-showcase" aria-labelledby="z-command-showcase-title"><div class="z-showcase-copy"><span class="z-showcase-kicker"><i></i> ZOMBI CYBER COMMAND CENTER</span><h2 id="z-command-showcase-title">مش مجرد بوت.<br><b>مركز قيادة مجتمعك.</b></h2><p>واجهة تجمع إدارة السيرفرات، الحماية، التذاكر، الألعاب، الرتب، والاقتصاد في مكان واحد. كل سيرفر له إعداداته الخاصة.</p><div class="z-showcase-points"><span><b>01</b> إدارة مستقلة لكل سيرفر</span><span><b>02</b> أدوات منظمة حسب النظام</span><span><b>03</b> واجهة تدعم الجوال</span></div><div class="actions"><a class="btn primary z-btn-energy" href="/dashboard">افتح مركز التحكم <span aria-hidden="true">↗</span></a><a class="btn z-btn-ghost" href="/demo">استكشف التجربة</a></div></div><a class="z-showcase-art" href="/demo" aria-label="استكشف تصميم مركز تحكم ZOMBI"><img src="/assets/zombi-command-center-showcase.png" alt="تصور بصري لواجهة ZOMBI Cyber Command Center مع لوحات إدارة السيرفرات والأمان والتذاكر والألعاب" loading="lazy"><span class="z-art-tag"><i></i> COMMAND INTERFACE</span><span class="z-art-corner" aria-hidden="true">Z / 01</span></a><div class="z-showcase-orbit" aria-hidden="true"></div></section><section class="features"><div class="z-section-intro"><span class="z-showcase-kicker"><i></i> SYSTEM MODULES</span><h2>كل نظام بمكانه الصحيح</h2><p>أدوات واضحة بدل لوحة مزدحمة — اختَر النظام وركّز على إعداداته.</p></div><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
@@ -1215,7 +1215,7 @@ function parseBankStocks(text){const out={};for(const raw of String(text||'').sp
 function planSummaryHtml(site,planName){const p=site.plans[planName];const feats=FEATURE_DEFS.filter(f=>p.features[f.key]).map(f=>`${f.emoji} ${f.label}`).join(' • ')||'—';const games=GAME_DEFS.filter(g=>g.publicSupported&&p.games[g.id]).map(g=>g.label).join('، ')||'—';return `<p><b>الميزات:</b> ${esc(feats)}</p><p><b>الألعاب:</b> ${esc(games)}</p><p><b>Store:</b> ${p.limits.storeProducts} • <b>Self Roles:</b> ${p.limits.selfRoles} • <b>Ticket Types:</b> ${p.limits.ticketTypes} • <b>Questions:</b> ${p.limits.questionsPerGame}</p>`;}
 
 async function start(){
-  const required=['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','PUBLIC_BASE_URL','SESSION_SECRET','DATABASE_URL'];const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
+  const required=['PUBLIC_BASE_URL','SESSION_SECRET','DATABASE_URL','DASHBOARD_USERNAME','DASHBOARD_PASSWORD'];const missing=required.filter(k=>!String(process.env[k]||'').trim());if(missing.length)console.warn('⚠️ Missing env:',missing.join(', '));
   const sessionSecret=String(process.env.SESSION_SECRET||'');
   if(process.env.NODE_ENV==='production'&&(sessionSecret.length<32||/^(change.?me|secret|password|your.?secret)$/i.test(sessionSecret)))throw new Error('Unsafe SESSION_SECRET: set a strong secret (32+ characters) in Render environment settings.');
   if(process.env.NODE_ENV==='production'&&!String(process.env.DATABASE_URL||'').trim())throw new Error('DATABASE_URL is required in production; refusing to use the in-memory session store.');
@@ -1224,9 +1224,9 @@ async function start(){
   if(!sessionStore&&process.env.NODE_ENV==='production')throw new Error('Persistent PostgreSQL session store unavailable; refusing production startup.');
   app.use(session({store:sessionStore,secret:sessionSecret||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session?.user||null;next();});
   app.post('/api/media/upload',requireLogin,checkCsrf,async(req,res,next)=>{try{
-    if(req.session?.dashboardPasswordOk!==true)return res.status(403).json({ok:false,error:'أدخل كلمة مرور الداش بورد أولاً.'});
     const guildId=String(req.body?.guildId||'').trim(),membership=userGuild(req,guildId);
-    if(!/^\d{15,25}$/.test(guildId)||!membership||!canManage(membership))return res.status(403).json({ok:false,error:'لا تملك صلاحية رفع الصور لهذا السيرفر.'});
+    if(!/^\d{15,25}$/.test(guildId)||(!isOwner(req.user)&&(!membership||!canManage(membership))))return res.status(403).json({ok:false,error:'لا تملك صلاحية رفع الصور لهذا السيرفر.'});
+    if(isOwner(req.user)&&!await getBotGuild(guildId).catch(()=>null))return res.status(404).json({ok:false,error:'البوت غير موجود في هذا السيرفر.'});
     const raw=String(req.body?.data||''),match=raw.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);
     if(!match) return res.status(400).json({ok:false,error:'اختر صورة PNG أو JPG أو GIF أو WEBP.'});
     const bytes=Buffer.from(match[2].replace(/\s+/g,''),'base64');
@@ -1238,25 +1238,39 @@ async function start(){
     const result=await response.json().catch(()=>({}));if(!response.ok||!result?.ok||!result?.url)throw new Error(result?.error||`استضافة البوت رفضت رفع الصورة (${response.status}).`);
     res.json({ok:true,url:result.url,name:result.name||''});
   }catch(e){next(e);}});
-   // Site-wide dashboard password gate. The password is configured only through DASHBOARD_PASSWORD.
+   // Single-owner username/password authentication. Credentials are checked only server-side.
+   const dashboardUsername=String(process.env.DASHBOARD_USERNAME||'').trim();
    const dashboardPassword=String(process.env.DASHBOARD_PASSWORD||'');
-   const dashboardPasswordPage=(error='')=>`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حماية لوحة التحكم</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090c;color:#f6f0e3;font-family:Tahoma,Arial,sans-serif;padding:20px}.card{width:min(420px,100%);padding:30px;border:1px solid #a77c32;border-radius:18px;background:#141419;box-shadow:0 18px 70px #0008}h1{font-size:25px;margin:0 0 10px;color:#e8c16a}p{color:#c5c0b6;line-height:1.8}input,button{width:100%;padding:14px;border-radius:10px;font-size:16px}input{background:#09090c;color:white;border:1px solid #51452e;margin:12px 0}button{background:#c99b3c;color:#17120a;border:0;font-weight:bold;cursor:pointer}.error{color:#ff9b9b}</style><main class="card"><h1>🔒 لوحة التحكم محمية</h1><p>أدخل الرقم السري للمتابعة. الحماية تشمل جميع السيرفرات ولا تعتمد على صلاحيات Discord.</p>${error?`<p class="error">${error}</p>`:''}<form method="post" action="/dashboard-password"><label for="password">الرقم السري</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">دخول آمن</button></form></main></html>`;
-   app.post('/dashboard-password',rateLimit({windowMs:60000,max:8,keyPrefix:'dashboard-password'}),(req,res)=>{
-     if(!dashboardPassword){res.status(503).send(dashboardPasswordPage('الحماية غير مهيأة بعد. أضف DASHBOARD_PASSWORD إلى ملف .env ثم أعد تشغيل الموقع.'));return;}
-     const supplied=String(req.body?.password||'');
-     const a=Buffer.from(supplied),b=Buffer.from(dashboardPassword);
-     const valid=a.length===b.length&&crypto.timingSafeEqual(a,b);
-     if(!valid){securityEvent('dashboard_password_failed',req,'warn');res.status(401).send(dashboardPasswordPage('الرقم السري غير صحيح. حاول مرة أخرى.'));return;}
-     req.session.dashboardPasswordOk=true;
-     req.session.save(err=>{if(err)return res.status(500).send('تعذر حفظ جلسة الدخول. حاول مرة أخرى.');res.redirect('/dashboard');});
+   const loginPage=(error='')=>`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل دخول MZ STORE</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090c;color:#f6f0e3;font-family:Tahoma,Arial,sans-serif;padding:20px}.card{width:min(420px,100%);padding:30px;border:1px solid #a77c32;border-radius:18px;background:#141419;box-shadow:0 18px 70px #0008}h1{font-size:25px;margin:0 0 10px;color:#e8c16a}p{color:#c5c0b6;line-height:1.8}input,button{width:100%;padding:14px;border-radius:10px;font-size:16px}input{background:#09090c;color:white;border:1px solid #51452e;margin:8px 0 14px}button{background:#c99b3c;color:#17120a;border:0;font-weight:bold;cursor:pointer}.error{color:#ff9b9b}</style><main class="card"><h1>🔒 لوحة التحكم محمية</h1><p>سجّل الدخول بحساب Owner للمتابعة.</p>${error?`<p class="error">${error}</p>`:''}<form method="post" action="/login"><label for="username">اسم المستخدم</label><input id="username" name="username" autocomplete="username" required maxlength="80" autofocus><label for="password">كلمة المرور</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">دخول آمن</button></form></main></html>`;
+   app.get('/login',(req,res)=>{if(req.user?.isDashboardOwner)return res.redirect('/dashboard');res.status(200).type('html').send(loginPage());});
+   app.post('/login',rateLimit({windowMs:60000,max:8,keyPrefix:'dashboard-login'}),(req,res)=>{
+     if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة. أضف DASHBOARD_USERNAME مع الإبقاء على DASHBOARD_PASSWORD في Render.'));
+     const suppliedUser=Buffer.from(String(req.body?.username||''));const expectedUser=Buffer.from(dashboardUsername);
+     const suppliedPass=Buffer.from(String(req.body?.password||''));const expectedPass=Buffer.from(dashboardPassword);
+     const userOk=suppliedUser.length===expectedUser.length&&crypto.timingSafeEqual(suppliedUser,expectedUser);
+     const passOk=suppliedPass.length===expectedPass.length&&crypto.timingSafeEqual(suppliedPass,expectedPass);
+     if(!userOk||!passOk){securityEvent('dashboard_login_failed',req,'warn');return res.status(401).type('html').send(loginPage('اسم المستخدم أو كلمة المرور غير صحيحة.'));}
+     req.session.regenerate(err=>{if(err)return res.status(500).type('html').send(loginPage('تعذر إنشاء جلسة آمنة. حاول مرة أخرى.'));req.session.user={id:'dashboard-owner',username:dashboardUsername,displayName:dashboardUsername,isDashboardOwner:true,guilds:[]};req.session.save(saveErr=>{if(saveErr)return res.status(500).type('html').send(loginPage('تعذر حفظ جلسة الدخول.'));res.redirect('/dashboard');});});
    });
-   app.use((req,res,next)=>{
-     // Keep bot-to-website sync and platform health checks working; protect all human-facing pages and dashboard APIs.
-     if(req.path==='/health'||req.path==='/dashboard-password'||req.path.startsWith('/api/bot-sync/'))return next();
-     if(!dashboardPassword){return res.status(503).send(dashboardPasswordPage('الحماية غير مهيأة. أضف DASHBOARD_PASSWORD إلى ملف .env ثم أعد تشغيل الموقع.'));}
-     if(req.session?.dashboardPasswordOk===true)return next();
-     if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم إدخال الرقم السري للوحة التحكم.'});
-     return res.status(401).type('html').send(dashboardPasswordPage());
+   app.get('/logout',(req,res)=>{req.session.destroy(err=>{res.clearCookie('connect.sid',{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://')});if(err)securityEvent('logout_session_destroy_failed',req,'error');res.redirect('/login');});});
+   app.use(async(req,res,next)=>{
+     if(req.path==='/health'||req.path==='/login'||req.path.startsWith('/api/bot-sync/'))return next();
+     if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
+     if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
+       req.user=req.session.user;
+       // Build the Owner's server list from the bot heartbeat (Gateway guild IDs), not a user OAuth account.
+       try{
+         const hb=await getRecentBotHeartbeat();
+         let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
+         if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
+         ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
+         const guilds=await Promise.all(ids.map(async id=>{try{const g=await getBotGuild(id);return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;}catch{return null;}}));
+         req.user.guilds=guilds.filter(Boolean);
+       }catch(e){console.error('[Dashboard] bot guild list load failed:',e.message);req.user.guilds=[];}
+       return next();
+     }
+     if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
+     return res.status(401).type('html').send(loginPage());
    });
 
   app.get('/transcript/:guildId/:token',async(req,res,next)=>{try{const guildId=String(req.params.guildId||'').trim(),token=String(req.params.token||'').trim();if(!/^\d{15,25}$/.test(guildId)||!/^[a-f0-9]{32,64}$/i.test(token))return res.status(404).send('Transcript not found');const staff=await store.data(guildId,'staff-insights.json',{}),tickets=staff?.tickets&&typeof staff.tickets==='object'?staff.tickets:{};const ticket=Object.values(tickets).find(x=>x?.completed&&String(x.transcriptToken||'')===token);if(!ticket)return res.status(404).send('Transcript not found');const journal=await store.data(guildId,`ticket-journal-${ticket.channelId}.json`,{messages:{}});res.set('Cache-Control','public,max-age=60');res.type('html').send(ticketTranscriptPage(ticket,journal,guildId));}catch(e){next(e);}});
@@ -1297,88 +1311,14 @@ async function start(){
     res.json({ok:true,channels:channels.length,roles:roles.length,emojis:emojis.length});
   }catch(e){next(e);}});
   app.get('/',async(req,res,next)=>{try{res.send(layout('Home',await landing(),req.user));}catch(e){next(e);}});
-  app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>عند تسجيل الدخول عبر Discord نستخدم بيانات <b>identify</b> وقائمة السيرفرات <b>guilds</b> حتى نعرض لك السيرفرات التي تملك صلاحية إدارتها. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>استخدام Discord نفسه يخضع أيضًا لسياسات وشروط Discord.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
+  app.get('/privacy',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('سياسة الخصوصية',`<section class="legal"><h1>سياسة الخصوصية</h1><p>توضح هذه الصفحة كيف يستخدم ZOMBI البيانات اللازمة لتشغيل البوت ولوحة التحكم.</p><h2>البيانات التي نستخدمها</h2><p>تسجيل دخول لوحة التحكم يتم باسم مستخدم وكلمة مرور يتحقق منهما الخادم. تُعرض السيرفرات التي يتصل بها بوت ZOMBI اعتمادًا على بيانات تشغيل البوت. يخزن ZOMBI إعدادات السيرفر والبيانات اللازمة للأنظمة التي يفعّلها مدير السيرفر مثل الاقتصاد، التذاكر، المتجر، المستويات، العصابات والألعاب.</p><h2>الاستخدام والمشاركة</h2><p>تُستخدم البيانات لتقديم وظائف ZOMBI وإدارة السيرفر. لا نبيع بيانات المستخدمين للمعلنين. قد تمر طلبات Discord عبر البنية المستضيفة للخدمة لتنفيذ الأوامر والمزامنة.</p><h2>إحصائيات الزيارات</h2><p>نستخدم معرّفًا عشوائيًا في ملف تعريف ارتباط لحساب المتصفحات الفريدة ومشاهدات الصفحات العامة. لا نسجل عنوان IP أو بيانات حساب Discord في هذه الإحصائيات. نحفظ بصمة المعرّف وآخر زيارة للعد الكلي، وتفاصيل الأيام لمدة 31 يومًا. حذف ملفات الارتباط أو استخدام جهاز آخر قد يؤدي إلى احتساب زيارة فريدة جديدة.</p><h2>الاحتفاظ والحذف</h2><p>قد تبقى إعدادات وبيانات السيرفر ما دامت الخدمة مستخدمة. يمكن لمالك السيرفر التواصل لطلب حذف بيانات سيرفره، مع مراعاة ما يلزم للاحتفاظ بسجلات تشغيل أو التزامات قانونية إن وجدت.</p><h2>Discord</h2><p>يستخدم ZOMBI واجهة Discord الرسمية لتشغيل البوت وإدارة السيرفرات التي تمت إضافته إليها.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
   app.get('/terms',async(req,res,next)=>{try{const site=await store.getGlobalConfig();res.send(layout('شروط الخدمة',`<section class="legal"><h1>شروط الخدمة</h1><p>باستخدام ZOMBI أو Dashboard فإنك توافق على استخدام الخدمة بشكل قانوني ووفق شروط Discord.</p><h2>صلاحيات السيرفر</h2><p>يجب أن تكون مخولًا لإضافة البوت أو تعديل إعدادات السيرفر. بعض الوظائف تحتاج صلاحيات Discord مثل Manage Channels وManage Roles، ويجب أن تكون رتبة البوت أعلى من الرتب التي يديرها.</p><h2>Free وPremium وPremium+</h2><p>الميزات والحدود المتاحة لكل خطة يحددها مالك ZOMBI وقد تتغير. مدة Premium تبدأ حسب الكود أو التفعيل الممنوح للسيرفر، ولا يمنح Premium حق تغيير حساب البوت العالمي لكل سيرفر؛ التخصيص لكل سيرفر يقتصر على الخيارات التي يوفرها Dashboard.</p><h2>الاستخدام المقبول</h2><p>لا تستخدم الخدمة للإساءة، التخريب، الاحتيال، انتهاك حقوق الآخرين أو مخالفة قواعد Discord. يجوز تعطيل الوصول عند إساءة الاستخدام.</p><h2>توفر الخدمة</h2><p>نسعى لاستمرار الخدمة لكن لا نضمن عدم الانقطاع أو فقدان البيانات بسبب أعطال خارجية. يُنصح بالاحتفاظ بنسخ احتياطية للإعدادات المهمة.</p>${site.supportUrl?`<p><a class="btn" href="${esc(site.supportUrl)}">التواصل مع الدعم</a></p>`:''}<p class="hint">آخر تحديث: 5 سبتمبر 2026</p></section>`,req.user));}catch(e){next(e);}});
-  app.get('/auth/discord',(req,res)=>{
-    console.info('[OAuth] login_start_requested');
-    const state=crypto.randomBytes(24).toString('hex'),now=Date.now();
-    const states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
-    req.session.oauthStates=[...states.filter(x=>x&&Number(x.at)>now-10*60*1000),{value:state,at:now}].slice(-5);
-    const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
-    const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});
-    req.session.save(err=>{if(err){console.error('[OAuth] login_start_session_save_failed',err.message);return res.status(503).send(layout('Session Error','<section class="login"><h1>تعذر حفظ جلسة تسجيل الدخول</h1><p>تحقق من اتصال قاعدة البيانات ثم حاول مرة أخرى.</p><a class="btn" href="/auth/discord">إعادة المحاولة</a></section>',req.user));}console.info('[OAuth] login_start_session_saved redirecting_to_discord');res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
-  });
-  app.get('/auth/discord/callback',async(req,res,next)=>{let oauthStage='callback_received';try{
-    console.info('[OAuth] callback_received',JSON.stringify({hasCode:!!req.query.code,hasState:!!req.query.state,hasDiscordError:!!req.query.error}));
-    if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
-    const incomingState=String(req.query.state||''),states=Array.isArray(req.session.oauthStates)?req.session.oauthStates:[];
-    const stateIndex=states.findIndex(x=>String(x?.value||'')===incomingState&&Date.now()-Number(x?.at||0)<10*60*1000);
-    if(!req.query.code||!incomingState||stateIndex<0){console.warn('[OAuth] callback_state_validation_failed',JSON.stringify({hasCode:!!req.query.code,hasState:!!incomingState,matchedState:stateIndex>=0,sessionStateCount:states.length}));return res.status(400).send(layout('OAuth Error','<section class="login"><h1>❌ فشل تسجيل الدخول</h1><p>جلسة تسجيل الدخول انتهت أو غير صالحة.</p><a class="btn" href="/auth/discord">تسجيل الدخول</a></section>',req.user));}
-    req.session.oauthStates=states.filter((_,i)=>i!==stateIndex);
-    const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
-    async function requestJson(url,options,label,maxShortRetries=1){
-      for(let attempt=0;;attempt++){
-        oauthStage=label;console.info('[OAuth] discord_request_started',label);
-        const response=await fetch(url,options),raw=await response.text();let data=null;
-        try{data=raw?JSON.parse(raw):{};}catch{data=null;}
-        const header=(name)=>response.headers.get(name)||null;
-        const meta={stage:label,status:response.status,contentType:header('content-type'),retryAfter:data?.retry_after??header('retry-after'),rateLimitScope:header('x-ratelimit-scope'),rateLimitGlobal:header('x-ratelimit-global'),rateLimitLimit:header('x-ratelimit-limit'),rateLimitRemaining:header('x-ratelimit-remaining'),rateLimitResetAfter:header('x-ratelimit-reset-after'),rateLimitBucket:header('x-ratelimit-bucket'),cfRay:header('cf-ray'),server:header('server'),discordMessage:data?.message||data?.error_description||data?.error||null,discordCode:data?.code??null,bodyIsJson:!!data};
-        console.info('[OAuth] discord_request_finished',JSON.stringify(meta));
-        if(response.ok){if(!data){const err=new Error(`${label} رجّع رد غير متوقع (${response.status}).`);err.status=response.status;throw err;}return data;}
-        if(!data){const err=new Error(`${label} رجّع رد غير JSON (${response.status}).`);err.status=response.status;err.retryAfter=Number(header('retry-after')||0);err.discordMeta=meta;throw err;}
-        const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||header('retry-after')||0);err.discordScope=header('x-ratelimit-scope');err.discordGlobal=String(header('x-ratelimit-global')||'').toLowerCase()==='true'||data?.global===true;err.discordCode=data?.code??null;err.discordCfRay=header('cf-ray');
-        if(response.status===429)console.error('[OAuth] discord_429_classification',JSON.stringify(meta));
-        const waitMs=Math.ceil(Number(err.retryAfter||0)*1000);
-        if(response.status===429&&attempt<maxShortRetries&&waitMs>0&&waitMs<=5000){await sleepMs(waitMs+150);continue;}
-        throw err;
-      }
-    }
-    async function loginViaProxy(code){
-      const proxyUrl=oauthProxyUrl();if(!proxyUrl)return null;
-      const secrets=proxySecretCandidates();if(!secrets.length){const e=new Error('OAUTH Proxy موجود لكن لا يوجد مفتاح توثيق متاح.');e.status=500;throw e;}
-      let authError=null;
-      for(const secret of secrets){
-        try{
-          const data=await requestJson(proxyUrl,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:String(code),redirect_uri:redirect})},'ZOMBI OAuth Proxy',1);
-          if(!data?.ok||!data?.user)throw new Error(data?.error||'OAuth Proxy لم يرجع بيانات المستخدم.');
-          return{user:data.user,guilds:Array.isArray(data.guilds)?data.guilds:[]};
-        }catch(e){if([401,403].includes(Number(e?.status||0))){authError=e;continue;}throw e;}
-      }
-      throw authError||new Error('تعذر توثيق OAuth Proxy.');
-    }
-    async function loginDirect(code){
-      const clientId=String(process.env.DISCORD_CLIENT_ID||'').trim(),clientSecret=String(process.env.DISCORD_CLIENT_SECRET||'').trim();
-      if(!clientId||!clientSecret)throw new Error('DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET غير مكتملة.');
-      const body=new URLSearchParams({client_id:clientId,client_secret:clientSecret,grant_type:'authorization_code',code:String(code),redirect_uri:redirect});
-      const td=await requestJson(OAUTH_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body},'Discord OAuth token',1);
-      if(!td?.access_token)throw new Error('Discord لم يرجع access token.');
-      const headers={Authorization:`Bearer ${td.access_token}`,Accept:'application/json'};
-      const user=await requestJson(`${API}/users/@me`,{headers},'Discord user profile',1);
-      await sleepMs(75);
-      const guilds=await requestJson(`${API}/users/@me/guilds`,{headers},'Discord guild list',1);
-      return{user,guilds:Array.isArray(guilds)?guilds:[]};
-    }
-    oauthStage='discord_authentication';console.info('[OAuth] authentication_flow_started',JSON.stringify({proxyConfigured:!!oauthProxyUrl()}));
-    const authResult=(await loginViaProxy(req.query.code))||await loginDirect(req.query.code),user=authResult.user,guilds=authResult.guilds;
-    oauthStage='session_regenerate';console.info('[OAuth] discord_authentication_succeeded');
-    const to=safeReturnTo(req.session.returnTo||'/dashboard');
-    const dashboardPasswordOk=req.session?.dashboardPasswordOk===true;
-    await new Promise((resolve,reject)=>req.session.regenerate(err=>err?reject(err):resolve()));
-    if(dashboardPasswordOk)req.session.dashboardPasswordOk=true;
-    req.session.user={id:user.id,username:user.username,displayName:user.global_name||user.username,avatar:user.avatar,guilds:Array.isArray(guilds)?guilds:[]};
-    oauthStage='session_save';await new Promise((resolve,reject)=>req.session.save(err=>err?reject(err):resolve()));
-    console.info('[OAuth] login_completed redirecting_to_dashboard');res.redirect(to);
-  }catch(e){
-    console.error('[OAuth] login_failed',JSON.stringify({stage:oauthStage,status:Number(e?.status)||null,retryAfter:Number(e?.retryAfter)||null,errorType:e?.name||'Error'}));
-    if(Number(e?.status)===429){const seconds=Math.max(1,Math.ceil(Number(e?.retryAfter||30)));res.set('Retry-After',String(seconds));return res.status(429).send(layout('OAuth Rate Limit',`<section class="login"><h1>⏳ Discord مشغول مؤقتًا</h1><p>تم إيقاف المحاولة بدل تكرار الطلبات. انتظر تقريبًا ${seconds} ثانية ثم اضغط تسجيل الدخول مرة واحدة.</p><a class="btn primary" href="/auth/discord">تسجيل الدخول من جديد</a><a class="btn" href="/">رجوع</a></section>`,req.user));}
-    next(e);
-  }});
-  app.get('/login',(req,res)=>res.redirect('/auth/discord'));app.get('/logout',(req,res)=>{const cookieName='connect.sid';req.session.destroy(err=>{res.clearCookie(cookieName,{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://')});if(err)securityEvent('logout_session_destroy_failed',req,'error');res.redirect('/');});});
+  app.all('/auth/discord*',(req,res)=>res.status(404).send('Discord OAuth login is disabled.'));
 
   app.get('/checkout',requireLogin,async(req,res,next)=>{try{
     const plan=paymentPlan(req.query.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);
     if(!zain.enabled)return res.status(503).send(layout('Zain Cash',`<section class="login"><h1>🟡 الدفع عبر Zain Cash غير مفعّل</h1><p>لم يتم إعداد رقم المحفظة بعد. تواصل مع مالك ZOMBI.</p><a class="btn" href="/premium">رجوع للاشتراكات</a></section>`,req.user));
-    const manageable=(req.user.guilds||[]).filter(canManage).slice(0,100),presence=await getBotPresenceSnapshot(),installed=manageable.filter(g=>presence.ids.has(String(g.id)));
+    const manageable=(req.user.guilds||[]).slice(0,500),presence=await getBotPresenceSnapshot(),installed=manageable.filter(g=>presence.ids.has(String(g.id)));
     const amount=paymentAmount(zain,plan),days=paymentDays(zain,plan),token=csrf(req),planLabel=PLAN_LABELS[plan];
     const options=installed.map(g=>`<option value="${esc(g.id)}">${esc(g.name)} — ${esc(g.id)}</option>`).join('');
     const body=`<section class="z-pay-wrap"><div class="z-pay-head"><span class="badge">ZAIN CASH PAYMENT</span><h1>🟡 اشترك في ${esc(planLabel)}</h1><p>الدفع يدوي وآمن: حوّل المبلغ ثم ارفع صورة التحويل. التفعيل يتم بعد موافقة Owner.</p></div>
@@ -1390,7 +1330,7 @@ async function start(){
 
   app.post('/checkout',requireLogin,checkCsrf,async(req,res,next)=>{try{
     const plan=paymentPlan(req.body.plan),site=await store.getGlobalConfig(),zain=resolvedZainCash(site);if(!zain.enabled)throw new Error('الدفع عبر Zain Cash غير مفعّل.');
-    const gid=String(req.body.guildId||'').trim(),g=userGuild(req,gid);if(!g||!canManage(g))return res.status(403).send(layout('Payment Error','<section class="login"><h1>❌ لا تملك صلاحية إدارة هذا السيرفر</h1><a class="btn" href="/checkout?plan='+plan+'">رجوع</a></section>',req.user));
+    const gid=String(req.body.guildId||'').trim(),g=userGuild(req,gid);if(!g||!isOwner(req.user))return res.status(403).send(layout('Payment Error','<section class="login"><h1>❌ لا تملك صلاحية إدارة هذا السيرفر</h1><a class="btn" href="/checkout?plan='+plan+'">رجوع</a></section>',req.user));
     if(!await getBotGuild(gid).catch(()=>null))throw new Error('بوت ZOMBI غير موجود في السيرفر المحدد.');
     const currentPlan=planNameForConfig(await store.getConfig(gid));if(currentPlan==='premium_plus'&&plan==='premium')throw new Error('هذا السيرفر لديه Premium+ فعّال. اختر Premium+ للتجديد بدل Premium.');
     const payerPhone=normalizePayerPhone(req.body.payerPhone);if(!payerPhone)throw new Error('رقم الهاتف غير صالح.');
@@ -1406,7 +1346,7 @@ async function start(){
   }catch(e){next(e);}});
 
   app.get('/dashboard',requireLogin,async(req,res,next)=>{try{
-    const manageable=(req.user.guilds||[]).filter(canManage).slice(0,100);
+    const manageable=(req.user.guilds||[]).slice(0,500);
     const presence=await getBotPresenceSnapshot();
     const reliable=Boolean(presence.api||presence.heartbeat?.guildIds?.length||presence.heartbeat?.guildCount===0);
 
