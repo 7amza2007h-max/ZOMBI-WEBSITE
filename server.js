@@ -1267,27 +1267,25 @@ async function start(){
      if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
-       // Serve the cached guild list immediately; refresh Discord guild details in the background.
+       // Load verified Discord guild names before rendering the dashboard.
+       // The previous background-only refresh rendered raw IDs on the first
+       // request and could keep doing so whenever Discord lookup failed.
        if(ownerGuildCache.until>Date.now()&&ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
        try{
          const hb=await getRecentBotHeartbeat();
          let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
          if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
          ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
-         // Do not make every dashboard click wait for up to 500 Discord API requests.
-         req.user.guilds=ids.map(id=>({id,name:id,permissions:ADMINISTRATOR.toString(),owner:false}));
          if(!ownerGuildCache.refreshing){
            ownerGuildCache.refreshing=(async()=>{
-             // Bot tokens cannot use OAuth's /users/@me/guilds endpoint to
-             // enumerate guild names. Fetch each known heartbeat guild directly
-             // through the bot's /guilds/:id endpoint, with bounded concurrency.
              const allIds=[...new Set(ids.map(String))].slice(0,500);
              const guilds=[];
              for(let i=0;i<allIds.length;i+=5){
                const batch=await Promise.all(allIds.slice(i,i+5).map(async id=>{
                  try{
                    const g=await getBotGuild(id);
-                   return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;
+                   if(!g||!g.name)return null;
+                   return {...g, id:String(g.id||id), name:String(g.name), permissions:ADMINISTRATOR.toString(), owner:false};
                  }catch(e){
                    console.warn(`[Dashboard] guild name fetch failed for ${id}:`,e.message);
                    return null;
@@ -1295,10 +1293,16 @@ async function start(){
                }));
                guilds.push(...batch.filter(Boolean));
              }
-             ownerGuildCache.guilds=guilds;ownerGuildCache.until=Date.now()+5*60*1000;
-           })().catch(e=>console.error('[Dashboard] bot guild list load failed:',e.message)).finally(()=>{ownerGuildCache.refreshing=null;});
+             ownerGuildCache.guilds=guilds;
+             ownerGuildCache.until=Date.now()+5*60*1000;
+           })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;}).finally(()=>{ownerGuildCache.refreshing=null;});
          }
-       }catch(e){console.error('[Dashboard] bot guild list load failed:',e.message);req.user.guilds=ownerGuildCache.guilds||[];}
+         await ownerGuildCache.refreshing;
+         req.user.guilds=ownerGuildCache.guilds.length?ownerGuildCache.guilds:[];
+       }catch(e){
+         console.error('[Dashboard] bot guild list load failed:',e.message);
+         req.user.guilds=ownerGuildCache.guilds||[];
+       }
        return next();
      }
      if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
