@@ -1267,42 +1267,33 @@ async function start(){
      if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
-       // Load verified Discord guild names before rendering the dashboard.
-       // The previous background-only refresh rendered raw IDs on the first
-       // request and could keep doing so whenever Discord lookup failed.
-       if(ownerGuildCache.until>Date.now()&&ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
-       try{
-         const hb=await getRecentBotHeartbeat();
-         let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
-         if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
-         ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
-         if(!ownerGuildCache.refreshing){
-           ownerGuildCache.refreshing=(async()=>{
-             const allIds=[...new Set(ids.map(String))].slice(0,500);
-             const guilds=[];
-             for(let i=0;i<allIds.length;i+=5){
-               const batch=await Promise.all(allIds.slice(i,i+5).map(async id=>{
-                 try{
-                   const g=await getBotGuild(id);
-                   if(!g||!g.name)return null;
-                   return {...g, id:String(g.id||id), name:String(g.name), permissions:ADMINISTRATOR.toString(), owner:false};
-                 }catch(e){
-                   console.warn(`[Dashboard] guild name fetch failed for ${id}:`,e.message);
-                   return null;
-                 }
-               }));
-               guilds.push(...batch.filter(Boolean));
-             }
-             ownerGuildCache.guilds=guilds;
-             ownerGuildCache.until=Date.now()+5*60*1000;
-           })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;}).finally(()=>{ownerGuildCache.refreshing=null;});
-         }
-         await ownerGuildCache.refreshing;
-         req.user.guilds=ownerGuildCache.guilds.length?ownerGuildCache.guilds:[];
-       }catch(e){
-         console.error('[Dashboard] bot guild list load failed:',e.message);
-         req.user.guilds=ownerGuildCache.guilds||[];
+       if(ownerGuildCache.until>Date.now()){req.user.guilds=ownerGuildCache.guilds;return next();}
+       if(!ownerGuildCache.refreshing){
+         ownerGuildCache.refreshing=(async()=>{
+           const hb=await getRecentBotHeartbeat().catch(()=>null);
+           let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
+           if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
+           ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
+           const guilds=[];
+           for(let i=0;i<ids.length;i+=10){
+             const batch=await Promise.all(ids.slice(i,i+10).map(async id=>{
+               let snapshot=null,live=null;
+               try{snapshot=await readStoredGuildBundle(id);}catch{}
+               const saved=snapshot?.guild&&String(snapshot.guild.id||id)===id?snapshot.guild:null;
+               if(saved?.name)return {...saved,id,name:String(saved.name),icon:saved.icon||null,permissions:ADMINISTRATOR.toString(),owner:false};
+               try{live=await getBotGuild(id);}catch(e){console.warn(`[Dashboard] guild lookup failed for ${id}:`,e.message);}
+               if(live?.name)return {...live,id:String(live.id||id),name:String(live.name),permissions:ADMINISTRATOR.toString(),owner:false};
+               return {id,name:`سيرفر ${id.slice(-4)} (تعذر جلب الاسم مؤقتًا)`,icon:null,permissions:ADMINISTRATOR.toString(),owner:false,_nameUnavailable:true};
+             }));
+             guilds.push(...batch.filter(Boolean));
+           }
+           ownerGuildCache.guilds=guilds;
+           ownerGuildCache.until=Date.now()+60_000;
+         })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=Date.now()+15_000;}).finally(()=>{ownerGuildCache.refreshing=null;});
        }
+       if(ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
+       await ownerGuildCache.refreshing;
+       req.user.guilds=ownerGuildCache.guilds||[];
        return next();
      }
      if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
@@ -1459,9 +1450,7 @@ res.send(layout('Dashboard', `
   ${apiWarning}
 
   <div class="servers">
-    ${cards || (!unknownCards
-      ? '<p>لا توجد سيرفرات متاحة للإدارة حاليًا.</p>'
-      : '')}
+    ${cards || unknownCards || '<p>لا توجد سيرفرات متاحة للإدارة حاليًا.</p>'}
   </div>
 
   ${unknownCards
