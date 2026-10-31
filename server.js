@@ -140,7 +140,7 @@ function makeDiscordError(response,data,label='Discord API'){
 async function directBotRequest(route,options={}){
   const token=botToken();
   if(!token){const e=new Error('BOT_TOKEN غير موجود في إعدادات الموقع.');e.code='BOT_TOKEN_MISSING';throw e;}
-  const res=await fetch(API+route,{...options,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',Accept:'application/json',...(options.headers||{})}});
+  const res=await fetch(API+route,{...options,signal:options.signal||AbortSignal.timeout(12000),headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json',Accept:'application/json',...(options.headers||{})}});
   if(res.status===204)return null;
   const text=await res.text();let data=null;try{data=text?JSON.parse(text):null;}catch{data=text?{message:text}:null;}
   if(!res.ok){const error=makeDiscordError(res,data,'Discord API');error.discordRoute=String(route).slice(0,180);throw error;}
@@ -153,7 +153,7 @@ async function proxyBotRequest(route,options={}){
   if(options.body!==undefined&&options.body!==null){if(typeof options.body==='string'){try{bodyValue=JSON.parse(options.body);}catch{bodyValue=options.body;}}else bodyValue=options.body;}
   let lastAuthError=null;
   for(const secret of proxy.secrets){
-    const res=await fetch(proxy.url,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
+    const res=await fetch(proxy.url,{method:'POST',signal:AbortSignal.timeout(12000),headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({route:String(route),method,body:bodyValue})});
     const text=await res.text();let payload=null;try{payload=text?JSON.parse(text):null;}catch{payload={error:text};}
     if([401,403].includes(res.status)){lastAuthError=makeDiscordError(res,payload,'ZOMBI Discord Proxy');continue;}
     if(!res.ok||payload?.ok===false){const discordData=payload?.data||payload;const e=makeDiscordError(res,discordData,'Discord API');e.status=Number(payload?.status||res.status);e.retryAfter=Number(payload?.retry_after||discordData?.retry_after||e.retryAfter||0);e.discordGlobal=Boolean(payload?.global||discordData?.global||e.discordGlobal);e.discordRoute=String(route).slice(0,180);throw e;}
@@ -267,7 +267,9 @@ async function botFetch(route,options={}){
       let result;
       try{result=await performBotRequestRetry(route,options,2);}
       catch(error){
-        if(Number(error?.status)===429&&cached&&cached.staleUntil>now)return cached.data;
+        const status=Number(error?.status||0),code=String(error?.cause?.code||error?.code||'');
+        const transient=status===429||status>=500||['TimeoutError','AbortError'].includes(String(error?.name||''))||['ECONNRESET','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT'].includes(code);
+        if(transient&&cached&&cached.staleUntil>Date.now())return cached.data;
         error.discordRoute=String(route).slice(0,180);
         throw error;
       }
@@ -1269,8 +1271,10 @@ async function start(){
          ownerGuildCache.refreshing=(async()=>{
            const hb=await getRecentBotHeartbeat();
            let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
-           // Older bot builds may not send guildIds. Use only guilds with persisted dashboard config as fallback.
-           if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
+           // Gateway heartbeat is the authoritative complete bot guild list.
+           // Bot REST cannot enumerate guilds; persisted IDs are only a partial fallback.
+           const hasAuthoritativeHeartbeat=Boolean(hb&&hb.ready!==false&&(ids.length||hb.guildCount===0));
+           if(!hasAuthoritativeHeartbeat)ids=await store.allGuildIds().catch(()=>[]);
            ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000);
            const known=new Map((ownerGuildCache.guilds||[]).map(g=>[String(g.id),g]));
            const verified=[];let transientFailures=0;
@@ -1281,7 +1285,14 @@ async function start(){
              }));verified.push(...batch.filter(Boolean));
            }
            if(transientFailures&&verified.length===0&&!ownerGuildCache.loaded){const e=new Error('تعذر التحقق من سيرفرات البوت بسبب خطأ مؤقت من Discord.');e.code='GUILD_DISCOVERY_TEMPORARY_FAILURE';throw e;}
-           ownerGuildCache.guilds=verified;ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+(transientFailures?30_000:5*60_000);
+           if(!hasAuthoritativeHeartbeat&&!ids.length&&!ownerGuildCache.loaded){
+             const e=new Error('لم يصل heartbeat موثوق من خدمة البوت بعد؛ لا يمكن اعتبار قائمة السيرفرات فارغة.');
+             e.code='GUILD_DISCOVERY_NO_SOURCE';throw e;
+           }
+           const verifiedMap=new Map(verified.map(g=>[String(g.id),g]));
+           for(const oldGuild of ownerGuildCache.guilds||[])if(!verifiedMap.has(String(oldGuild.id))&&transientFailures)verifiedMap.set(String(oldGuild.id),oldGuild);
+           ownerGuildCache.guilds=[...verifiedMap.values()];
+           ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+(transientFailures?30_000:hasAuthoritativeHeartbeat?60_000:30_000);
          })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;throw e;}).finally(()=>{ownerGuildCache.refreshing=null;});
        }
        try{
@@ -2712,9 +2723,11 @@ res.send(layout('Dashboard', `
   app.get('/premium',async(req,res,next)=>{try{res.send(layout('Premium وPremium+',pricing(publicSiteConfig(await store.getGlobalConfig())),req.user));}catch(e){next(e);}});
 
   app.get('/owner',requireLogin,requireOwner,async(req,res,next)=>{try{
-    const token=csrf(req),ids=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse(),paymentItems=await payments.list({limit:100});
+    const token=csrf(req),storedIds=await store.allGuildIds(),site=await store.getGlobalConfig(),codes=(await store.getCodes()).slice(-40).reverse(),paymentItems=await payments.list({limit:100});
     const zain=resolvedZainCash(site),pendingPayments=paymentItems.filter(x=>x.status==='pending').length;
-    const presence=await getBotPresenceSnapshot(),userGuildMap=new Map((req.user?.guilds||[]).map(g=>[String(g.id),g]));
+    const presence=await getBotPresenceSnapshot();
+    const ids=[...new Set([...storedIds,...(presence.heartbeat?.guildIds||[])].map(String).filter(id=>/^\d{15,25}$/.test(id)))].slice(0,5000);
+    const userGuildMap=new Map((req.user?.guilds||[]).map(g=>[String(g.id),g]));
     const apiGuilds=presence.api?.guilds instanceof Map?presence.api.guilds:new Map();
     const entries=await Promise.all(ids.slice(0,250).map(async id=>{
       const sid=String(id),knownInstalled=presence.ids.has(sid),fallbackGuild=userGuildMap.get(sid)||null;

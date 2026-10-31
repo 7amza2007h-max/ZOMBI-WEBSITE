@@ -21,6 +21,7 @@ const {
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 // مكتبات العجلة المتحركة الموجودة في مشروعك - تحميل آمن
 let createCanvas = null;
@@ -13682,6 +13683,74 @@ async function registerCommands() {
     }
 }
 
+
+// ==========================================================
+// ZOMBI DASHBOARD GUILD HEARTBEAT
+// The Discord Gateway client is the only reliable source for the
+// complete list of guilds joined by this bot.
+// ==========================================================
+const dashboardHeartbeatUrl = String(
+    process.env.DASHBOARD_URL || process.env.ZOMBI_DASHBOARD_URL || process.env.WEBSITE_URL || ''
+).trim().replace(/\/+$/, '');
+
+async function publishDashboardHeartbeat() {
+    if (!dashboardHeartbeatUrl || !TOKEN || !client.isReady()) return;
+    const guildIds = [...client.guilds.cache.keys()]
+        .filter(id => /^\d{15,25}$/.test(String(id)))
+        .slice(0, 5000);
+    const secret = crypto.createHash('sha256')
+        .update(`ZOMBI_SYNC:${TOKEN}`)
+        .digest('hex');
+    try {
+        const response = await fetch(`${dashboardHeartbeatUrl}/api/bot-sync/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${secret}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json'
+            },
+            body: JSON.stringify({
+                at: Date.now(),
+                ready: true,
+                botId: String(client.user.id),
+                botTag: String(client.user.tag),
+                guildCount: guildIds.length,
+                guildIds
+            }),
+            signal: AbortSignal.timeout(10000)
+        });
+        if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            console.warn(`⚠️ Dashboard heartbeat rejected (${response.status}): ${detail.slice(0, 180)}`);
+            return;
+        }
+        console.log(`✅ Dashboard guild heartbeat: ${guildIds.length} guilds`);
+    } catch (error) {
+        console.warn('⚠️ Dashboard heartbeat unavailable:', error?.message || error);
+    }
+}
+
+let dashboardHeartbeatTimer = null;
+function startDashboardHeartbeat() {
+    if (!dashboardHeartbeatUrl) {
+        console.warn('ℹ️ DASHBOARD_URL is not configured; Owner guild list heartbeat is disabled.');
+        return;
+    }
+    publishDashboardHeartbeat().catch(() => {});
+    if (dashboardHeartbeatTimer) clearInterval(dashboardHeartbeatTimer);
+    dashboardHeartbeatTimer = setInterval(() => {
+        publishDashboardHeartbeat().catch(() => {});
+    }, 60_000);
+    dashboardHeartbeatTimer.unref?.();
+}
+
+client.on('guildCreate', () => {
+    setTimeout(() => publishDashboardHeartbeat().catch(() => {}), 1500).unref?.();
+});
+client.on('guildDelete', () => {
+    setTimeout(() => publishDashboardHeartbeat().catch(() => {}), 1500).unref?.();
+});
+
 // ==========================================================
 // READY
 // ==========================================================؟
@@ -13706,6 +13775,8 @@ client.once('clientReady', async () => {
     console.log(
         '=========================================='
     );
+
+    startDashboardHeartbeat();
 
     try {
         client.user.setPresence({
