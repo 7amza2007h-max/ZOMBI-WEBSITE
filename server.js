@@ -1319,10 +1319,15 @@ async function start(){
     async function requestJson(url,options,label,maxShortRetries=1){
       for(let attempt=0;;attempt++){
         oauthStage=label;console.info('[OAuth] discord_request_started',label);
-        const response=await fetch(url,options),raw=await response.text();console.info('[OAuth] discord_request_finished',JSON.stringify({stage:label,status:response.status}));let data=null;
-        try{data=raw?JSON.parse(raw):{};}catch{const err=new Error(`${label} رجّع رد غير متوقع (${response.status}): ${raw.replace(/\s+/g,' ').slice(0,180)}`);err.status=response.status;throw err;}
-        if(response.ok)return data;
-        const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||response.headers.get('retry-after')||0);
+        const response=await fetch(url,options),raw=await response.text();let data=null;
+        try{data=raw?JSON.parse(raw):{};}catch{data=null;}
+        const header=(name)=>response.headers.get(name)||null;
+        const meta={stage:label,status:response.status,contentType:header('content-type'),retryAfter:data?.retry_after??header('retry-after'),rateLimitScope:header('x-ratelimit-scope'),rateLimitGlobal:header('x-ratelimit-global'),rateLimitLimit:header('x-ratelimit-limit'),rateLimitRemaining:header('x-ratelimit-remaining'),rateLimitResetAfter:header('x-ratelimit-reset-after'),rateLimitBucket:header('x-ratelimit-bucket'),cfRay:header('cf-ray'),server:header('server'),discordMessage:data?.message||data?.error_description||data?.error||null,discordCode:data?.code??null,bodyIsJson:!!data};
+        console.info('[OAuth] discord_request_finished',JSON.stringify(meta));
+        if(response.ok){if(!data){const err=new Error(`${label} رجّع رد غير متوقع (${response.status}).`);err.status=response.status;throw err;}return data;}
+        if(!data){const err=new Error(`${label} رجّع رد غير JSON (${response.status}).`);err.status=response.status;err.retryAfter=Number(header('retry-after')||0);err.discordMeta=meta;throw err;}
+        const err=new Error(data?.error||data?.error_description||data?.message||`${label} failed (${response.status})`);err.status=response.status;err.data=data;err.retryAfter=Number(data?.retry_after||header('retry-after')||0);err.discordScope=header('x-ratelimit-scope');err.discordGlobal=String(header('x-ratelimit-global')||'').toLowerCase()==='true'||data?.global===true;err.discordCode=data?.code??null;err.discordCfRay=header('cf-ray');
+        if(response.status===429)console.error('[OAuth] discord_429_classification',JSON.stringify(meta));
         const waitMs=Math.ceil(Number(err.retryAfter||0)*1000);
         if(response.status===429&&attempt<maxShortRetries&&waitMs>0&&waitMs<=5000){await sleepMs(waitMs+150);continue;}
         throw err;
