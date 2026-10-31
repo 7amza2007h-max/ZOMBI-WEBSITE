@@ -1259,25 +1259,30 @@ async function start(){
      if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
-       // Serve the cached guild list immediately; refresh Discord guild details in the background.
+       // Reuse verified names from cache; otherwise fetch guild details before rendering the list.
        if(ownerGuildCache.until>Date.now()&&ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
        try{
          const hb=await getRecentBotHeartbeat();
          let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
          if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
          ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
-         // Do not make every dashboard click wait for up to 500 Discord API requests.
-         req.user.guilds=ids.map(id=>({id,name:id,permissions:ADMINISTRATOR.toString(),owner:false}));
-         if(!ownerGuildCache.refreshing){
+         if(ownerGuildCache.refreshing){
+           await ownerGuildCache.refreshing;
+         } else {
            ownerGuildCache.refreshing=(async()=>{
              const guilds=[];
              for(let i=0;i<ids.length;i+=10){
-               const batch=await Promise.all(ids.slice(i,i+10).map(async id=>{try{const g=await getBotGuild(id);return g?{...g,permissions:ADMINISTRATOR.toString(),owner:false}:null;}catch{return null;}}));
+               const batch=await Promise.all(ids.slice(i,i+10).map(async id=>{
+                 try{const g=await getBotGuild(id);return g?{...g,id:String(g.id||id),name:String(g.name||id),permissions:ADMINISTRATOR.toString(),owner:false}:null;}
+                 catch(error){console.error(`[Dashboard] failed to load guild ${id}:`,error.message);return null;}
+               }));
                guilds.push(...batch.filter(Boolean));
              }
              ownerGuildCache.guilds=guilds;ownerGuildCache.until=Date.now()+5*60*1000;
-           })().catch(e=>console.error('[Dashboard] bot guild list load failed:',e.message)).finally(()=>{ownerGuildCache.refreshing=null;});
+           })().finally(()=>{ownerGuildCache.refreshing=null;});
+           await ownerGuildCache.refreshing;
          }
+         req.user.guilds=ownerGuildCache.guilds.length?ownerGuildCache.guilds:ids.map(id=>({id,name:id,permissions:ADMINISTRATOR.toString(),owner:false}));
        }catch(e){console.error('[Dashboard] bot guild list load failed:',e.message);req.user.guilds=ownerGuildCache.guilds||[];}
        return next();
      }
