@@ -659,3 +659,37 @@
 })();
 
 // ZOMBI V9.6 professional command-center skin + strict plan locking is applied server-side.
+
+
+// ZOMBI image picker: upload selected files to the bot host and keep the returned URL in the existing field.
+(function(){
+  const imageField=/^(?:.*(?:banner|thumbnail|avatar|logo|image|cover|icon|line).*url|.*url.*(?:banner|thumbnail|avatar|logo|image|cover|icon|line))$/i;
+  function enhance(){
+    document.querySelectorAll('input').forEach(input=>{
+      if(input.dataset.zombiImagePicker||!imageField.test(input.name||''))return;
+      input.dataset.zombiImagePicker='1';
+      const wrap=document.createElement('div');wrap.className='zombi-image-upload';wrap.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px';
+      const file=document.createElement('input');file.type='file';file.accept='image/png,image/jpeg,image/gif,image/webp';file.hidden=true;
+      const button=document.createElement('button');button.type='button';button.className='btn';button.textContent='📁 اختيار صورة من الجهاز';
+      const status=document.createElement('small');status.textContent='ترفع الصورة إلى ملفات البوت تلقائياً';status.style.cssText='color:var(--muted,#aaa)';
+      button.addEventListener('click',()=>file.click());
+      file.addEventListener('change',async()=>{
+        const selected=file.files&&file.files[0];if(!selected)return;
+        if(selected.size>5*1024*1024){status.textContent='حجم الصورة أكبر من 5MB.';file.value='';return;}
+        if(!/^image\/(png|jpeg|gif|webp)$/.test(selected.type)){status.textContent='صيغة الصورة غير مدعومة.';file.value='';return;}
+        const form=input.closest('form'),csrf=form?.querySelector('[name="_csrf"]')?.value||'';
+        const guildId=(location.pathname.match(/\/dashboard\/([0-9]+)/)||[])[1]||'';
+        button.disabled=true;status.textContent='⏳ جاري رفع الصورة إلى استضافة البوت...';
+        try{
+          const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('تعذرت قراءة الصورة.'));reader.readAsDataURL(selected);});
+          const response=await fetch('/api/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({data,guildId})});
+          const result=await response.json().catch(()=>({}));if(!response.ok||!result.ok||!result.url)throw new Error(result.error||'فشل رفع الصورة.');
+          input.value=result.url;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));status.textContent='✅ تم رفع الصورة؛ الرابط جاهز، اضغط حفظ.';
+        }catch(error){status.textContent='❌ '+(error.message||'تعذر رفع الصورة.');}finally{button.disabled=false;file.value='';}
+      });
+      wrap.append(button,file,status);input.insertAdjacentElement('afterend',wrap);
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',enhance);else enhance();
+  new MutationObserver(enhance).observe(document.documentElement,{childList:true,subtree:true});
+})();

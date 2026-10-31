@@ -1145,6 +1145,13 @@ function applyGuildBrandToPayload(payload,cfg,bundle){
     if(value&&typeof value==='object'){
       const out={};
       for(const [k,v] of Object.entries(value))out[k]=walk(v,k);
+      // Every dashboard panel footer is scoped to the guild that owns this configuration.
+      if(String(key).toLowerCase()==='footer'&&typeof out.text==='string'){
+        let suffix=out.text.trim();
+        if(suffix.toLowerCase().startsWith(brand.toLowerCase()))suffix=suffix.slice(brand.length).replace(/^\s*[•|—-]\s*/,'').trim();
+        else if(/[•|—-]/.test(suffix))suffix=suffix.replace(/^.*?(?:\s*[•|—-]\s*)/,'').trim();
+        out.text=`${brand}${suffix?` • ${suffix}`:''}`.slice(0,2048);
+      }
       return out;
     }
     return value;
@@ -1216,6 +1223,21 @@ async function start(){
   let sessionStore;if(String(process.env.DATABASE_URL||'').trim()){const {Pool}=require('pg');const sslDisabled=String(process.env.DATABASE_SSL||'').toLowerCase()==='false';const rawDb=String(process.env.DATABASE_URL||'').trim();let sessionConnectionString=rawDb;try{const u=new URL(rawDb);for(const k of ['sslmode','sslcert','sslkey','sslrootcert','channel_binding'])u.searchParams.delete(k);sessionConnectionString=u.toString();}catch{}const sessionPool=new Pool({connectionString:sessionConnectionString,ssl:sslDisabled?false:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:15000,keepAlive:true});class PgSessionStore extends session.Store{get(sid,cb){sessionPool.query('SELECT sess,expire_at FROM zombi_web_sessions WHERE sid=$1',[sid]).then(r=>{const row=r.rows[0];if(!row||Number(row.expire_at||0)<Date.now())return cb(null,null);cb(null,row.sess);}).catch(cb);}set(sid,sess,cb){const exp=sess?.cookie?.expires?new Date(sess.cookie.expires).getTime():Date.now()+7*86400000;sessionPool.query(`INSERT INTO zombi_web_sessions(sid,sess,expire_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(sid) DO UPDATE SET sess=EXCLUDED.sess,expire_at=EXCLUDED.expire_at`,[sid,JSON.stringify(sess||{}),exp]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}destroy(sid,cb){sessionPool.query('DELETE FROM zombi_web_sessions WHERE sid=$1',[sid]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}}sessionStore=new PgSessionStore();}
   if(!sessionStore&&process.env.NODE_ENV==='production')throw new Error('Persistent PostgreSQL session store unavailable; refusing production startup.');
   app.use(session({store:sessionStore,secret:sessionSecret||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session?.user||null;next();});
+  app.post('/api/media/upload',requireLogin,checkCsrf,async(req,res,next)=>{try{
+    if(req.session?.dashboardPasswordOk!==true)return res.status(403).json({ok:false,error:'أدخل كلمة مرور الداش بورد أولاً.'});
+    const guildId=String(req.body?.guildId||'').trim(),membership=userGuild(req,guildId);
+    if(!/^\d{15,25}$/.test(guildId)||!membership||!canManage(membership))return res.status(403).json({ok:false,error:'لا تملك صلاحية رفع الصور لهذا السيرفر.'});
+    const raw=String(req.body?.data||''),match=raw.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);
+    if(!match) return res.status(400).json({ok:false,error:'اختر صورة PNG أو JPG أو GIF أو WEBP.'});
+    const bytes=Buffer.from(match[2].replace(/\s+/g,''),'base64');
+    if(!bytes.length||bytes.length>5*1024*1024)return res.status(413).json({ok:false,error:'حجم الصورة يجب ألا يتجاوز 5MB.'});
+    const detected=detectDiscordImageMime(bytes);if(!['image/png','image/jpeg','image/gif','image/webp'].includes(detected))return res.status(400).json({ok:false,error:'ملف الصورة غير صالح.'});
+    const endpoint=String(process.env.BOT_MEDIA_API_URL||'').trim(),secret=String(process.env.BOT_MEDIA_API_SECRET||'').trim();
+    if(!endpoint||!secret)return res.status(503).json({ok:false,error:'رفع الصور غير مربوط باستضافة البوت. أضف BOT_MEDIA_API_URL وBOT_MEDIA_API_SECRET إلى إعدادات الموقع.'});
+    const response=await fetch(endpoint.replace(/\/$/,'')+'/api/media/upload',{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({guildId,mime:detected,data:bytes.toString('base64')})});
+    const result=await response.json().catch(()=>({}));if(!response.ok||!result?.ok||!result?.url)throw new Error(result?.error||`استضافة البوت رفضت رفع الصورة (${response.status}).`);
+    res.json({ok:true,url:result.url,name:result.name||''});
+  }catch(e){next(e);}});
    // Site-wide dashboard password gate. The password is configured only through DASHBOARD_PASSWORD.
    const dashboardPassword=String(process.env.DASHBOARD_PASSWORD||'');
    const dashboardPasswordPage=(error='')=>`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حماية لوحة التحكم</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090c;color:#f6f0e3;font-family:Tahoma,Arial,sans-serif;padding:20px}.card{width:min(420px,100%);padding:30px;border:1px solid #a77c32;border-radius:18px;background:#141419;box-shadow:0 18px 70px #0008}h1{font-size:25px;margin:0 0 10px;color:#e8c16a}p{color:#c5c0b6;line-height:1.8}input,button{width:100%;padding:14px;border-radius:10px;font-size:16px}input{background:#09090c;color:white;border:1px solid #51452e;margin:12px 0}button{background:#c99b3c;color:#17120a;border:0;font-weight:bold;cursor:pointer}.error{color:#ff9b9b}</style><main class="card"><h1>🔒 لوحة التحكم محمية</h1><p>أدخل الرقم السري للمتابعة. الحماية تشمل جميع السيرفرات ولا تعتمد على صلاحيات Discord.</p>${error?`<p class="error">${error}</p>`:''}<form method="post" action="/dashboard-password"><label for="password">الرقم السري</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">دخول آمن</button></form></main></html>`;
@@ -1283,7 +1305,7 @@ async function start(){
     req.session.oauthStates=[...states.filter(x=>x&&Number(x.at)>now-10*60*1000),{value:state,at:now}].slice(-5);
     const redirect=process.env.DISCORD_CALLBACK_URL||`${baseUrl()}/auth/discord/callback`;
     const q=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',response_type:'code',redirect_uri:redirect,scope:'identify guilds',state});
-    res.redirect(`https://discord.com/oauth2/authorize?${q}`);
+    req.session.save(err=>{if(err){console.error('OAuth session save failed:',err.message);return res.status(503).send(layout('Session Error','<section class="login"><h1>تعذر حفظ جلسة تسجيل الدخول</h1><p>تحقق من اتصال قاعدة البيانات ثم حاول مرة أخرى.</p><a class="btn" href="/auth/discord">إعادة المحاولة</a></section>',req.user));}res.redirect(`https://discord.com/oauth2/authorize?${q}`);});
   });
   app.get('/auth/discord/callback',async(req,res,next)=>{try{
     if(req.query.error)throw new Error(`Discord OAuth: ${String(req.query.error_description||req.query.error)}`);
