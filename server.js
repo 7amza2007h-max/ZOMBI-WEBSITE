@@ -279,44 +279,36 @@ async function botFetch(route,options={}){
   return task;
 }
 
-let botGuildListCache={ids:new Set(),guilds:new Map(),bot:null,until:0,staleUntil:0};
-async function getBotGuildIdSet(force=false){
-  const now=Date.now();
-  if(!force&&botGuildListCache.until>now&&botGuildListCache.ids instanceof Set)return botGuildListCache;
-  try{
-    const [botUser,guilds]=await Promise.all([botFetch('/users/@me'),botFetch('/users/@me/guilds?with_counts=true&limit=200')]);
-    if(!botUser?.id)throw new Error('Discord لم يرجع هوية البوت.');
-    if(!Array.isArray(guilds))throw new Error('Discord لم يرجع قائمة سيرفرات البوت.');
-    const expected=String(process.env.DISCORD_BOT_CLIENT_ID||'').trim();
-    if(expected&&String(botUser.id)!==expected){const e=new Error(`BOT_TOKEN يعود لبوت مختلف عن DISCORD_BOT_CLIENT_ID (${botUser.id} != ${expected}).`);e.code='BOT_ID_MISMATCH';throw e;}
-    botGuildListCache={ids:new Set(guilds.map(g=>String(g.id))),guilds:new Map(guilds.map(g=>[String(g.id),g])),bot:botUser,until:now+2*60*1000,staleUntil:now+20*60*1000};
-    return botGuildListCache;
-  }catch(e){
-    if(botGuildListCache.ids.size&&botGuildListCache.staleUntil>now&&Number(e?.status)===429)return botGuildListCache;
-    throw e;
-  }
-}
 async function getRecentBotHeartbeat(){
   try{
     const hb=await store.data('site','heartbeat.json',{});const at=Number(hb?.at||0);
     if(!at||Date.now()-at>180_000)return null;
-    return{...hb,guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]};
+    return{...hb,guildIds:Array.isArray(hb.guildIds)?hb.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,5000):[]};
   }catch{return null;}
 }
 async function getBotPresenceSnapshot(){
-  // The bot heartbeat already contains its guild IDs. Prefer it when fresh so
-  // dashboard page loads do not wait on Discord's /users/@me/guilds endpoint.
   const heartbeat=await getRecentBotHeartbeat();
   if(heartbeat&&heartbeat.ready!==false&&(heartbeat.guildIds?.length||heartbeat.guildCount===0)){
     return{ids:new Set((heartbeat.guildIds||[]).map(String)),heartbeat,api:null,error:null,source:'heartbeat'};
   }
-  let api=null,error=null;
-  try{api=await getBotGuildIdSet();}catch(e){error=e;}
-  const ids=new Set();
-  if(api?.ids)for(const id of api.ids)ids.add(String(id));
-  if(heartbeat?.ready!==false)for(const id of heartbeat?.guildIds||[])ids.add(String(id));
-  return{ids,heartbeat,api,error,source:api?'discord':'fallback'};
+  // A Bot token cannot call /users/@me/guilds (that is a user OAuth endpoint).
+  // When old bot builds omit guildIds, verify persisted guild IDs directly with /guilds/:id.
+  const candidateIds=await store.allGuildIds().catch(()=>[]);
+  const ids=new Set(),guilds=new Map();let error=null,checked=0;
+  for(let i=0;i<candidateIds.length;i+=4){
+    const batch=await Promise.all(candidateIds.slice(i,i+4).map(async rawId=>{
+      const id=String(rawId);if(!/^\d{15,25}$/.test(id))return null;
+      try{const guild=await getBotGuild(id);return guild?{id,guild}:null;}
+      catch(e){if([403,404].includes(Number(e?.status))||Number(e?.code)===50001)return null;error=error||e;return null;}
+    }));
+    checked+=batch.length;
+    for(const item of batch.filter(Boolean)){ids.add(item.id);guilds.set(item.id,item.guild);}
+  }
+  if(error&&ids.size===0)return{ids,heartbeat,api:null,error,source:'unavailable'};
+  const api=checked?{ids,guilds}:null;
+  return{ids,heartbeat,api,error,source:api?'verified-configured-guilds':'fallback'};
 }
+
 function detectDiscordImageMime(buf){
   if(!Buffer.isBuffer(buf)||buf.length<4)return '';
   if(buf.length>=8&&buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47&&buf[4]===0x0D&&buf[5]===0x0A&&buf[6]===0x1A&&buf[7]===0x0A)return 'image/png';
@@ -469,7 +461,7 @@ function decorateDashboard(html,site,cfg,owner){
 }
 function layout(title,body,user=null){
   const pageClass=title==='Owner'?'owner-page':title==='Dashboard'?'servers-page':'';
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.3.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<span class="pill z-owner-badge">👑 OWNER</span><a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/login">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.3.0"></script><script defer src="/site/role-manager.js?v=16.3.0"></script><script defer src="/site/upgrade.js?v=16.3.0"></script><script defer src="/site/operations-ui.js?v=16.3.0"></script><script>(function(){if(window.__zombiPersistentUpload)return;window.__zombiPersistentUpload=true;function setup(){const m=location.pathname.match(/^\/dashboard\/(\d{15,25})/);if(!m)return;const guildId=m[1];document.querySelectorAll('input[type="url"],input[type="text"]').forEach(function(field){const name=(field.name||field.id||'').toLowerCase();if(!/(image|banner|thumbnail|logo|avatar|background|lineurl|font|panelmedia|cover|iconurl)/.test(name)||field.dataset.zombiUploadReady)return;field.dataset.zombiUploadReady='1';const font=/font/.test(name);const wrap=document.createElement('div');wrap.className='zombi-media-picker';wrap.style.cssText='display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:7px 0';const pick=document.createElement('input');pick.type='file';pick.accept=font?'.woff,.woff2,.ttf,.otf':'image/png,image/jpeg,image/webp,image/gif';pick.hidden=true;const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=font?'📁 اختيار ملف خط من الجهاز':'🖼️ اختيار صورة من الجهاز';const status=document.createElement('small');status.textContent='يحفظ الملف بشكل دائم';status.style.cssText='color:#9ca3af';button.addEventListener('click',()=>pick.click());wrap.append(button,pick,status);field.insertAdjacentElement('afterend',wrap);pick.addEventListener('change',async function(){const file=pick.files&&pick.files[0];if(!file)return;const max=font?5*1024*1024:6*1024*1024;if(file.size>max){status.textContent='حجم الملف أكبر من الحد المسموح.';pick.value='';return;}const form=field.closest('form');const csrf=form&&form.querySelector('input[name="_csrf"]');if(!csrf){status.textContent='تعذر العثور على رمز الحماية؛ حدّث الصفحة.';return;}button.disabled=true;status.textContent='جارٍ رفع الملف...';try{const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('تعذرت قراءة الملف'));reader.readAsDataURL(file);});const response=await fetch('/dashboard/'+guildId+'/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.value,'Accept':'application/json'},body:JSON.stringify({_csrf:csrf.value,dataUrl,filename:file.name,kind:font?'font':'image'})});const result=await response.json().catch(()=>({}));if(!response.ok||!result.url)throw new Error(result.error||'فشل رفع الملف');field.value=result.url;field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));status.textContent='✓ تم رفع الملف وحفظه';}catch(error){status.textContent='تعذر الرفع: '+(error.message||'خطأ غير معروف');}finally{button.disabled=false;pick.value='';}});});}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();})();</script></body></html>`;
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} • ZOMBI</title><link rel="stylesheet" href="/site/site.css?v=16.3.0"></head><body class="${pageClass}"><div class="z-brand-watermark" aria-hidden="true">ZOMBI</div><a class="z-skip-link" href="#main-content">تجاوز إلى المحتوى</a><header class="top"><a class="brand" href="/"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><span>ZOMBI</span></a><nav><a class="pill" href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">انضم لسيرفر ZOMBI</a><a href="/demo">جرّب الداشبورد</a><a class="z-upgrade-nav" href="/premium">💎 الاشتراكات</a>${user?`<a href="/dashboard">Dashboard</a><a href="/payments">دفعاتي</a>${isOwner(user)?'<span class="pill z-owner-badge">👑 OWNER</span><a href="/owner">Owner</a><a href="/owner/health">الصحة والزوار</a>':''}<a class="pill" href="/logout">خروج</a>`:'<a class="pill" href="/login">تسجيل دخول</a>'}</nav></header><main id="main-content" tabindex="-1">${body}</main><footer><span>© ${new Date().getFullYear()} ZOMBI • Discord Bot</span><span class="footer-links"><a href="https://discord.gg/A6SArZA9J" target="_blank" rel="noopener noreferrer">سيرفر ZOMBI</a><a href="/privacy">سياسة الخصوصية</a><a href="/terms">شروط الخدمة</a></span></footer><script defer src="/site/dashboard.js?v=16.3.0"></script><script defer src="/site/role-manager.js?v=16.3.0"></script><script defer src="/site/upgrade.js?v=16.3.0"></script><script defer src="/site/operations-ui.js?v=16.3.0"></script><script defer src="/site/media-picker.js?v=1.0.0"></script><script>(function(){if(window.__zombiPersistentUpload)return;window.__zombiPersistentUpload=true;function setup(){const m=location.pathname.match(/^\/dashboard\/(\d{15,25})/);if(!m)return;const guildId=m[1];document.querySelectorAll('input[type="url"],input[type="text"]').forEach(function(field){const name=(field.name||field.id||'').toLowerCase();if(!/(image|banner|thumbnail|logo|avatar|background|lineurl|font|panelmedia|cover|iconurl)/.test(name)||field.dataset.zombiUploadReady)return;field.dataset.zombiUploadReady='1';const font=/font/.test(name);const wrap=document.createElement('div');wrap.className='zombi-media-picker';wrap.style.cssText='display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:7px 0';const pick=document.createElement('input');pick.type='file';pick.accept=font?'.woff,.woff2,.ttf,.otf':'image/png,image/jpeg,image/webp,image/gif';pick.hidden=true;const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=font?'📁 اختيار ملف خط من الجهاز':'🖼️ اختيار صورة من الجهاز';const status=document.createElement('small');status.textContent='يحفظ الملف بشكل دائم';status.style.cssText='color:#9ca3af';button.addEventListener('click',()=>pick.click());wrap.append(button,pick,status);field.insertAdjacentElement('afterend',wrap);pick.addEventListener('change',async function(){const file=pick.files&&pick.files[0];if(!file)return;const max=font?5*1024*1024:6*1024*1024;if(file.size>max){status.textContent='حجم الملف أكبر من الحد المسموح.';pick.value='';return;}const form=field.closest('form');const csrf=form&&form.querySelector('input[name="_csrf"]');if(!csrf){status.textContent='تعذر العثور على رمز الحماية؛ حدّث الصفحة.';return;}button.disabled=true;status.textContent='جارٍ رفع الملف...';try{const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('تعذرت قراءة الملف'));reader.readAsDataURL(file);});const response=await fetch('/dashboard/'+guildId+'/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.value,'Accept':'application/json'},body:JSON.stringify({_csrf:csrf.value,dataUrl,filename:file.name,kind:font?'font':'image'})});const result=await response.json().catch(()=>({}));if(!response.ok||!result.url)throw new Error(result.error||'فشل رفع الملف');field.value=result.url;field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));status.textContent='✓ تم رفع الملف وحفظه';}catch(error){status.textContent='تعذر الرفع: '+(error.message||'خطأ غير معروف');}finally{button.disabled=false;pick.value='';}});});}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();})();</script></body></html>`;
 }
 function inviteUrl(gid=''){const id=String(process.env.DISCORD_BOT_CLIENT_ID||process.env.DISCORD_CLIENT_ID||'');return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=1099780189206&integration_type=0&scope=bot+applications.commands${gid?`&guild_id=${gid}&disable_guild_select=true`:''}`;}
 async function landing(){const ids=await store.allGuildIds().catch(()=>[]),site=publicSiteConfig(await store.getGlobalConfig());return `<section class="hero"><div><span class="badge">PUBLIC DISCORD BOT</span><h1>سيرفرك. مدينتك.<br><b>عالم ZOMBI.</b></h1><p>ابنِ مجتمعك بالألعاب والاقتصاد والتذاكر. أدِر البنك والمتجر والرتب من لوحة تحكم واحدة، بإعدادات مستقلة لكل سيرفر.</p><div class="actions"><a class="btn primary" href="${inviteUrl()}">➕ إضافة إلى Discord</a><a class="btn" href="/dashboard">⚙️ فتح Dashboard</a><a class="btn z-premium-cta" href="#plans">💎 اكتشف Premium وPremium+</a></div><div class="stats"><div><strong>${ids.length}</strong><span>سيرفر مسجل</span></div><div><strong>15+</strong><span>خدمة في لوحة البنك</span></div><div><strong>Free / Premium / Premium+</strong><span>خطط</span></div></div></div><div class="hero-card"><img src="/assets/zombi-v2-logo.svg" alt="شعار ZOMBI"><h3>ZOMBI CITY</h3><p>من أول جولة إلى مدينة متكاملة.</p><div class="hero-command"><span>للأدمن</span><code>-العاب</code></div><div class="hero-command"><span>داخل روم البنك</span><code>لوحة</code></div><div class="hero-command"><span>تحدّ وانهب الكاش</span><code>نهب @العضو</code></div></div></section><section class="z-command-showcase" aria-labelledby="z-command-showcase-title"><div class="z-showcase-copy"><span class="z-showcase-kicker"><i></i> ZOMBI CYBER COMMAND CENTER</span><h2 id="z-command-showcase-title">مش مجرد بوت.<br><b>مركز قيادة مجتمعك.</b></h2><p>واجهة تجمع إدارة السيرفرات، الحماية، التذاكر، الألعاب، الرتب، والاقتصاد في مكان واحد. كل سيرفر له إعداداته الخاصة.</p><div class="z-showcase-points"><span><b>01</b> إدارة مستقلة لكل سيرفر</span><span><b>02</b> أدوات منظمة حسب النظام</span><span><b>03</b> واجهة تدعم الجوال</span></div><div class="actions"><a class="btn primary z-btn-energy" href="/dashboard">افتح مركز التحكم <span aria-hidden="true">↗</span></a><a class="btn z-btn-ghost" href="/demo">استكشف التجربة</a></div></div><a class="z-showcase-art" href="/demo" aria-label="استكشف تصميم مركز تحكم ZOMBI"><img src="/assets/zombi-command-center-showcase.png" alt="تصور بصري لواجهة ZOMBI Cyber Command Center مع لوحات إدارة السيرفرات والأمان والتذاكر والألعاب" loading="lazy"><span class="z-art-tag"><i></i> COMMAND INTERFACE</span><span class="z-art-corner" aria-hidden="true">Z / 01</span></a><div class="z-showcase-orbit" aria-hidden="true"></div></section><section class="features"><div class="z-section-intro"><span class="z-showcase-kicker"><i></i> SYSTEM MODULES</span><h2>كل نظام بمكانه الصحيح</h2><p>أدوات واضحة بدل لوحة مزدحمة — اختَر النظام وركّز على إعداداته.</p></div><div class="grid">${[['🏦','ZOMBI Bank','رصيد، تحويل، حماية كاش وكفالة من لوحة واحدة'],['🎯','Heist Games','7 تحديات نهب مع سجن وكولداون مستقل لكل لعبة'],['🎮','Games','حدد من Dashboard الرتب المسموح لها بدء الألعاب'],['🎫','Tickets','أنواع تذاكر ولوحات احترافية'],['🛒','Store','بيع رتب مقابل عملة السيرفر'],['🔔','Self Roles','لوحات رتب وإشعارات ذاتية'],['🏆','Levels','XP ومستويات ومكافآت'],['💎','Free / Premium / Premium+','تحكم Owner كامل بالمميزات والألعاب لكل خطة']].map(x=>`<article><i>${x[0]}</i><h3>${x[1]}</h3><p>${x[2]}</p></article>`).join('')}</div></section>${pricing(site)}`;}
@@ -1227,25 +1219,24 @@ async function start(){
   const sessionSecret=String(process.env.SESSION_SECRET||'');
   if(process.env.NODE_ENV==='production'&&(sessionSecret.length<32||/^(change.?me|secret|password|your.?secret)$/i.test(sessionSecret)))throw new Error('Unsafe SESSION_SECRET: set a strong secret (32+ characters) in Render environment settings.');
   if(process.env.NODE_ENV==='production'&&!String(process.env.DATABASE_URL||'').trim())throw new Error('DATABASE_URL is required in production; refusing to use the in-memory session store.');
-  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(securityHeaders);app.use(rateLimit({windowMs:60000,max:180,keyPrefix:'web'}));app.use('/auth',rateLimit({windowMs:60000,max:20,keyPrefix:'auth'}));app.use('/api/bot-sync',rateLimit({windowMs:60000,max:180,keyPrefix:'bot-sync'}));app.use('/owner',rateLimit({windowMs:60000,max:60,keyPrefix:'owner'}));app.use('/panel-assets',express.static(require('path').join(__dirname,'assets','panels'),{maxAge:'1h'}));app.use(express.urlencoded({extended:true,limit:'8mb',parameterLimit:1000}));app.use(express.json({limit:'10mb'}));app.get('/media/:id',async(req,res,next)=>{try{if(!/^[a-f0-9-]{36}$/i.test(String(req.params.id||'')))return res.sendStatus(404);const asset=await store.getMediaAsset(req.params.id);if(!asset)return res.sendStatus(404);res.set('Content-Type',asset.content_type);res.set('Content-Length',String(asset.size_bytes));res.set('Content-Disposition','inline; filename=\"'+String(asset.filename||'asset').replace(/[\"\\\r\n]/g,'_')+'\"');res.set('X-Content-Type-Options','nosniff');res.set('Cache-Control','public, max-age=31536000, immutable');res.end(asset.data);}catch(e){next(e);}});;for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','role-manager.js','upgrade.js','operations-ui.js','zombi-logo.png','zombi-v2-logo.svg','zombi-site-background.png','zombi-command-center-showcase.jpg','zombi-command-center-showcase.png','zombi-dashboard-hero.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.set('Cache-Control','no-store, max-age=0');res.sendFile(require('path').join(__dirname,req.params.file));});
+  await store.ensureDb();await payments.ensureDb();await seedLegacyHome();const app=express();app.set('trust proxy',1);app.use(securityHeaders);app.use(rateLimit({windowMs:60000,max:180,keyPrefix:'web'}));app.use('/auth',rateLimit({windowMs:60000,max:20,keyPrefix:'auth'}));app.use('/api/bot-sync',rateLimit({windowMs:60000,max:180,keyPrefix:'bot-sync'}));app.use('/owner',rateLimit({windowMs:60000,max:60,keyPrefix:'owner'}));app.use('/panel-assets',express.static(require('path').join(__dirname,'assets','panels'),{maxAge:'1h'}));app.use(express.urlencoded({extended:true,limit:'8mb',parameterLimit:1000}));app.use(express.json({limit:'10mb'}));app.get('/media/:id',async(req,res,next)=>{try{if(!/^[a-f0-9-]{36}$/i.test(String(req.params.id||'')))return res.sendStatus(404);const asset=await store.getMediaAsset(req.params.id);if(!asset)return res.sendStatus(404);res.set('Content-Type',asset.content_type);res.set('Content-Length',String(asset.size_bytes));res.set('Content-Disposition','inline; filename=\"'+String(asset.filename||'asset').replace(/[\"\\\r\n]/g,'_')+'\"');res.set('X-Content-Type-Options','nosniff');res.set('Cache-Control','public, max-age=31536000, immutable');res.end(asset.data);}catch(e){next(e);}});;for(const prefix of ['/site','/assets'])app.get(prefix+'/:file',(req,res)=>{const allowed=['site.css','dashboard.js','role-manager.js','upgrade.js','operations-ui.js','media-picker.js','zombi-logo.png','zombi-v2-logo.svg','zombi-site-background.png','zombi-command-center-showcase.jpg','zombi-command-center-showcase.png','zombi-dashboard-hero.png'];if(!allowed.includes(req.params.file))return res.sendStatus(404);res.set('Cache-Control','public, max-age=86400, stale-while-revalidate=604800');res.sendFile(require('path').join(__dirname,req.params.file));});
   let sessionStore;if(String(process.env.DATABASE_URL||'').trim()){const {Pool}=require('pg');const sslDisabled=String(process.env.DATABASE_SSL||'').toLowerCase()==='false';const rawDb=String(process.env.DATABASE_URL||'').trim();let sessionConnectionString=rawDb;try{const u=new URL(rawDb);for(const k of ['sslmode','sslcert','sslkey','sslrootcert','channel_binding'])u.searchParams.delete(k);sessionConnectionString=u.toString();}catch{}const sessionPool=new Pool({connectionString:sessionConnectionString,ssl:sslDisabled?false:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:15000,keepAlive:true});class PgSessionStore extends session.Store{get(sid,cb){sessionPool.query('SELECT sess,expire_at FROM zombi_web_sessions WHERE sid=$1',[sid]).then(r=>{const row=r.rows[0];if(!row||Number(row.expire_at||0)<Date.now())return cb(null,null);cb(null,row.sess);}).catch(cb);}set(sid,sess,cb){const exp=sess?.cookie?.expires?new Date(sess.cookie.expires).getTime():Date.now()+7*86400000;sessionPool.query(`INSERT INTO zombi_web_sessions(sid,sess,expire_at) VALUES($1,$2::jsonb,$3) ON CONFLICT(sid) DO UPDATE SET sess=EXCLUDED.sess,expire_at=EXCLUDED.expire_at`,[sid,JSON.stringify(sess||{}),exp]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}destroy(sid,cb){sessionPool.query('DELETE FROM zombi_web_sessions WHERE sid=$1',[sid]).then(()=>cb&&cb()).catch(e=>cb&&cb(e));}}sessionStore=new PgSessionStore();}
   if(!sessionStore&&process.env.NODE_ENV==='production')throw new Error('Persistent PostgreSQL session store unavailable; refusing production startup.');
-  app.use(session({store:sessionStore,secret:sessionSecret||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session?.user||null;next();});app.post('/dashboard/:guildId/media/upload',requireLogin,checkCsrf,async(req,res,next)=>{try{const gid=String(req.params.guildId||'');const member=userGuild(req,gid);if(!/^\d{15,25}$/.test(gid)||(!isOwner(req.user)&&(!member||!canManage(member))))return res.status(403).json({error:'لا تملك صلاحية رفع الملفات لهذا السيرفر.'});if(!store.dbEnabled())return res.status(503).json({error:'الرفع الدائم يتطلب DATABASE_URL مع PostgreSQL.'});const raw=String(req.body?.dataUrl||''),match=raw.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);if(!match)return res.status(400).json({error:'صيغة الملف غير صالحة.'});const mime=match[1].toLowerCase(),isImage=['image/png','image/jpeg','image/webp','image/gif'].includes(mime),isFont=['font/woff','font/woff2','font/ttf','font/otf','application/font-woff','application/font-woff2','application/x-font-ttf','application/vnd.ms-opentype','application/octet-stream'].includes(mime)&&String(req.body?.kind)==='font';if(!isImage&&!isFont)return res.status(415).json({error:'الملفات المسموحة: صور PNG/JPG/WEBP/GIF وخطوط WOFF/WOFF2/TTF/OTF.'});const data=Buffer.from(match[2],'base64'),max=isFont?5*1024*1024:6*1024*1024;if(!data.length||data.length>max)return res.status(413).json({error:'حجم الملف غير مسموح.'});const id=require('crypto').randomUUID(),filename=String(req.body?.filename||'asset').replace(/[^a-z0-9._-]/gi,'_').slice(0,160)||'asset';await store.saveMediaAsset({id,guildId:req.params.guildId,contentType:mime,filename,data});return res.json({ok:true,id,url:baseUrl()+'/media/'+id});}catch(e){next(e);}})
+  app.use(session({store:sessionStore,secret:sessionSecret||crypto.randomBytes(32).toString('hex'),resave:false,saveUninitialized:false,rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://'),maxAge:7*86400000}}));app.use((req,_res,next)=>{req.user=req.session?.user||null;next();});app.post('/dashboard/:guildId/media/upload',requireLogin,checkCsrf,async(req,res,next)=>{try{const gid=String(req.params.guildId||'');const member=userGuild(req,gid);if(!/^\d{15,25}$/.test(gid)||(!isOwner(req.user)&&(!member||!canManage(member))))return res.status(403).json({error:'لا تملك صلاحية رفع الملفات لهذا السيرفر.'});if(!store.dbEnabled())return res.status(503).json({error:'الرفع الدائم يتطلب DATABASE_URL مع PostgreSQL.'});const raw=String(req.body?.dataUrl||''),match=raw.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);if(!match)return res.status(400).json({error:'صيغة الملف غير صالحة.'});const mime=match[1].toLowerCase(),isImage=['image/png','image/jpeg','image/webp','image/gif'].includes(mime),isFont=['font/woff','font/woff2','font/ttf','font/otf','application/font-woff','application/font-woff2','application/x-font-ttf','application/vnd.ms-opentype','application/octet-stream'].includes(mime)&&String(req.body?.kind)==='font';if(!isImage&&!isFont)return res.status(415).json({error:'الملفات المسموحة: صور PNG/JPG/WEBP/GIF وخطوط WOFF/WOFF2/TTF/OTF.'});const data=Buffer.from(match[2],'base64'),max=isFont?5*1024*1024:6*1024*1024;if(!data.length||data.length>max)return res.status(413).json({error:'حجم الملف غير مسموح.'});if(isImage&&detectDiscordImageMime(data)!==mime)return res.status(400).json({error:'محتوى الصورة لا يطابق نوع الملف.'});const id=require('crypto').randomUUID(),filename=String(req.body?.filename||'asset').replace(/[^a-z0-9._-]/gi,'_').slice(0,160)||'asset';await store.saveMediaAsset({id,guildId:req.params.guildId,contentType:mime,filename,data});return res.json({ok:true,id,url:baseUrl()+'/media/'+id});}catch(e){next(e);}})
   app.post('/api/media/upload',requireLogin,checkCsrf,async(req,res,next)=>{try{
     const guildId=String(req.body?.guildId||'').trim(),membership=userGuild(req,guildId);
     if(!/^\d{15,25}$/.test(guildId)||(!isOwner(req.user)&&(!membership||!canManage(membership))))return res.status(403).json({ok:false,error:'لا تملك صلاحية رفع الصور لهذا السيرفر.'});
-    if(isOwner(req.user)&&!await getBotGuild(guildId).catch(()=>null))return res.status(404).json({ok:false,error:'البوت غير موجود في هذا السيرفر.'});
+    if(!store.dbEnabled())return res.status(503).json({ok:false,error:'الرفع الدائم يتطلب DATABASE_URL مع PostgreSQL.'});
     const raw=String(req.body?.data||''),match=raw.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);
-    if(!match) return res.status(400).json({ok:false,error:'اختر صورة PNG أو JPG أو GIF أو WEBP.'});
+    if(!match)return res.status(400).json({ok:false,error:'اختر صورة PNG أو JPG أو GIF أو WEBP.'});
     const bytes=Buffer.from(match[2].replace(/\s+/g,''),'base64');
     if(!bytes.length||bytes.length>5*1024*1024)return res.status(413).json({ok:false,error:'حجم الصورة يجب ألا يتجاوز 5MB.'});
-    const detected=detectDiscordImageMime(bytes);if(!['image/png','image/jpeg','image/gif','image/webp'].includes(detected))return res.status(400).json({ok:false,error:'ملف الصورة غير صالح.'});
-    const endpoint=String(process.env.BOT_MEDIA_API_URL||'').trim(),secret=String(process.env.BOT_MEDIA_API_SECRET||'').trim();
-    if(!endpoint||!secret)return res.status(503).json({ok:false,error:'رفع الصور غير مربوط باستضافة البوت. أضف BOT_MEDIA_API_URL وBOT_MEDIA_API_SECRET إلى إعدادات الموقع.'});
-    const response=await fetch(endpoint.replace(/\/$/,'')+'/api/media/upload',{method:'POST',headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({guildId,mime:detected,data:bytes.toString('base64')})});
-    const result=await response.json().catch(()=>({}));if(!response.ok||!result?.ok||!result?.url)throw new Error(result?.error||`استضافة البوت رفضت رفع الصورة (${response.status}).`);
-    res.json({ok:true,url:result.url,name:result.name||''});
+    const detected=detectDiscordImageMime(bytes);if(!['image/png','image/jpeg','image/gif','image/webp'].includes(detected)||detected!==match[1].toLowerCase())return res.status(400).json({ok:false,error:'امتداد الصورة لا يطابق محتواها.'});
+    const id=crypto.randomUUID(),filename=String(req.body?.filename||'image').replace(/[^a-z0-9._-]/gi,'_').slice(0,160)||'image';
+    await store.saveMediaAsset({id,guildId,contentType:detected,filename,data:bytes});
+    return res.json({ok:true,id,url:baseUrl()+'/media/'+id,name:filename});
   }catch(e){next(e);}});
+
    // Single-owner username/password authentication. Credentials are checked only server-side.
    const dashboardUsername=String(process.env.DASHBOARD_USERNAME||'').trim();
    const dashboardPassword=String(process.env.DASHBOARD_PASSWORD||'');
@@ -1261,48 +1252,34 @@ async function start(){
      req.session.regenerate(err=>{if(err)return res.status(500).type('html').send(loginPage('تعذر إنشاء جلسة آمنة. حاول مرة أخرى.'));req.session.user={id:'dashboard-owner',username:dashboardUsername,displayName:dashboardUsername,isDashboardOwner:true,guilds:[]};req.session.save(saveErr=>{if(saveErr)return res.status(500).type('html').send(loginPage('تعذر حفظ جلسة الدخول.'));res.redirect('/dashboard');});});
    });
    app.get('/logout',(req,res)=>{req.session.destroy(err=>{res.clearCookie('connect.sid',{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'||baseUrl().startsWith('https://')});if(err)securityEvent('logout_session_destroy_failed',req,'error');res.redirect('/login');});});
-   const ownerGuildCache={guilds:[],until:0,refreshing:null};
+   const ownerGuildCache={guilds:[],until:0,refreshing:null,loaded:false};
    app.use(async(req,res,next)=>{
      if(req.path==='/health'||req.path==='/login'||req.path.startsWith('/api/bot-sync/'))return next();
      if(!dashboardUsername||!dashboardPassword)return res.status(503).type('html').send(loginPage('إعدادات الدخول غير مكتملة.'));
      if(req.session?.user?.isDashboardOwner===true&&req.session.user.id==='dashboard-owner'){
        req.user=req.session.user;
-       // Load verified Discord guild names before rendering the dashboard.
-       // The previous background-only refresh rendered raw IDs on the first
-       // request and could keep doing so whenever Discord lookup failed.
-       if(ownerGuildCache.until>Date.now()&&ownerGuildCache.guilds.length){req.user.guilds=ownerGuildCache.guilds;return next();}
-       try{
-         const hb=await getRecentBotHeartbeat();
-         let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
-         if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
-         ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,500);
-         if(!ownerGuildCache.refreshing){
-           ownerGuildCache.refreshing=(async()=>{
-             const allIds=[...new Set(ids.map(String))].slice(0,500);
-             const guilds=[];
-             for(let i=0;i<allIds.length;i+=5){
-               const batch=await Promise.all(allIds.slice(i,i+5).map(async id=>{
-                 try{
-                   const g=await getBotGuild(id);
-                   if(!g||!g.name)return null;
-                   return {...g, id:String(g.id||id), name:String(g.name), permissions:ADMINISTRATOR.toString(), owner:false};
-                 }catch(e){
-                   console.warn(`[Dashboard] guild name fetch failed for ${id}:`,e.message);
-                   return null;
-                 }
-               }));
-               guilds.push(...batch.filter(Boolean));
-             }
-             ownerGuildCache.guilds=guilds;
-             ownerGuildCache.until=Date.now()+5*60*1000;
-           })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;}).finally(()=>{ownerGuildCache.refreshing=null;});
-         }
-         await ownerGuildCache.refreshing;
-         req.user.guilds=ownerGuildCache.guilds.length?ownerGuildCache.guilds:[];
-       }catch(e){
-         console.error('[Dashboard] bot guild list load failed:',e.message);
-         req.user.guilds=ownerGuildCache.guilds||[];
+       if(ownerGuildCache.loaded&&ownerGuildCache.until>Date.now()){req.user.guilds=ownerGuildCache.guilds;return next();}
+       if(!ownerGuildCache.refreshing){
+         ownerGuildCache.refreshing=(async()=>{
+           const hb=await getRecentBotHeartbeat();
+           let ids=Array.isArray(hb?.guildIds)?hb.guildIds:[];
+           // Older bot builds may not send guildIds. Use only guilds with persisted dashboard config as fallback.
+           if(!ids.length)ids=await store.allGuildIds().catch(()=>[]);
+           ids=[...new Set(ids.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000);
+           const known=new Map((ownerGuildCache.guilds||[]).map(g=>[String(g.id),g]));
+           const verified=[];let transientFailures=0;
+           for(let i=0;i<ids.length;i+=5){
+             const batch=await Promise.all(ids.slice(i,i+5).map(async id=>{
+               try{const g=await getBotGuild(id);if(!g||!g.name)return null;return {...g,id:String(g.id||id),name:String(g.name),permissions:ADMINISTRATOR.toString(),owner:false};}
+               catch(e){if([403,404].includes(Number(e?.status))||Number(e?.code)===50001)return null;transientFailures++;return known.get(id)||null;}
+             }));verified.push(...batch.filter(Boolean));
+           }
+           if(transientFailures&&verified.length===0&&!ownerGuildCache.loaded){const e=new Error('تعذر التحقق من سيرفرات البوت بسبب خطأ مؤقت من Discord.');e.code='GUILD_DISCOVERY_TEMPORARY_FAILURE';throw e;}
+           ownerGuildCache.guilds=verified;ownerGuildCache.loaded=true;ownerGuildCache.until=Date.now()+(transientFailures?30_000:5*60_000);
+         })().catch(e=>{console.error('[Dashboard] bot guild list load failed:',e.message);ownerGuildCache.until=0;throw e;}).finally(()=>{ownerGuildCache.refreshing=null;});
        }
+       try{await ownerGuildCache.refreshing;req.user.guilds=ownerGuildCache.guilds;}
+       catch(e){if(ownerGuildCache.loaded)req.user.guilds=ownerGuildCache.guilds;else return res.status(503).type('html').send(loginPage('تعذر التحقق من سيرفرات البوت حاليًا بسبب اتصال Discord. لم يتم اعتبار القائمة فارغة؛ أعد المحاولة لاحقًا.'));}
        return next();
      }
      if(req.path.startsWith('/api/'))return res.status(401).json({ok:false,error:'يلزم تسجيل الدخول إلى لوحة التحكم.'});
@@ -1329,7 +1306,7 @@ async function start(){
       botId:String(body.botId||'').slice(0,30),
       botTag:String(body.botTag||'').slice(0,100),
       guildCount:Math.max(0,Math.min(5000,Number(body.guildCount)||0)),
-      guildIds:Array.isArray(body.guildIds)?body.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)).slice(0,500):[]
+      guildIds:Array.isArray(body.guildIds)?[...new Set(body.guildIds.map(String).filter(x=>/^\d{15,25}$/.test(x)))].slice(0,5000):[]
     };
     await store.saveData('site','heartbeat.json',payload);
     res.json({ok:true});
@@ -1382,7 +1359,7 @@ async function start(){
   }catch(e){next(e);}});
 
   app.get('/dashboard',requireLogin,async(req,res,next)=>{try{
-    const manageable=(req.user.guilds||[]).slice(0,500);
+    const manageable=(req.user.guilds||[]).slice(0,5000);
     const presence=await getBotPresenceSnapshot();
     const reliable=Boolean(presence.api||presence.heartbeat?.guildIds?.length||presence.heartbeat?.guildCount===0);
 
